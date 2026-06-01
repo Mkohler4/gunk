@@ -34,4 +34,4 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Dropped the filesystem-watching design. Gunk now ingests only folders the
   user explicitly drops on the app. (See ADR-0004.)
 
-[Unreleased]: https://github.com/markkohler/gunk/commits/main
+[Unreleased]: https://github.com/Mkohler4/gunk/commits/main
