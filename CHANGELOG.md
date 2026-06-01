@@ -20,6 +20,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0004: "Drag-in over file-watch" — locks the principle that gunk only
   knows about folders the user explicitly drops on the app. No filesystem
   watching, no Full Disk Access, no path config in v0.
+- ADR-0005: "Monorepo layout" — both packages (`mcp/` for TypeScript,
+  `app/` for Swift) live in this repo. One CHANGELOG, one set of ADRs,
+  one CI workflow.
+- `docs/tasks/README.md` — format and conventions for structured task
+  specs designed for autonomous agent execution.
+- `docs/tasks/codex-prompt.md` — exact prompt template to invoke Codex
+  on a single task with proper guard rails.
+- `docs/tasks/phase-2-walking-skeleton.md` — 15 ordered, individually
+  testable tasks (T-2.1 through T-2.15) covering the Phase 2 walking
+  skeleton: monorepo scaffolding, CI, SQLite schema v0, store layers,
+  MCP server with `list_gunks` + `get_gunk`, drop-zone UI, list view,
+  single-binary build, Cursor integration docs, end-to-end smoke test.
 - `docs/roadmap.md` — 9-week phased plan, walking-skeleton-first.
 
 ### Changed
