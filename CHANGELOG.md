@@ -33,6 +33,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   MCP server with `list_gunks` + `get_gunk`, drop-zone UI, list view,
   single-binary build, Cursor integration docs, end-to-end smoke test.
 - `docs/roadmap.md` — 9-week phased plan, walking-skeleton-first.
+- Conventional Commits enforcement (commitlint + husky), GitHub Project board.
 
 ### Changed
 - Pivoted from a CLI-first product framing to an ambient/background system

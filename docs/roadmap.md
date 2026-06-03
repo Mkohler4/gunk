@@ -31,12 +31,12 @@ roadmap, here are the ADRs explaining what we're building and why."
       invoked), ADR-0004 (drag-in over file-watch)
 - [x] `docs/roadmap.md` (this file)
 - [ ] `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
-- [ ] Initial git commit, push to GitHub (public)
-- [ ] GitHub Project board with issues seeded from this roadmap
+- [x] Initial git commit, push to GitHub (public)
+- [x] GitHub Project board with issues seeded from this roadmap
 - [ ] Bun + TypeScript scaffold for `gunk-mcp` (lint, typecheck, test, format)
 - [ ] Swift Package scaffold for `gunk.app` (mirroring AICockpit's structure)
 - [ ] CI: GitHub Actions running lint + typecheck + test on every PR
-- [ ] Conventional Commits enforced (commitlint + husky)
+- [x] Conventional Commits enforced (commitlint + husky)
 - [ ] First build-in-public thread: thesis + repo link + the OAuth demo concept
 
 ---
