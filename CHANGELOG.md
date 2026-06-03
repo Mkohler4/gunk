@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` Swift Package scaffold (menubar app skeleton).
 - Monorepo skeleton (`mcp/`, `app/`), `.editorconfig`, `.tool-versions`,
   GitHub PR + issue templates.
 - Initial repository scaffold: `README.md`, `LICENSE` (MIT), `CHANGELOG.md`, `.gitignore`.
