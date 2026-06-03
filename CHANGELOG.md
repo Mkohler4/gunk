@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Monorepo skeleton (`mcp/`, `app/`), `.editorconfig`, `.tool-versions`,
+  GitHub PR + issue templates.
 - Initial repository scaffold: `README.md`, `LICENSE` (MIT), `CHANGELOG.md`, `.gitignore`.
 - `CONTRIBUTING.md` and `CODE_OF_CONDUCT.md` (Contributor Covenant 2.1).
 - ADR-0001: "What is gunk?" — locks the product thesis (local-only, drop-in,
