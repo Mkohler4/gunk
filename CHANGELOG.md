@@ -36,6 +36,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   single-binary build, Cursor integration docs, end-to-end smoke test.
 - `docs/roadmap.md` — 9-week phased plan, walking-skeleton-first.
 - Conventional Commits enforcement (commitlint + husky), GitHub Project board.
+- `web/` — marketing landing page (Next.js App Router + TypeScript), ported
+  from the `gunk.html` prototype: one minimal page with the "Reinventing the
+  trash can." hero, problem/how-it-works/before-after sections, dark mode,
+  and a placeholder email signup.
 
 ### Changed
 - Pivoted from a CLI-first product framing to an ambient/background system
