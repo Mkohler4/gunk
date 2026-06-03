@@ -1,0 +1,25 @@
+{
+  "name": "gunk-mcp",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "description": "Short-lived MCP server for gunk.",
+  "scripts": {
+    "start": "bun run src/index.ts",
+    "test": "vitest run",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit",
+    "format": "prettier --check .",
+    "build": "bun build src/index.ts --outdir dist --target bun"
+  },
+  "devDependencies": {
+    "@types/bun": "^1.3.14",
+    "@typescript-eslint/eslint-plugin": "^8.49.0",
+    "@typescript-eslint/parser": "^8.49.0",
+    "eslint": "^9.39.4",
+    "prettier": "^3.7.4",
+    "typescript-eslint": "^8.49.0",
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.8"
+  }
+}

@@ -40,6 +40,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   from the `gunk.html` prototype: one minimal page with the "Reinventing the
   trash can." hero, problem/how-it-works/before-after sections, dark mode,
   and a placeholder email signup.
+- `gunk-mcp` package scaffold (Bun + TypeScript + Vitest + ESLint +
+  Prettier).
 
 ### Changed
 - Pivoted from a CLI-first product framing to an ambient/background system

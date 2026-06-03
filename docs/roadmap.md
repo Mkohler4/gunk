@@ -33,8 +33,7 @@ roadmap, here are the ADRs explaining what we're building and why."
 - [ ] `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
 - [x] Initial git commit, push to GitHub (public)
 - [x] GitHub Project board with issues seeded from this roadmap
-- [x] Bun + TypeScript scaffold precondition for `gunk-mcp` (`mcp/`
-      directory; lint, typecheck, test, format land in T-2.2)
+- [x] Bun + TypeScript scaffold for `gunk-mcp` (lint, typecheck, test, format)
 - [ ] Swift Package scaffold for `gunk.app` (mirroring AICockpit's structure)
 - [ ] CI: GitHub Actions running lint + typecheck + test on every PR
 - [x] Conventional Commits enforced (commitlint + husky)
