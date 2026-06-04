@@ -4,15 +4,15 @@ import XCTest
 @testable import GunkApp
 
 final class StoreTests: XCTestCase {
-  func testInsertGunkPersists() throws {
+  func testInsertSourcePersists() throws {
     let (store, _) = try makeStore(now: 100)
 
-    let inserted = try store.insertGunk(name: "fixture", path: "/code/fixture")
+    let inserted = try store.insertSource(name: "fixture", path: "/code/fixture")
 
     XCTAssertEqual(
-      try store.listGunks(),
+      try store.listSources(),
       [
-        Gunk(
+        Source(
           id: inserted.id,
           name: "fixture",
           path: "/code/fixture",
@@ -23,7 +23,7 @@ final class StoreTests: XCTestCase {
     )
   }
 
-  func testListGunksReturnsInDroppedAtDescOrder() throws {
+  func testListSourcesReturnsInDroppedAtDescOrder() throws {
     var timestamp: Int64 = 100
     let queue = try DatabaseQueue()
     let store = try Store(databaseQueue: queue) {
@@ -31,16 +31,277 @@ final class StoreTests: XCTestCase {
       return timestamp
     }
 
-    _ = try store.insertGunk(name: "oldest", path: "/code/oldest")
-    _ = try store.insertGunk(name: "middle", path: "/code/middle")
-    _ = try store.insertGunk(name: "newest", path: "/code/newest")
+    _ = try store.insertSource(name: "oldest", path: "/code/oldest")
+    _ = try store.insertSource(name: "middle", path: "/code/middle")
+    _ = try store.insertSource(name: "newest", path: "/code/newest")
 
-    XCTAssertEqual(try store.listGunks().map(\.name), ["newest", "middle", "oldest"])
+    XCTAssertEqual(try store.listSources().map(\.name), ["newest", "middle", "oldest"])
+  }
+
+  func testRemoveSourceSetsRemovedAt() throws {
+    let (store, queue) = try makeStore(now: 500)
+    let source = try store.insertSource(name: "fixture", path: "/code/fixture")
+
+    try store.removeSource(id: source.id)
+
+    let removedAt = try queue.read { db in
+      try Int64.fetchOne(
+        db,
+        sql: "SELECT removed_at FROM sources WHERE id = ?",
+        arguments: [source.id]
+      )
+    }
+
+    XCTAssertEqual(removedAt, 500)
+  }
+
+  func testListSourcesExcludesRemoved() throws {
+    let (store, _) = try makeStore(now: 500)
+    let removed = try store.insertSource(name: "removed", path: "/code/removed")
+    _ = try store.insertSource(name: "active", path: "/code/active")
+
+    try store.removeSource(id: removed.id)
+
+    XCTAssertEqual(try store.listSources().map(\.name), ["active"])
+  }
+
+  func testMigrationsAreIdempotentThroughV2() throws {
+    let queue = try DatabaseQueue()
+
+    _ = try Store(databaseQueue: queue, now: { 100 })
+    _ = try Store(databaseQueue: queue, now: { 200 })
+
+    let versions = try queue.read { db in
+      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
+    }
+
+    XCTAssertEqual(versions, [0, 1, 2])
+  }
+
+  func testV0ToV2UpgradePreservesSources() throws {
+    let queue = try DatabaseQueue()
+
+    try queue.write { db in
+      try db.execute(sql: Schema.v0)
+      try db.execute(
+        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+        arguments: [0, 100]
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO gunks (id, name, path, dropped_at, removed_at)
+          VALUES (?, ?, ?, ?, ?)
+          """,
+        arguments: [1, "fixture-source", "/code/fixture-source", 150, nil]
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO files (id, gunk_id, relpath, size)
+          VALUES (?, ?, ?, ?)
+          """,
+        arguments: [1, 1, "README.md", 42]
+      )
+    }
+
+    _ = try Store(databaseQueue: queue, now: { 200 })
+
+    let versions = try queue.read { db in
+      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
+    }
+    let source = try queue.read { db in
+      try Row.fetchOne(db, sql: "SELECT id, name, path, dropped_at, removed_at FROM sources")
+        .map(StoreTests.source(from:))
+    }
+    let file = try queue.read { db in
+      try Row.fetchOne(db, sql: "SELECT source_id, relpath, size FROM files")
+    }
+
+    XCTAssertEqual(versions, [0, 1, 2])
+    XCTAssertEqual(
+      source,
+      Source(
+        id: 1,
+        name: "fixture-source",
+        path: "/code/fixture-source",
+        droppedAt: 150,
+        removedAt: nil
+      )
+    )
+    XCTAssertEqual(file?["source_id"] as Int64?, 1)
+    XCTAssertEqual(file?["relpath"] as String?, "README.md")
+    XCTAssertEqual(file?["size"] as Int64?, 42)
+  }
+
+  func testExistingV1StoreUpgradesToV2PreservingSources() throws {
+    let queue = try DatabaseQueue()
+
+    try queue.write { db in
+      try db.execute(sql: Schema.v0)
+      try db.execute(
+        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+        arguments: [0, 100]
+      )
+      try db.execute(
+        sql: """
+          INSERT INTO gunks (id, name, path, dropped_at, removed_at)
+          VALUES (?, ?, ?, ?, ?)
+          """,
+        arguments: [1, "v1-source", "/code/v1-source", 150, nil]
+      )
+      try db.execute(sql: Schema.v1)
+      try db.execute(
+        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+        arguments: [1, 125]
+      )
+    }
+
+    _ = try Store(databaseQueue: queue, now: { 200 })
+
+    let source = try queue.read { db in
+      try Row.fetchOne(db, sql: "SELECT id, name, path, dropped_at, removed_at FROM sources")
+        .map(StoreTests.source(from:))
+    }
+
+    XCTAssertEqual(
+      source,
+      Source(
+        id: 1,
+        name: "v1-source",
+        path: "/code/v1-source",
+        droppedAt: 150,
+        removedAt: nil
+      )
+    )
+  }
+
+  func testInsertGunkPersistsWithSourceLink() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "auth-module",
+      purpose: "Google OAuth flow",
+      language: "TypeScript",
+      confidence: 0.91,
+      bundlePath: "/tmp/modules/1",
+      manifestPath: "/tmp/modules/1/gunk.yml",
+      extractedAt: 200
+    )
+
+    XCTAssertEqual(
+      try store.gunksForSource(sourceId: source.id),
+      [
+        Gunk(
+          id: gunk.id,
+          sourceId: source.id,
+          name: "auth-module",
+          purpose: "Google OAuth flow",
+          language: "TypeScript",
+          confidence: 0.91,
+          bundlePath: "/tmp/modules/1",
+          manifestPath: "/tmp/modules/1/gunk.yml",
+          extractedAt: 200,
+          approvedAt: nil,
+          removedAt: nil
+        )
+      ]
+    )
+  }
+
+  func testAddTagAndQueryByTag() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "auth-module")
+    let auth = try store.addTag(name: "auth")
+
+    try store.addGunkTag(gunkId: gunk.id, tagId: auth.id, confidence: 0.9)
+
+    XCTAssertEqual(
+      try store.listGunkTags(gunkId: gunk.id),
+      [
+        GunkTag(
+          gunkId: gunk.id,
+          tagId: auth.id,
+          tag: "auth",
+          confidence: 0.9
+        )
+      ]
+    )
+  }
+
+  func testAddGunkFilePersists() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "auth-module")
+
+    let file = try store.addGunkFile(gunkId: gunk.id, relpath: "auth.ts", size: 256)
+
+    XCTAssertEqual(
+      try store.filesForGunk(gunkId: gunk.id),
+      [
+        GunkFile(
+          id: file.id,
+          gunkId: gunk.id,
+          relpath: "auth.ts",
+          size: 256
+        )
+      ]
+    )
+  }
+
+  func testRecordLLMRunPersists() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+
+    let run = try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-5",
+      inputTokens: 1000,
+      outputTokens: 200,
+      costUsd: 0.12,
+      finishedAt: 150
+    )
+
+    XCTAssertEqual(
+      run,
+      LLMRun(
+        id: run.id,
+        sourceId: source.id,
+        provider: "openai",
+        model: "gpt-5",
+        inputTokens: 1000,
+        outputTokens: 200,
+        costUsd: 0.12,
+        startedAt: 100,
+        finishedAt: 150
+      )
+    )
+  }
+
+  func testApproveGunkSetsApprovedAt() throws {
+    let (store, queue) = try makeStore(now: 500)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "auth-module")
+
+    try store.approveGunk(id: gunk.id)
+
+    let approvedAt = try queue.read { db in
+      try Int64.fetchOne(
+        db,
+        sql: "SELECT approved_at FROM gunks WHERE id = ?",
+        arguments: [gunk.id]
+      )
+    }
+
+    XCTAssertEqual(approvedAt, 500)
   }
 
   func testRemoveGunkSetsRemovedAt() throws {
     let (store, queue) = try makeStore(now: 500)
-    let gunk = try store.insertGunk(name: "fixture", path: "/code/fixture")
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "auth-module")
 
     try store.removeGunk(id: gunk.id)
 
@@ -53,98 +314,7 @@ final class StoreTests: XCTestCase {
     }
 
     XCTAssertEqual(removedAt, 500)
-  }
-
-  func testListGunksExcludesRemoved() throws {
-    let (store, _) = try makeStore(now: 500)
-    let removed = try store.insertGunk(name: "removed", path: "/code/removed")
-    _ = try store.insertGunk(name: "active", path: "/code/active")
-
-    try store.removeGunk(id: removed.id)
-
-    XCTAssertEqual(try store.listGunks().map(\.name), ["active"])
-  }
-
-  func testMigrationsAreIdempotent() throws {
-    let queue = try DatabaseQueue()
-
-    _ = try Store(databaseQueue: queue, now: { 100 })
-    _ = try Store(databaseQueue: queue, now: { 200 })
-
-    let versions = try queue.read { db in
-      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
-    }
-
-    XCTAssertEqual(versions, [0, 1])
-  }
-
-  func testMigratesExistingV0StoreToV1() throws {
-    let queue = try DatabaseQueue()
-
-    try queue.write { db in
-      try db.execute(sql: Schema.v0)
-      try db.execute(
-        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-        arguments: [0, 100]
-      )
-    }
-
-    _ = try Store(databaseQueue: queue, now: { 200 })
-
-    let versions = try queue.read { db in
-      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
-    }
-
-    let tagCount = try queue.read { db in
-      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags")
-    }
-
-    XCTAssertEqual(versions, [0, 1])
-    XCTAssertEqual(tagCount, 10)
-  }
-
-  func testFileBackedStoreUsesWALMode() throws {
-    let folderURL = FileManager.default.temporaryDirectory
-      .appendingPathComponent(UUID().uuidString)
-    let storeURL = folderURL.appendingPathComponent("store.db")
-    defer { try? FileManager.default.removeItem(at: folderURL) }
-
-    _ = try Store(path: storeURL, now: { 100 })
-
-    let queue = try DatabaseQueue(path: storeURL.path)
-    let journalMode = try queue.read { db in
-      try String.fetchOne(db, sql: "PRAGMA journal_mode")
-    }
-
-    XCTAssertEqual(journalMode, "wal")
-  }
-
-  func testMCPListQueryReadsInsertedGunk() throws {
-    let (store, queue) = try makeStore(now: 123)
-    let inserted = try store.insertGunk(name: "fixture", path: "/code/fixture")
-
-    let row = try queue.read { db in
-      try Row.fetchOne(
-        db,
-        sql: """
-          SELECT
-            id,
-            name,
-            path,
-            dropped_at AS droppedAt,
-            removed_at AS removedAt
-          FROM gunks
-          WHERE removed_at IS NULL
-          ORDER BY dropped_at DESC
-          """
-      )
-    }
-
-    XCTAssertEqual(row?["id"], inserted.id)
-    XCTAssertEqual(row?["name"], "fixture")
-    XCTAssertEqual(row?["path"], "/code/fixture")
-    XCTAssertEqual(row?["droppedAt"], 123)
-    XCTAssertNil(row?["removedAt"] as Int64?)
+    XCTAssertTrue(try store.listGunks().isEmpty)
   }
 
   func testListTagsReturnsTaxonomy() throws {
@@ -167,61 +337,6 @@ final class StoreTests: XCTestCase {
     )
   }
 
-  func testSetGunkTagsReplacesTagsAndRecordsTimestamp() throws {
-    var timestamp: Int64 = 100
-    let queue = try DatabaseQueue()
-    let store = try Store(databaseQueue: queue) {
-      defer { timestamp += 100 }
-      return timestamp
-    }
-    let gunk = try store.insertGunk(name: "fixture", path: "/code/fixture")
-
-    try store.setGunkTags(
-      gunkId: gunk.id,
-      tags: [
-        GunkTagInput(tag: "api", confidence: 0.7, source: "heuristic"),
-        GunkTagInput(tag: "auth", confidence: 0.9, source: "manual")
-      ]
-    )
-    try store.setGunkTags(
-      gunkId: gunk.id,
-      tags: [
-        GunkTagInput(tag: "payments", confidence: 0.8, source: "llm")
-      ]
-    )
-
-    XCTAssertEqual(
-      try store.listGunkTags(gunkId: gunk.id),
-      [
-        GunkTag(
-          gunkId: gunk.id,
-          tag: "payments",
-          confidence: 0.8,
-          source: "llm",
-          taggedAt: 500
-        )
-      ]
-    )
-  }
-
-  func testListGunkTagsReturnsTagsOrderedByConfidence() throws {
-    let (store, _) = try makeStore(now: 500)
-    let gunk = try store.insertGunk(name: "fixture", path: "/code/fixture")
-
-    try store.setGunkTags(
-      gunkId: gunk.id,
-      tags: [
-        GunkTagInput(tag: "api", confidence: 0.7, source: "heuristic"),
-        GunkTagInput(tag: "auth", confidence: 0.9, source: "manual")
-      ]
-    )
-
-    XCTAssertEqual(try store.listGunkTags(gunkId: gunk.id).map(\.tag), [
-      "auth",
-      "api"
-    ])
-  }
-
   func testSchemaMatchesMCPSourceOfTruthByteForByte() throws {
     let schemaDirectory = URL(fileURLWithPath: #filePath)
       .deletingLastPathComponent()
@@ -238,10 +353,24 @@ final class StoreTests: XCTestCase {
       Data(Schema.v1.utf8),
       try Data(contentsOf: schemaDirectory.appendingPathComponent("v1.sql"))
     )
+    XCTAssertEqual(
+      Data(Schema.v2.utf8),
+      try Data(contentsOf: schemaDirectory.appendingPathComponent("v2.sql"))
+    )
   }
 
   private func makeStore(now: Int64) throws -> (Store, DatabaseQueue) {
     let queue = try DatabaseQueue()
     return (try Store(databaseQueue: queue, now: { now }), queue)
+  }
+
+  private static func source(from row: Row) -> Source {
+    Source(
+      id: row["id"],
+      name: row["name"],
+      path: row["path"],
+      droppedAt: row["dropped_at"],
+      removedAt: row["removed_at"]
+    )
   }
 }

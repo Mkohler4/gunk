@@ -36,23 +36,139 @@ final class Store {
     try prepareDatabase()
   }
 
-  func insertGunk(name: String, path: String) throws -> Gunk {
+  func insertSource(name: String, path: String) throws -> Source {
     let droppedAt = now()
 
     return try databaseQueue.write { db in
+      if let existing = try Row.fetchOne(
+        db,
+        sql: """
+          SELECT id, name, path, dropped_at, removed_at
+          FROM sources
+          WHERE path = ?
+          """,
+        arguments: [path]
+      ) {
+        let source = Store.source(from: existing)
+
+        if (existing["removed_at"] as Int64?) != nil {
+          try db.execute(
+            sql: "UPDATE sources SET removed_at = NULL WHERE id = ?",
+            arguments: [source.id]
+          )
+
+          return Source(
+            id: source.id,
+            name: source.name,
+            path: source.path,
+            droppedAt: source.droppedAt,
+            removedAt: nil
+          )
+        }
+
+        return source
+      }
+
       try db.execute(
         sql: """
-          INSERT INTO gunks (name, path, dropped_at)
+          INSERT INTO sources (name, path, dropped_at)
           VALUES (?, ?, ?)
           """,
         arguments: [name, path, droppedAt]
       )
 
-      return Gunk(
+      return Source(
         id: db.lastInsertedRowID,
         name: name,
         path: path,
         droppedAt: droppedAt,
+        removedAt: nil
+      )
+    }
+  }
+
+  func listSources() throws -> [Source] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT id, name, path, dropped_at, removed_at
+          FROM sources
+          WHERE removed_at IS NULL
+          ORDER BY dropped_at DESC
+          """
+      )
+
+      return rows.map(Store.source(from:))
+    }
+  }
+
+  func removeSource(id: Int64) throws {
+    let removedAt = now()
+
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          UPDATE sources
+          SET removed_at = ?
+          WHERE id = ? AND removed_at IS NULL
+          """,
+        arguments: [removedAt, id]
+      )
+    }
+  }
+
+  func insertGunk(
+    sourceId: Int64,
+    name: String,
+    purpose: String? = nil,
+    language: String? = nil,
+    confidence: Double? = nil,
+    bundlePath: String? = nil,
+    manifestPath: String? = nil,
+    extractedAt: Int64? = nil,
+    approvedAt: Int64? = nil
+  ) throws -> Gunk {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO gunks (
+            source_id,
+            name,
+            purpose,
+            language,
+            confidence,
+            bundle_path,
+            manifest_path,
+            extracted_at,
+            approved_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [
+          sourceId,
+          name,
+          purpose,
+          language,
+          confidence,
+          bundlePath,
+          manifestPath,
+          extractedAt,
+          approvedAt
+        ]
+      )
+
+      return Gunk(
+        id: db.lastInsertedRowID,
+        sourceId: sourceId,
+        name: name,
+        purpose: purpose,
+        language: language,
+        confidence: confidence,
+        bundlePath: bundlePath,
+        manifestPath: manifestPath,
+        extractedAt: extractedAt,
+        approvedAt: approvedAt,
         removedAt: nil
       )
     }
@@ -63,14 +179,68 @@ final class Store {
       let rows = try Row.fetchAll(
         db,
         sql: """
-          SELECT id, name, path, dropped_at, removed_at
+          SELECT
+            id,
+            source_id,
+            name,
+            purpose,
+            language,
+            confidence,
+            bundle_path,
+            manifest_path,
+            extracted_at,
+            approved_at,
+            removed_at
           FROM gunks
           WHERE removed_at IS NULL
-          ORDER BY dropped_at DESC
+          ORDER BY id DESC
           """
       )
 
       return rows.map(Store.gunk(from:))
+    }
+  }
+
+  func gunksForSource(sourceId: Int64) throws -> [Gunk] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            name,
+            purpose,
+            language,
+            confidence,
+            bundle_path,
+            manifest_path,
+            extracted_at,
+            approved_at,
+            removed_at
+          FROM gunks
+          WHERE source_id = ? AND removed_at IS NULL
+          ORDER BY id DESC
+          """,
+        arguments: [sourceId]
+      )
+
+      return rows.map(Store.gunk(from:))
+    }
+  }
+
+  func approveGunk(id: Int64) throws {
+    let approvedAt = now()
+
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          UPDATE gunks
+          SET approved_at = ?
+          WHERE id = ? AND removed_at IS NULL
+          """,
+        arguments: [approvedAt, id]
+      )
     }
   }
 
@@ -89,12 +259,30 @@ final class Store {
     }
   }
 
+  @discardableResult
+  func addTag(name: String) throws -> Tag {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: "INSERT OR IGNORE INTO tags (name) VALUES (?)",
+        arguments: [name]
+      )
+
+      let row = try Row.fetchOne(
+        db,
+        sql: "SELECT id, name FROM tags WHERE name = ?",
+        arguments: [name]
+      )!
+
+      return Store.tag(from: row)
+    }
+  }
+
   func listTags() throws -> [Tag] {
     try databaseQueue.read { db in
       let rows = try Row.fetchAll(
         db,
         sql: """
-          SELECT name, description
+          SELECT id, name
           FROM tags
           ORDER BY name ASC
           """
@@ -104,30 +292,17 @@ final class Store {
     }
   }
 
-  func setGunkTags(gunkId: Int64, tags: [GunkTagInput]) throws {
-    let taggedAt = now()
-
+  func addGunkTag(gunkId: Int64, tagId: Int64, confidence: Double?) throws {
     try databaseQueue.write { db in
       try db.execute(
-        sql: "DELETE FROM gunk_tags WHERE gunk_id = ?",
-        arguments: [gunkId]
+        sql: """
+          INSERT INTO gunk_tags (gunk_id, tag_id, confidence)
+          VALUES (?, ?, ?)
+          ON CONFLICT(gunk_id, tag_id) DO UPDATE
+          SET confidence = excluded.confidence
+          """,
+        arguments: [gunkId, tagId, confidence]
       )
-
-      for tag in tags {
-        try db.execute(
-          sql: """
-            INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at)
-            VALUES (?, ?, ?, ?, ?)
-            """,
-          arguments: [
-            gunkId,
-            tag.tag,
-            tag.confidence,
-            tag.source,
-            taggedAt
-          ]
-        )
-      }
     }
   }
 
@@ -136,15 +311,111 @@ final class Store {
       let rows = try Row.fetchAll(
         db,
         sql: """
-          SELECT gunk_id, tag, confidence, source, tagged_at
+          SELECT
+            gunk_tags.gunk_id,
+            gunk_tags.tag_id,
+            tags.name AS tag,
+            gunk_tags.confidence
           FROM gunk_tags
-          WHERE gunk_id = ?
-          ORDER BY confidence DESC, tag ASC
+          JOIN tags ON tags.id = gunk_tags.tag_id
+          WHERE gunk_tags.gunk_id = ?
+          ORDER BY gunk_tags.confidence DESC, tags.name ASC
           """,
         arguments: [gunkId]
       )
 
       return rows.map(Store.gunkTag(from:))
+    }
+  }
+
+  @discardableResult
+  func addGunkFile(gunkId: Int64, relpath: String, size: Int64?) throws -> GunkFile {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO gunk_files (gunk_id, relpath, size)
+          VALUES (?, ?, ?)
+          """,
+        arguments: [gunkId, relpath, size]
+      )
+
+      return GunkFile(
+        id: db.lastInsertedRowID,
+        gunkId: gunkId,
+        relpath: relpath,
+        size: size
+      )
+    }
+  }
+
+  func filesForGunk(gunkId: Int64) throws -> [GunkFile] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT id, gunk_id, relpath, size
+          FROM gunk_files
+          WHERE gunk_id = ?
+          ORDER BY relpath ASC
+          """,
+        arguments: [gunkId]
+      )
+
+      return rows.map(Store.gunkFile(from:))
+    }
+  }
+
+  @discardableResult
+  func recordLLMRun(
+    sourceId: Int64?,
+    provider: String,
+    model: String,
+    inputTokens: Int64? = nil,
+    outputTokens: Int64? = nil,
+    costUsd: Double? = nil,
+    startedAt: Int64? = nil,
+    finishedAt: Int64? = nil
+  ) throws -> LLMRun {
+    let startedAt = startedAt ?? now()
+
+    return try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO llm_runs (
+            source_id,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost_usd,
+            started_at,
+            finished_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [
+          sourceId,
+          provider,
+          model,
+          inputTokens,
+          outputTokens,
+          costUsd,
+          startedAt,
+          finishedAt
+        ]
+      )
+
+      return LLMRun(
+        id: db.lastInsertedRowID,
+        sourceId: sourceId,
+        provider: provider,
+        model: model,
+        inputTokens: inputTokens,
+        outputTokens: outputTokens,
+        costUsd: costUsd,
+        startedAt: startedAt,
+        finishedAt: finishedAt
+      )
     }
   }
 
@@ -178,8 +449,8 @@ final class Store {
     }
   }
 
-  private static func gunk(from row: Row) -> Gunk {
-    Gunk(
+  private static func source(from row: Row) -> Source {
+    Source(
       id: row["id"],
       name: row["name"],
       path: row["path"],
@@ -188,20 +459,44 @@ final class Store {
     )
   }
 
+  private static func gunk(from row: Row) -> Gunk {
+    Gunk(
+      id: row["id"],
+      sourceId: row["source_id"],
+      name: row["name"],
+      purpose: row["purpose"],
+      language: row["language"],
+      confidence: row["confidence"],
+      bundlePath: row["bundle_path"],
+      manifestPath: row["manifest_path"],
+      extractedAt: row["extracted_at"],
+      approvedAt: row["approved_at"],
+      removedAt: row["removed_at"]
+    )
+  }
+
   private static func tag(from row: Row) -> Tag {
     Tag(
-      name: row["name"],
-      description: row["description"]
+      id: row["id"],
+      name: row["name"]
     )
   }
 
   private static func gunkTag(from row: Row) -> GunkTag {
     GunkTag(
       gunkId: row["gunk_id"],
+      tagId: row["tag_id"],
       tag: row["tag"],
-      confidence: row["confidence"],
-      source: row["source"],
-      taggedAt: row["tagged_at"]
+      confidence: row["confidence"]
+    )
+  }
+
+  private static func gunkFile(from row: Row) -> GunkFile {
+    GunkFile(
+      id: row["id"],
+      gunkId: row["gunk_id"],
+      relpath: row["relpath"],
+      size: row["size"]
     )
   }
 

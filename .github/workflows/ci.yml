@@ -103,6 +103,18 @@ jobs:
       - name: Skip package jobs
         run: echo "Only docs changed; package CI jobs are skipped."
 
+  schema-parity:
+    name: Schema parity
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Check Swift and MCP schema parity
+        run: bash scripts/check-schema-parity.sh
+
   mcp:
     name: MCP
     runs-on: ubuntu-latest

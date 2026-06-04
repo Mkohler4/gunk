@@ -5,7 +5,7 @@ import Observation
 final class GunkListModel {
   private let store: Store
 
-  private(set) var gunks: [Gunk] = []
+  private(set) var sources: [Source] = []
   private(set) var errorMessage: String?
 
   init(store: Store) {
@@ -14,7 +14,7 @@ final class GunkListModel {
 
   func refresh() {
     do {
-      gunks = try store.listGunks()
+      sources = try store.listSources()
       errorMessage = nil
     } catch {
       errorMessage = error.localizedDescription
@@ -23,8 +23,8 @@ final class GunkListModel {
 
   func delete(id: Int64) {
     do {
-      try store.removeGunk(id: id)
-      gunks = try store.listGunks()
+      try store.removeSource(id: id)
+      sources = try store.listSources()
       errorMessage = nil
     } catch {
       errorMessage = error.localizedDescription
