@@ -56,12 +56,35 @@ and schema column names inside the store layer.
 ## MCP Entrypoint
 
 `src/index.ts` starts the `gunk-mcp` server using the standard MCP stdio
-transport. The server advertises the tools capability and currently returns an
-empty list for `tools/list`; T-2.8 adds the first tool.
+transport. The server advertises the tools capability and registers its tools
+through `src/server/registerTools.ts`.
 
 Run `bun run start` from `mcp/` to start the server. It stays alive while stdin
 is open and exits when its parent MCP client closes the connection or the
 process receives `Ctrl-C`.
+
+## Tools
+
+### `list_gunks`
+
+Lists the user's active gunks (folders dropped onto `gunk.app`) in newest-first
+order. The tool takes no input. On each call, it opens `~/.gunk/store.db`
+through the schema opener, excludes soft-removed gunks, and returns JSON as MCP
+text content:
+
+```json
+{
+  "gunks": [
+    {
+      "id": 2,
+      "name": "newer-project",
+      "path": "/Users/example/code/newer-project",
+      "droppedAt": 200,
+      "removedAt": null
+    }
+  ]
+}
+```
 
 ## Context
 

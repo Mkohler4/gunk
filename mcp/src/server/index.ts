@@ -1,12 +1,12 @@
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 import type { Transport } from "@modelcontextprotocol/sdk/shared/transport.js";
-import { ListToolsRequestSchema } from "@modelcontextprotocol/sdk/types.js";
 
 import packageJson from "../../package.json" with { type: "json" };
 import { SERVER_CAPABILITIES } from "./capabilities.js";
+import { registerTools, type RegisterToolsOptions } from "./registerTools.js";
 
-export function createServer(): Server {
+export function createServer(options: RegisterToolsOptions = {}): Server {
   const server = new Server(
     {
       name: "gunk-mcp",
@@ -17,17 +17,16 @@ export function createServer(): Server {
     },
   );
 
-  server.setRequestHandler(ListToolsRequestSchema, async () => ({
-    tools: [],
-  }));
+  registerTools(server, options);
 
   return server;
 }
 
 export async function startServer(
   transport: Transport = new StdioServerTransport(),
+  options: RegisterToolsOptions = {},
 ): Promise<Server> {
-  const server = createServer();
+  const server = createServer(options);
 
   await server.connect(transport);
 
