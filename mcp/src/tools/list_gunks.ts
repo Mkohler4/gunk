@@ -8,7 +8,7 @@ import { listGunks } from "../store/index.js";
 
 export const LIST_GUNKS_TOOL = {
   name: "list_gunks",
-  description: "List the user's gunks (folders dropped onto gunk.app).",
+  description: "List the user's extracted module gunks.",
   inputSchema: {
     type: "object",
     properties: {},

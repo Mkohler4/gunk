@@ -17,16 +17,32 @@ import {
 import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
 
 function createMemoryStore(
-  path?: string,
+  bundlePath?: string | null,
   removedAt: number | null = null,
 ): Database {
   const db = new Database(":memory:");
   runMigrations(db);
 
-  if (path) {
+  db.query(
+    "INSERT INTO sources (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+  ).run(1, "source", "/code/source", 100, null);
+
+  if (bundlePath !== undefined) {
     db.query(
-      "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(7, "fixture", path, 123, removedAt);
+      "INSERT INTO gunks (id, source_id, name, purpose, language, confidence, bundle_path, manifest_path, extracted_at, approved_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      7,
+      1,
+      "fixture",
+      "Fixture module",
+      "TypeScript",
+      0.9,
+      bundlePath,
+      bundlePath === null ? null : join(bundlePath, "gunk.yml"),
+      123,
+      null,
+      removedAt,
+    );
   }
 
   return db;
@@ -67,6 +83,7 @@ describe("get_gunk handler", () => {
     writeFileSync(join(folderPath, "README.md"), "# Fixture\n");
     writeFileSync(join(folderPath, "package.json"), "{}");
     writeFileSync(join(folderPath, "src", "index.ts"), "nested");
+    writeFileSync(join(folderPath, "gunk.yml"), "name: fixture\n");
   });
 
   afterEach(() => {
@@ -98,6 +115,15 @@ describe("get_gunk handler", () => {
     });
   });
 
+  test("returns error for unextracted id", async () => {
+    const handleGetGunk = createGetGunkHandler(() => createMemoryStore(null));
+
+    await expect(handleGetGunk(7)).resolves.toMatchObject({
+      isError: true,
+      content: [{ text: "Gunk not found: 7" }],
+    });
+  });
+
   test("returns full payload for known id", async () => {
     const handleGetGunk = createGetGunkHandler(() =>
       createMemoryStore(folderPath),
@@ -105,11 +131,18 @@ describe("get_gunk handler", () => {
 
     expect(parseTextResult(await handleGetGunk(7))).toEqual({
       id: 7,
+      sourceId: 1,
       name: "fixture",
-      path: folderPath,
-      droppedAt: 123,
+      purpose: "Fixture module",
+      language: "TypeScript",
+      confidence: 0.9,
+      bundlePath: folderPath,
+      manifestPath: join(folderPath, "gunk.yml"),
+      extractedAt: 123,
+      approvedAt: null,
       readme: "# Fixture\n",
       tree: [
+        { name: "gunk.yml", type: "file", size: 14 },
         { name: "package.json", type: "file", size: 2 },
         { name: "README.md", type: "file", size: 10 },
         { name: "src", type: "dir" },
@@ -126,6 +159,7 @@ describe("get_gunk MCP registration", () => {
   beforeEach(() => {
     folderPath = mkdtempSync(join(tmpdir(), "gunk-tool-registration-"));
     writeFileSync(join(folderPath, "README.md"), "# Registered\n");
+    writeFileSync(join(folderPath, "gunk.yml"), "name: fixture\n");
   });
 
   afterEach(async () => {
@@ -175,7 +209,7 @@ describe("get_gunk MCP registration", () => {
     expect(result && parseTextResult(result)).toMatchObject({
       id: 7,
       name: "fixture",
-      path: folderPath,
+      bundlePath: folderPath,
       readme: "# Registered\n",
     });
   });

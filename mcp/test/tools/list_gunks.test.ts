@@ -16,8 +16,14 @@ import {
 interface SeedGunk {
   id: number;
   name: string;
-  path: string;
-  droppedAt: number;
+  sourceId?: number;
+  purpose?: string | null;
+  language?: string | null;
+  confidence?: number | null;
+  bundlePath?: string | null;
+  manifestPath?: string | null;
+  extractedAt?: number | null;
+  approvedAt?: number | null;
   removedAt?: number | null;
 }
 
@@ -25,16 +31,26 @@ function createMemoryStore(gunks: SeedGunk[] = []): Database {
   const db = new Database(":memory:");
   runMigrations(db);
 
+  db.query(
+    "INSERT INTO sources (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+  ).run(1, "source", "/code/source", 100, null);
+
   const insert = db.query(
-    "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+    "INSERT INTO gunks (id, source_id, name, purpose, language, confidence, bundle_path, manifest_path, extracted_at, approved_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
   );
 
   for (const gunk of gunks) {
     insert.run(
       gunk.id,
+      gunk.sourceId ?? 1,
       gunk.name,
-      gunk.path,
-      gunk.droppedAt,
+      gunk.purpose ?? null,
+      gunk.language ?? null,
+      gunk.confidence ?? null,
+      gunk.bundlePath ?? null,
+      gunk.manifestPath ?? null,
+      gunk.extractedAt ?? null,
+      gunk.approvedAt ?? null,
       gunk.removedAt ?? null,
     );
   }
@@ -75,35 +91,53 @@ describe("list_gunks handler", () => {
     expect(parseGunks(await handleListGunks())).toEqual([]);
   });
 
-  test("returns three seeded gunks in dropped_at desc order", async () => {
+  test("returns seeded module gunks in id desc order", async () => {
     const handleListGunks = createListGunksHandler(() =>
       createMemoryStore([
-        { id: 1, name: "oldest", path: "/code/oldest", droppedAt: 100 },
-        { id: 2, name: "newest", path: "/code/newest", droppedAt: 300 },
-        { id: 3, name: "middle", path: "/code/middle", droppedAt: 200 },
+        { id: 1, name: "oldest", confidence: 0.6 },
+        { id: 2, name: "newest", confidence: 0.9 },
+        { id: 3, name: "middle", confidence: 0.7 },
       ]),
     );
 
     expect(parseGunks(await handleListGunks())).toEqual([
       {
-        id: 2,
-        name: "newest",
-        path: "/code/newest",
-        droppedAt: 300,
+        id: 3,
+        sourceId: 1,
+        name: "middle",
+        purpose: null,
+        language: null,
+        confidence: 0.7,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
         removedAt: null,
       },
       {
-        id: 3,
-        name: "middle",
-        path: "/code/middle",
-        droppedAt: 200,
+        id: 2,
+        sourceId: 1,
+        name: "newest",
+        purpose: null,
+        language: null,
+        confidence: 0.9,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
         removedAt: null,
       },
       {
         id: 1,
+        sourceId: 1,
         name: "oldest",
-        path: "/code/oldest",
-        droppedAt: 100,
+        purpose: null,
+        language: null,
+        confidence: 0.6,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
         removedAt: null,
       },
     ]);
@@ -112,12 +146,10 @@ describe("list_gunks handler", () => {
   test("excludes removed gunks", async () => {
     const handleListGunks = createListGunksHandler(() =>
       createMemoryStore([
-        { id: 1, name: "active", path: "/code/active", droppedAt: 100 },
+        { id: 1, name: "active" },
         {
           id: 2,
           name: "removed",
-          path: "/code/removed",
-          droppedAt: 200,
           removedAt: 300,
         },
       ]),
@@ -126,9 +158,15 @@ describe("list_gunks handler", () => {
     expect(parseGunks(await handleListGunks())).toEqual([
       {
         id: 1,
+        sourceId: 1,
         name: "active",
-        path: "/code/active",
-        droppedAt: 100,
+        purpose: null,
+        language: null,
+        confidence: null,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
         removedAt: null,
       },
     ]);
@@ -174,8 +212,8 @@ describe("list_gunks MCP registration", () => {
   test("tools/call returns the expected data", async () => {
     await connect(() =>
       createMemoryStore([
-        { id: 1, name: "older", path: "/code/older", droppedAt: 100 },
-        { id: 2, name: "newer", path: "/code/newer", droppedAt: 200 },
+        { id: 1, name: "older", confidence: 0.5 },
+        { id: 2, name: "newer", confidence: 0.8 },
       ]),
     );
 
@@ -187,20 +225,16 @@ describe("list_gunks MCP registration", () => {
       CallToolResultSchema,
     );
 
-    expect(result && parseGunks(result)).toEqual([
+    expect(result && parseGunks(result)).toMatchObject([
       {
         id: 2,
         name: "newer",
-        path: "/code/newer",
-        droppedAt: 200,
-        removedAt: null,
+        confidence: 0.8,
       },
       {
         id: 1,
         name: "older",
-        path: "/code/older",
-        droppedAt: 100,
-        removedAt: null,
+        confidence: 0.5,
       },
     ]);
   });
