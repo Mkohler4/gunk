@@ -48,7 +48,7 @@ export default function SiteHeader() {
         <nav>
           <a
             className="ghost"
-            href="https://github.com"
+            href="https://github.com/Mkohler4/gunk"
             target="_blank"
             rel="noopener noreferrer"
           >
