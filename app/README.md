@@ -3,9 +3,8 @@
 Native macOS menubar app for gunk.
 
 This package is the Swift / SwiftUI / AppKit half of the product described in
-the root README and ADR-0002. For T-2.3 it only contains a menubar skeleton:
-an accessory app, an `NSStatusItem`, and a placeholder popover that later tasks
-will replace with the drop-zone and list views.
+the root README and ADR-0002. It runs as a menu bar accessory with an
+`NSStatusItem` and a popover for dropping, listing, and removing gunks.
 
 ## Requirements
 
@@ -29,6 +28,10 @@ and shows a `G` status item. Open the popover and drag a folder onto the
 drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs are rejected.
 Successful drops post a `gunkInserted` notification so the list view can
 refresh immediately.
+
+The popover lists active gunks below the drop zone in newest-first order. Each
+row shows the folder name, middle-truncated path, relative drop date, and a
+trash button that soft-removes the gunk from the shared store.
 
 ## Store
 

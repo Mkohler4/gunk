@@ -27,9 +27,12 @@ final class MenubarController {
 
   private func configurePopover(store: Store) {
     popover.behavior = .transient
-    popover.contentSize = NSSize(width: 320, height: 220)
+    popover.contentSize = NSSize(width: 360, height: 480)
     popover.contentViewController = NSHostingController(
-      rootView: PopoverView(dropHandler: DropZoneHandler(store: store))
+      rootView: PopoverView(
+        dropHandler: DropZoneHandler(store: store),
+        listModel: GunkListModel(store: store)
+      )
     )
   }
 
