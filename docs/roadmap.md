@@ -58,7 +58,7 @@ architecture is allowed to ship in isolation.
 - [ ] Drop handler: copy folder *path* (not contents) into `~/.gunk/store.db`
 - [ ] List view: dropped folders, with name, path, file count, drop date
 - [ ] Delete affordance: remove a folder from gunk
-- [ ] SQLite schema v0 (using GRDB or sqlite3): `gunks`, `files`
+- [x] SQLite schema v0 (using GRDB or sqlite3): `gunks`, `files`
 
 ### MCP server side
 

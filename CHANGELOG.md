@@ -8,6 +8,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- SQLite schema v0 (`gunks`, `files`, `schema_version`) and idempotent
+  migration runner.
 - GitHub Actions CI workflow (mcp + app jobs).
 - `gunk.app` Swift Package scaffold (menubar app skeleton).
 - Monorepo skeleton (`mcp/`, `app/`), `.editorconfig`, `.tool-versions`,

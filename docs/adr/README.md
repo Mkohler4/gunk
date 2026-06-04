@@ -12,6 +12,7 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0003  | Ambient over invoked           | Accepted |
 | 0004  | Drag-in over file-watch        | Accepted |
 | 0005  | Monorepo layout                | Accepted |
+| 0006  | SQLite schema v0               | Accepted |
 
 ## Format
 
