@@ -4,6 +4,7 @@ import SwiftUI
 struct PopoverView: View {
   let dropHandler: DropZoneHandler
   let listModel: GunkListModel
+  let store: Store
 
   var body: some View {
     TabView {
@@ -12,7 +13,7 @@ struct PopoverView: View {
           Text("Sources")
         }
 
-      SettingsView()
+      SettingsView(store: store)
         .tabItem {
           Text("Settings")
         }

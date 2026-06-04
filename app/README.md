@@ -66,6 +66,7 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 | `filesForGunk(gunkId:)` | Returns files for one module ordered by path. |
 | `recordLLMRun(...)` | Records provider/model token and cost accounting for a source. |
 | `llmRunsForSource(sourceId:)` | Returns LLM runs for one source ordered by insertion. |
+| `listLLMRuns()` | Returns all LLM runs ordered by start time for cost aggregation. |
 
 The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
 byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.
@@ -124,3 +125,15 @@ example `~/Documents/project`, and never records git remotes. When the source is
 a git repository, only the short local commit hash is included. Top-level source
 licenses are detected where possible; restrictive licenses such as GPL are
 flagged in the manifest but do not block extraction.
+
+## Processing and Cost UI
+
+`ProcessingModel` tracks active source decompositions, exposes
+`isProcessing`, per-source progress fractions, and the number of modules found
+so far, then drives `DockIconController` to show the processing bin state and a
+live badge count. When all active work completes, it reflects the current gunk
+count as the idle Dock badge.
+
+`CostMeterView` appears in Settings and summarizes token and USD spend from
+`llm_runs` for today and all time. The aggregation treats missing token or cost
+fields as zero so partial provider responses still render cleanly.
