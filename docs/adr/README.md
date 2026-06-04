@@ -5,18 +5,19 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 
 ## Index
 
-| #     | Title                          | Status   |
-|-------|--------------------------------|----------|
-| 0001  | What is gunk?                  | Accepted |
-| 0002  | Stack and runtime              | Accepted |
-| 0003  | Ambient over invoked           | Accepted |
-| 0004  | Drag-in over file-watch        | Accepted |
-| 0005  | Monorepo layout                | Accepted |
-| 0006  | SQLite schema v0               | Accepted |
-| 0007  | SQLite schema v1 tags          | Accepted |
-| 0008  | Gunks are modules              | Accepted |
-| 0009  | Dock recycling-bin surface     | Accepted |
-| 0010  | SQLite schema v2 modules       | Accepted |
+| #     | Title                                                | Status   |
+|-------|------------------------------------------------------|----------|
+| 0001  | What is gunk?                                        | Accepted |
+| 0002  | Stack and runtime                                    | Accepted |
+| 0003  | Ambient over invoked                                 | Accepted |
+| 0004  | Drag-in over file-watch                              | Accepted |
+| 0005  | Monorepo layout                                      | Accepted |
+| 0006  | SQLite schema v0                                     | Accepted |
+| 0007  | SQLite schema v1 tags                                | Accepted |
+| 0008  | Gunks are modules                                    | Accepted |
+| 0009  | Dock recycling-bin surface                           | Accepted |
+| 0010  | SQLite schema v2 modules                             | Accepted |
+| 0011  | AI decomposition pipeline and gunk.yml manifest      | Accepted |
 
 ## Format
 
