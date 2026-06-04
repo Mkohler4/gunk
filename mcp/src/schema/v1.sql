@@ -1,37 +1,3 @@
-enum Schema {
-  static let version = 1
-
-  static let migrations = [
-    (version: 0, sql: v0),
-    (version: 1, sql: v1)
-  ]
-
-  // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
-  static let v0 = """
-CREATE TABLE schema_version (
-  version INTEGER PRIMARY KEY,
-  applied_at INTEGER NOT NULL
-);
-
-CREATE TABLE gunks (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  name TEXT NOT NULL,
-  path TEXT NOT NULL UNIQUE,
-  dropped_at INTEGER NOT NULL,
-  removed_at INTEGER
-);
-
-CREATE TABLE files (
-  id INTEGER PRIMARY KEY AUTOINCREMENT,
-  gunk_id INTEGER NOT NULL REFERENCES gunks(id) ON DELETE CASCADE,
-  relpath TEXT NOT NULL,
-  size INTEGER,
-  UNIQUE(gunk_id, relpath)
-);
-""" + "\n"
-
-  // Keep byte-for-byte identical to mcp/src/schema/v1.sql. See ADR-0007.
-  static let v1 = """
 CREATE TABLE tags (
   name TEXT PRIMARY KEY,
   description TEXT NOT NULL
@@ -57,5 +23,3 @@ INSERT INTO tags (name, description) VALUES
   ('db-layer', 'Database models, migrations, and persistence code'),
   ('email', 'Email templates, delivery, and notification flows'),
   ('search', 'Search, indexing, ranking, and retrieval code');
-""" + "\n"
-}

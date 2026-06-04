@@ -75,7 +75,32 @@ final class StoreTests: XCTestCase {
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
 
-    XCTAssertEqual(versions, [0])
+    XCTAssertEqual(versions, [0, 1])
+  }
+
+  func testMigratesExistingV0StoreToV1() throws {
+    let queue = try DatabaseQueue()
+
+    try queue.write { db in
+      try db.execute(sql: Schema.v0)
+      try db.execute(
+        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+        arguments: [0, 100]
+      )
+    }
+
+    _ = try Store(databaseQueue: queue, now: { 200 })
+
+    let versions = try queue.read { db in
+      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
+    }
+
+    let tagCount = try queue.read { db in
+      try Int.fetchOne(db, sql: "SELECT COUNT(*) FROM tags")
+    }
+
+    XCTAssertEqual(versions, [0, 1])
+    XCTAssertEqual(tagCount, 10)
   }
 
   func testFileBackedStoreUsesWALMode() throws {
@@ -122,15 +147,97 @@ final class StoreTests: XCTestCase {
     XCTAssertNil(row?["removedAt"] as Int64?)
   }
 
-  func testSchemaMatchesMCPSourceOfTruthByteForByte() throws {
-    let sourceURL = URL(fileURLWithPath: #filePath)
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .deletingLastPathComponent()
-      .appendingPathComponent("mcp/src/schema/v0.sql")
+  func testListTagsReturnsTaxonomy() throws {
+    let (store, _) = try makeStore(now: 100)
 
-    XCTAssertEqual(Data(Schema.v0.utf8), try Data(contentsOf: sourceURL))
+    XCTAssertEqual(
+      try store.listTags().map(\.name),
+      [
+        "api",
+        "auth",
+        "cli",
+        "dashboard",
+        "db-layer",
+        "email",
+        "payments",
+        "scraper",
+        "search",
+        "ui-kit"
+      ]
+    )
+  }
+
+  func testSetGunkTagsReplacesTagsAndRecordsTimestamp() throws {
+    var timestamp: Int64 = 100
+    let queue = try DatabaseQueue()
+    let store = try Store(databaseQueue: queue) {
+      defer { timestamp += 100 }
+      return timestamp
+    }
+    let gunk = try store.insertGunk(name: "fixture", path: "/code/fixture")
+
+    try store.setGunkTags(
+      gunkId: gunk.id,
+      tags: [
+        GunkTagInput(tag: "api", confidence: 0.7, source: "heuristic"),
+        GunkTagInput(tag: "auth", confidence: 0.9, source: "manual")
+      ]
+    )
+    try store.setGunkTags(
+      gunkId: gunk.id,
+      tags: [
+        GunkTagInput(tag: "payments", confidence: 0.8, source: "llm")
+      ]
+    )
+
+    XCTAssertEqual(
+      try store.listGunkTags(gunkId: gunk.id),
+      [
+        GunkTag(
+          gunkId: gunk.id,
+          tag: "payments",
+          confidence: 0.8,
+          source: "llm",
+          taggedAt: 500
+        )
+      ]
+    )
+  }
+
+  func testListGunkTagsReturnsTagsOrderedByConfidence() throws {
+    let (store, _) = try makeStore(now: 500)
+    let gunk = try store.insertGunk(name: "fixture", path: "/code/fixture")
+
+    try store.setGunkTags(
+      gunkId: gunk.id,
+      tags: [
+        GunkTagInput(tag: "api", confidence: 0.7, source: "heuristic"),
+        GunkTagInput(tag: "auth", confidence: 0.9, source: "manual")
+      ]
+    )
+
+    XCTAssertEqual(try store.listGunkTags(gunkId: gunk.id).map(\.tag), [
+      "auth",
+      "api"
+    ])
+  }
+
+  func testSchemaMatchesMCPSourceOfTruthByteForByte() throws {
+    let schemaDirectory = URL(fileURLWithPath: #filePath)
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .deletingLastPathComponent()
+      .appendingPathComponent("mcp/src/schema")
+
+    XCTAssertEqual(
+      Data(Schema.v0.utf8),
+      try Data(contentsOf: schemaDirectory.appendingPathComponent("v0.sql"))
+    )
+    XCTAssertEqual(
+      Data(Schema.v1.utf8),
+      try Data(contentsOf: schemaDirectory.appendingPathComponent("v1.sql"))
+    )
   }
 
   private func makeStore(now: Int64) throws -> (Store, DatabaseQueue) {

@@ -89,6 +89,65 @@ final class Store {
     }
   }
 
+  func listTags() throws -> [Tag] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT name, description
+          FROM tags
+          ORDER BY name ASC
+          """
+      )
+
+      return rows.map(Store.tag(from:))
+    }
+  }
+
+  func setGunkTags(gunkId: Int64, tags: [GunkTagInput]) throws {
+    let taggedAt = now()
+
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: "DELETE FROM gunk_tags WHERE gunk_id = ?",
+        arguments: [gunkId]
+      )
+
+      for tag in tags {
+        try db.execute(
+          sql: """
+            INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at)
+            VALUES (?, ?, ?, ?, ?)
+            """,
+          arguments: [
+            gunkId,
+            tag.tag,
+            tag.confidence,
+            tag.source,
+            taggedAt
+          ]
+        )
+      }
+    }
+  }
+
+  func listGunkTags(gunkId: Int64) throws -> [GunkTag] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT gunk_id, tag, confidence, source, tagged_at
+          FROM gunk_tags
+          WHERE gunk_id = ?
+          ORDER BY confidence DESC, tag ASC
+          """,
+        arguments: [gunkId]
+      )
+
+      return rows.map(Store.gunkTag(from:))
+    }
+  }
+
   private func prepareDatabase() throws {
     try databaseQueue.writeWithoutTransaction { db in
       try db.execute(sql: "PRAGMA journal_mode = WAL")
@@ -109,15 +168,13 @@ final class Store {
         currentVersion = -1
       }
 
-      guard currentVersion < Schema.version else {
-        return
+      for migration in Schema.migrations where migration.version > currentVersion {
+        try db.execute(sql: migration.sql)
+        try db.execute(
+          sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+          arguments: [migration.version, now()]
+        )
       }
-
-      try db.execute(sql: Schema.v0)
-      try db.execute(
-        sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
-        arguments: [Schema.version, now()]
-      )
     }
   }
 
@@ -128,6 +185,23 @@ final class Store {
       path: row["path"],
       droppedAt: row["dropped_at"],
       removedAt: row["removed_at"]
+    )
+  }
+
+  private static func tag(from row: Row) -> Tag {
+    Tag(
+      name: row["name"],
+      description: row["description"]
+    )
+  }
+
+  private static func gunkTag(from row: Row) -> GunkTag {
+    GunkTag(
+      gunkId: row["gunk_id"],
+      tag: row["tag"],
+      confidence: row["confidence"],
+      source: row["source"],
+      taggedAt: row["tagged_at"]
     )
   }
 

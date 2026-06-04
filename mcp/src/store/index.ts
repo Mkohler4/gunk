@@ -1,6 +1,6 @@
 import type { Database } from "bun:sqlite";
 
-import type { Gunk, GunkFile } from "./types.js";
+import type { Gunk, GunkFile, GunkTag, Tag } from "./types.js";
 
 const GUNK_COLUMNS = `
   id,
@@ -48,4 +48,30 @@ export function getGunkFiles(db: Database, gunkId: number): GunkFile[] {
     .all(gunkId);
 }
 
-export type { Gunk, GunkFile } from "./types.js";
+export function listTags(db: Database): Tag[] {
+  return db
+    .query<Tag, []>(
+      `SELECT name, description
+       FROM tags
+       ORDER BY name ASC`,
+    )
+    .all();
+}
+
+export function listGunkTags(db: Database, gunkId: number): GunkTag[] {
+  return db
+    .query<GunkTag, [number]>(
+      `SELECT
+         gunk_id AS gunkId,
+         tag,
+         confidence,
+         source,
+         tagged_at AS taggedAt
+       FROM gunk_tags
+       WHERE gunk_id = ?
+       ORDER BY confidence DESC, tag ASC`,
+    )
+    .all(gunkId);
+}
+
+export type { Gunk, GunkFile, GunkTag, Tag } from "./types.js";
