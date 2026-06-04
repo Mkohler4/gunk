@@ -4,6 +4,8 @@ import type { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import { afterEach, beforeEach, expect, test } from "vitest";
 
 import { createServer } from "../src/server/index.js";
+import { GET_GUNK_TOOL } from "../src/tools/get_gunk.js";
+import { LIST_GUNKS_TOOL } from "../src/tools/list_gunks.js";
 
 let client: Client;
 let server: Server;
@@ -46,15 +48,6 @@ test("server starts and advertises tools capability", () => {
 
 test("tools/list advertises registered tools", async () => {
   await expect(client.listTools()).resolves.toEqual({
-    tools: [
-      {
-        name: "list_gunks",
-        description: "List the user's gunks (folders dropped onto gunk.app).",
-        inputSchema: {
-          type: "object",
-          properties: {},
-        },
-      },
-    ],
+    tools: [LIST_GUNKS_TOOL, GET_GUNK_TOOL],
   });
 });

@@ -7,6 +7,7 @@ import { afterEach, describe, expect, test } from "vitest";
 
 import { runMigrations } from "../../src/schema/index.js";
 import { createServer } from "../../src/server/index.js";
+import { GET_GUNK_TOOL } from "../../src/tools/get_gunk.js";
 import {
   createListGunksHandler,
   LIST_GUNKS_TOOL,
@@ -166,7 +167,7 @@ describe("list_gunks MCP registration", () => {
     await connect();
 
     await expect(client?.listTools()).resolves.toEqual({
-      tools: [LIST_GUNKS_TOOL],
+      tools: [LIST_GUNKS_TOOL, GET_GUNK_TOOL],
     });
   });
 

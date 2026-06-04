@@ -86,6 +86,36 @@ text content:
 }
 ```
 
+### `get_gunk`
+
+Returns one active gunk's metadata, root README content, and shallow file tree.
+Call it with an integer `id` returned by `list_gunks`:
+
+```json
+{
+  "id": 2
+}
+```
+
+The tool checks for a root README, caps its content at 64 KiB, and returns at
+most 200 root entries while skipping `.git`, `node_modules`, and `.DS_Store`:
+
+```json
+{
+  "id": 2,
+  "name": "newer-project",
+  "path": "/Users/example/code/newer-project",
+  "droppedAt": 200,
+  "readme": "# Newer project\n",
+  "tree": [
+    { "name": "README.md", "type": "file", "size": 16 },
+    { "name": "src", "type": "dir" }
+  ]
+}
+```
+
+Unknown or removed IDs return an MCP tool error with `Gunk not found: <id>`.
+
 ## Context
 
 - Root README: [../README.md](../README.md)
