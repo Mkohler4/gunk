@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ADR-0011 (AI decomposition pipeline + gunk.yml spec).
 - `gunk.app` store v2 (sources, module gunks, tags, files, llm_runs) and schema parity CI.
 - SQLite schema v2 (sources + module-level gunks, tags, gunk_files, llm_runs) and v0/v1 to v2 migration.
 - ADR-0008 (gunks are modules), ADR-0009 (Dock recycling-bin surface).
