@@ -10,9 +10,11 @@ struct SettingsView: View {
   @State private var isTestingConnection = false
 
   private let secretStore: SecretStore
+  private let store: Store?
   private let testConnection: (LLMProvider, String, String) async throws -> Void
 
   init(
+    store: Store? = nil,
     provider: LLMProvider = .openAI,
     model: String? = nil,
     apiKey: String = "",
@@ -33,6 +35,7 @@ struct SettingsView: View {
       "llm.confidenceThreshold"
     )
     self._apiKey = State(initialValue: apiKey)
+    self.store = store
     self.secretStore = secretStore
     self.testConnection = testConnection
   }
@@ -75,6 +78,12 @@ struct SettingsView: View {
         Text(statusMessage)
           .font(.caption)
           .foregroundStyle(.secondary)
+      }
+
+      if let store {
+        Divider()
+
+        CostMeterView(store: store)
       }
     }
     .formStyle(.grouped)

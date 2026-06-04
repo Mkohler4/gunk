@@ -548,6 +548,30 @@ final class Store {
     }
   }
 
+  func listLLMRuns() throws -> [LLMRun] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost_usd,
+            started_at,
+            finished_at
+          FROM llm_runs
+          ORDER BY started_at ASC, id ASC
+          """
+      )
+
+      return rows.map(Store.llmRun(from:))
+    }
+  }
+
   private func prepareDatabase() throws {
     try databaseQueue.writeWithoutTransaction { db in
       try db.execute(sql: "PRAGMA journal_mode = WAL")

@@ -3,6 +3,7 @@ import AppKit
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
   private var dockIconController: DockIconController?
+  private var processingModel: ProcessingModel?
   private var menubarController: MenubarController?
   private var store: Store?
   private let fileManager: FileManager
@@ -25,10 +26,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     do {
       let store = try Store(path: Store.defaultURL)
       let dockIconController = DockIconController()
-      dockIconController.reflectGunkCount(try store.listGunks().count)
+      let processingModel = ProcessingModel(
+        dockIconController: dockIconController,
+        gunkCount: { try store.listGunks().count }
+      )
+      processingModel.refreshIdleDockState()
 
       self.store = store
       self.dockIconController = dockIconController
+      self.processingModel = processingModel
       menubarController = MenubarController(store: store)
     } catch {
       NSApp.presentError(error)
@@ -46,8 +52,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
     do {
       let store = try activeStore()
-      dockIconController?.setState(.processing)
-      defer { refreshDockIcon(store: store) }
+      let processingModel = try activeProcessingModel(store: store)
 
       for directory in directories {
         for sourceURL in try sourceDetector.detect(folder: directory) {
@@ -57,7 +62,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           )
 
           notificationCenter.post(name: .gunkInserted, object: source)
-          enqueueDecomposition(for: source)
+          processingModel.begin(sourceId: source.id)
+          enqueueDecomposition(for: source, processingModel: processingModel)
         }
       }
     } catch {
@@ -75,13 +81,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return store
   }
 
-  private func refreshDockIcon(store: Store) {
-    do {
-      dockIconController?.reflectGunkCount(try store.listGunks().count)
-    } catch {
-      dockIconController?.setState(.empty)
-      NSApp.presentError(error)
+  private func activeProcessingModel(store: Store) throws -> ProcessingModel {
+    if let processingModel {
+      return processingModel
     }
+
+    let dockIconController = dockIconController ?? DockIconController()
+    self.dockIconController = dockIconController
+
+    let processingModel = ProcessingModel(
+      dockIconController: dockIconController,
+      gunkCount: { try store.listGunks().count }
+    )
+    self.processingModel = processingModel
+    return processingModel
   }
 
   private func isDirectoryURL(_ url: URL) -> Bool {
@@ -90,8 +103,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       && isDirectory.boolValue
   }
 
-  private func enqueueDecomposition(for source: Source) {
-    // T-3.11 wires drop-time decomposition orchestration and progress.
+  private func enqueueDecomposition(for source: Source, processingModel: ProcessingModel) {
+    // The decomposition runner is still configured separately; T-3.11 wires the
+    // user-visible progress surface so the eventual runner can report into it.
+    processingModel.update(sourceId: source.id, progress: 1)
+    processingModel.complete(sourceId: source.id)
     _ = source
   }
 }

@@ -31,7 +31,8 @@ final class MenubarController {
     popover.contentViewController = NSHostingController(
       rootView: PopoverView(
         dropHandler: DropZoneHandler(store: store),
-        listModel: GunkListModel(store: store)
+        listModel: GunkListModel(store: store),
+        store: store
       )
     )
   }
