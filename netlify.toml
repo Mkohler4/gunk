@@ -1,0 +1,10 @@
+# Netlify build config for the gunk marketing site (in web/).
+# Without this, Netlify was publishing the raw web/ source folder and skipping
+# the Next.js build entirely ("No build steps found"), so nothing real shipped.
+[build]
+  base = "web"
+  command = "npm run build"
+  publish = "out"
+
+[build.environment]
+  NODE_VERSION = "22"
