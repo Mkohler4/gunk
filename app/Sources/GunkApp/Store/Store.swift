@@ -103,6 +103,21 @@ final class Store {
     }
   }
 
+  func source(id: Int64) throws -> Source? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          SELECT id, name, path, dropped_at, removed_at
+          FROM sources
+          WHERE id = ? AND removed_at IS NULL
+          """,
+        arguments: [id]
+      )
+      .map(Store.source(from:))
+    }
+  }
+
   func removeSource(id: Int64) throws {
     let removedAt = now()
 
@@ -201,6 +216,32 @@ final class Store {
     }
   }
 
+  func gunk(id: Int64) throws -> Gunk? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            name,
+            purpose,
+            language,
+            confidence,
+            bundle_path,
+            manifest_path,
+            extracted_at,
+            approved_at,
+            removed_at
+          FROM gunks
+          WHERE id = ? AND removed_at IS NULL
+          """,
+        arguments: [id]
+      )
+      .map(Store.gunk(from:))
+    }
+  }
+
   func gunksForSource(sourceId: Int64) throws -> [Gunk] {
     try databaseQueue.read { db in
       let rows = try Row.fetchAll(
@@ -255,6 +296,24 @@ final class Store {
           WHERE id = ? AND removed_at IS NULL
           """,
         arguments: [removedAt, id]
+      )
+    }
+  }
+
+  func updateGunkExtraction(
+    id: Int64,
+    bundlePath: String,
+    manifestPath: String,
+    extractedAt: Int64
+  ) throws {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          UPDATE gunks
+          SET bundle_path = ?, manifest_path = ?, extracted_at = ?
+          WHERE id = ? AND removed_at IS NULL
+          """,
+        arguments: [bundlePath, manifestPath, extractedAt, id]
       )
     }
   }

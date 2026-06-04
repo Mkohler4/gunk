@@ -47,12 +47,15 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 | --- | --- |
 | `insertSource(name:path:)` | Inserts or restores a dropped folder and returns its `Source`. |
 | `listSources()` | Returns active sources ordered newest-first. |
+| `source(id:)` | Returns one active source by id. |
 | `removeSource(id:)` | Soft-removes a source by setting `removed_at`. |
 | `insertGunk(sourceId:name:...)` | Inserts an extracted module linked to a source. |
 | `listGunks()` | Returns active module gunks ordered newest-first. |
+| `gunk(id:)` | Returns one active module by id. |
 | `gunksForSource(sourceId:)` | Returns active modules for one source. |
 | `approveGunk(id:)` | Sets `approved_at` for a module. |
 | `removeGunk(id:)` | Soft-removes a module by setting `removed_at`. |
+| `updateGunkExtraction(id:bundlePath:manifestPath:extractedAt:)` | Records the physical bundle and manifest paths after extraction. |
 | `listTags()` | Returns the seeded classifier tag taxonomy. |
 | `addTag(name:)` | Inserts or returns a taxonomy tag. |
 | `addGunkTag(gunkId:tagId:confidence:)` | Adds or updates one module tag. |
@@ -91,3 +94,33 @@ using the ADR-0011 structured module schema. It validates module files against
 the scanned source file index, filters tags to the seeded taxonomy, clamps
 confidence to `0...1`, records token usage in `llm_runs`, and persists module,
 tag, and file membership rows.
+
+## Extraction
+
+`Extractor.extract(gunk:)` turns a persisted module into a portable bundle when
+its confidence is at least the configured threshold (`0.7` by default).
+Bundles are written under `<gunkHome>/modules/<gunk_id>/`; `gunkHome` is
+injectable and defaults to `~/.gunk`, so tests use temp directories and never
+write to the real home store.
+
+Only rows from `gunk_files` are copied, preserving relative paths. The bundle
+also contains:
+
+| File | Purpose |
+| --- | --- |
+| `gunk.yml` | ADR-0011 manifest with schema version, module metadata, tags, language, purpose, empty dependency lists when unknown, inferred entrypoints, home-relative provenance, detected license, confidence, extraction time, and any redactions. |
+| `README.gunk.md` | Generated mini-README from the module purpose, tags, entrypoints, and confidence. |
+
+Extraction repeats secret protection as a defense-in-depth backstop. It skips
+secret-named files such as `.env*`, `*.pem`, `*.key`, `id_rsa*`,
+`credentials*`, `*.p12`, and `*.pfx`; it scans file contents for known key
+patterns such as AWS access key prefixes, OpenAI-style `sk-` prefixes, private
+key blocks, and high-entropy credential-looking lines. Matched lines are
+redacted or the file is skipped before bytes reach the bundle, and every action
+is recorded in `gunk.yml`.
+
+Manifest provenance stores the source path relative to the user home, for
+example `~/Documents/project`, and never records git remotes. When the source is
+a git repository, only the short local commit hash is included. Top-level source
+licenses are detected where possible; restrictive licenses such as GPL are
+flagged in the manifest but do not block extraction.
