@@ -31,12 +31,12 @@ final class DropZoneHandler {
 
     for directory in directories {
       let url = directory.standardizedFileURL
-      let gunk = try store.insertGunk(
+      let source = try store.insertSource(
         name: url.lastPathComponent,
         path: url.path
       )
 
-      notificationCenter.post(name: .gunkInserted, object: gunk)
+      notificationCenter.post(name: .gunkInserted, object: source)
     }
 
     return !directories.isEmpty

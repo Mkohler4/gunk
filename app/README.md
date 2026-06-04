@@ -29,9 +29,9 @@ drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs are rejected.
 Successful drops post a `gunkInserted` notification so the list view can
 refresh immediately.
 
-The popover lists active gunks below the drop zone in newest-first order. Each
-row shows the folder name, middle-truncated path, relative drop date, and a
-trash button that soft-removes the gunk from the shared store.
+The popover lists active dropped sources below the drop zone in newest-first
+order. Each row shows the folder name, middle-truncated path, relative drop
+date, and a trash button that soft-removes the source from the shared store.
 
 ## Store
 
@@ -45,12 +45,22 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 
 | Method | Behavior |
 | --- | --- |
-| `insertGunk(name:path:)` | Inserts a dropped folder and returns its `Gunk`. |
-| `listGunks()` | Returns active gunks ordered newest-first. |
-| `removeGunk(id:)` | Soft-removes a gunk by setting `removed_at`. |
+| `insertSource(name:path:)` | Inserts or restores a dropped folder and returns its `Source`. |
+| `listSources()` | Returns active sources ordered newest-first. |
+| `removeSource(id:)` | Soft-removes a source by setting `removed_at`. |
+| `insertGunk(sourceId:name:...)` | Inserts an extracted module linked to a source. |
+| `listGunks()` | Returns active module gunks ordered newest-first. |
+| `gunksForSource(sourceId:)` | Returns active modules for one source. |
+| `approveGunk(id:)` | Sets `approved_at` for a module. |
+| `removeGunk(id:)` | Soft-removes a module by setting `removed_at`. |
 | `listTags()` | Returns the seeded classifier tag taxonomy. |
-| `setGunkTags(gunkId:tags:)` | Replaces one gunk's classifier tags. |
-| `listGunkTags(gunkId:)` | Returns one gunk's tags ordered by confidence. |
+| `addTag(name:)` | Inserts or returns a taxonomy tag. |
+| `addGunkTag(gunkId:tagId:confidence:)` | Adds or updates one module tag. |
+| `listGunkTags(gunkId:)` | Returns one module's tags ordered by confidence. |
+| `addGunkFile(gunkId:relpath:size:)` | Records one file in a module bundle. |
+| `filesForGunk(gunkId:)` | Returns files for one module ordered by path. |
+| `recordLLMRun(...)` | Records provider/model token and cost accounting for a source. |
 
 The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
 byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.
+`scripts/check-schema-parity.sh` enforces parity for the module schema in CI.

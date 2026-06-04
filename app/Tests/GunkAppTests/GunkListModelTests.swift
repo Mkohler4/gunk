@@ -6,38 +6,38 @@ import XCTest
 final class GunkListModelTests: XCTestCase {
   func testRefreshLoadsAll() throws {
     let store = try makeStore()
-    _ = try store.insertGunk(name: "older", path: "/code/older")
-    _ = try store.insertGunk(name: "newer", path: "/code/newer")
+    _ = try store.insertSource(name: "older", path: "/code/older")
+    _ = try store.insertSource(name: "newer", path: "/code/newer")
     let model = GunkListModel(store: store)
 
     model.refresh()
 
-    XCTAssertEqual(model.gunks.map(\.name), ["newer", "older"])
+    XCTAssertEqual(model.sources.map(\.name), ["newer", "older"])
     XCTAssertNil(model.errorMessage)
   }
 
   func testDeleteRemovesOne() throws {
     let store = try makeStore()
-    let removed = try store.insertGunk(name: "removed", path: "/code/removed")
-    _ = try store.insertGunk(name: "active", path: "/code/active")
+    let removed = try store.insertSource(name: "removed", path: "/code/removed")
+    _ = try store.insertSource(name: "active", path: "/code/active")
     let model = GunkListModel(store: store)
     model.refresh()
 
     model.delete(id: removed.id)
 
-    XCTAssertEqual(model.gunks.map(\.name), ["active"])
+    XCTAssertEqual(model.sources.map(\.name), ["active"])
     XCTAssertNil(model.errorMessage)
   }
 
   func testDeleteUnknownIdIsNoOp() throws {
     let store = try makeStore()
-    _ = try store.insertGunk(name: "active", path: "/code/active")
+    _ = try store.insertSource(name: "active", path: "/code/active")
     let model = GunkListModel(store: store)
     model.refresh()
 
     model.delete(id: 999)
 
-    XCTAssertEqual(model.gunks.map(\.name), ["active"])
+    XCTAssertEqual(model.sources.map(\.name), ["active"])
     XCTAssertNil(model.errorMessage)
   }
 

@@ -36,16 +36,16 @@ final class DropZoneTests: XCTestCase {
     XCTAssertTrue(handler.filterDirectoryURLs([fileURL]).isEmpty)
   }
 
-  func testDropHandlerInsertsGunk() throws {
+  func testDropHandlerInsertsSource() throws {
     let queue = try DatabaseQueue()
     let store = try Store(databaseQueue: queue, now: { 123 })
     let handler = DropZoneHandler(store: store)
 
     XCTAssertTrue(try handler.handleDrop(urls: [temporaryDirectory]))
     XCTAssertEqual(
-      try store.listGunks(),
+      try store.listSources(),
       [
-        Gunk(
+        Source(
           id: 1,
           name: temporaryDirectory.lastPathComponent,
           path: temporaryDirectory.path,
@@ -63,19 +63,19 @@ final class DropZoneTests: XCTestCase {
       store: store,
       notificationCenter: notificationCenter
     )
-    var insertedGunk: Gunk?
+    var insertedSource: Source?
     let observer = notificationCenter.addObserver(
       forName: .gunkInserted,
       object: nil,
       queue: nil
     ) { notification in
-      insertedGunk = notification.object as? Gunk
+      insertedSource = notification.object as? Source
     }
     defer { notificationCenter.removeObserver(observer) }
 
     try handler.handleDrop(urls: [temporaryDirectory])
 
-    XCTAssertEqual(insertedGunk?.path, temporaryDirectory.path)
+    XCTAssertEqual(insertedSource?.path, temporaryDirectory.path)
   }
 
   private func makeHandler() throws -> DropZoneHandler {
