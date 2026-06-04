@@ -1,8 +1,22 @@
-export interface Gunk {
+export interface Source {
   id: number;
   name: string;
   path: string;
   droppedAt: number;
+  removedAt: number | null;
+}
+
+export interface Gunk {
+  id: number;
+  sourceId: number;
+  name: string;
+  purpose: string | null;
+  language: string | null;
+  confidence: number | null;
+  bundlePath: string | null;
+  manifestPath: string | null;
+  extractedAt: number | null;
+  approvedAt: number | null;
   removedAt: number | null;
 }
 
@@ -14,14 +28,13 @@ export interface GunkFile {
 }
 
 export interface Tag {
+  id: number;
   name: string;
-  description: string;
 }
 
 export interface GunkTag {
   gunkId: number;
+  tagId: number;
   tag: string;
-  confidence: number;
-  source: "llm" | "manual" | "heuristic";
-  taggedAt: number;
+  confidence: number | null;
 }

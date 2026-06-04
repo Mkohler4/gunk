@@ -16,6 +16,7 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0007  | SQLite schema v1 tags          | Accepted |
 | 0008  | Gunks are modules              | Accepted |
 | 0009  | Dock recycling-bin surface     | Accepted |
+| 0010  | SQLite schema v2 modules       | Accepted |
 
 ## Format
 

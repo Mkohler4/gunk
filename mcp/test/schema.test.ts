@@ -1,9 +1,11 @@
 import { Database } from "bun:sqlite";
-import { mkdtempSync, rmSync } from "node:fs";
+import { copyFileSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, test } from "vitest";
 
+import v0Sql from "../src/schema/v0.sql" with { type: "text" };
+import v1Sql from "../src/schema/v1.sql" with { type: "text" };
 import { openStore, runMigrations } from "../src/schema/index.js";
 
 const temporaryDirectories: string[] = [];
@@ -15,23 +17,26 @@ afterEach(() => {
 });
 
 describe("runMigrations", () => {
-  test("creates v1 tables", () => {
+  test("creates module-level schema tables", () => {
     const db = new Database(":memory:");
 
-    expect(runMigrations(db)).toEqual({ from: -1, to: 1 });
+    expect(runMigrations(db)).toEqual({ from: -1, to: 2 });
 
     const tables = db
       .query<{ name: string }, []>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_version', 'gunks', 'files', 'tags', 'gunk_tags') ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_version', 'sources', 'files', 'gunks', 'tags', 'gunk_tags', 'gunk_files', 'llm_runs') ORDER BY name",
       )
       .all()
       .map(({ name }) => name);
 
     expect(tables).toEqual([
       "files",
+      "gunk_files",
       "gunk_tags",
       "gunks",
+      "llm_runs",
       "schema_version",
+      "sources",
       "tags",
     ]);
     db.close();
@@ -40,8 +45,8 @@ describe("runMigrations", () => {
   test("is idempotent", () => {
     const db = new Database(":memory:");
 
-    expect(runMigrations(db)).toEqual({ from: -1, to: 1 });
-    expect(runMigrations(db)).toEqual({ from: 1, to: 1 });
+    expect(runMigrations(db)).toEqual({ from: -1, to: 2 });
+    expect(runMigrations(db)).toEqual({ from: 2, to: 2 });
 
     const versionRows = db
       .query<
@@ -50,7 +55,7 @@ describe("runMigrations", () => {
       >("SELECT COUNT(*) AS count FROM schema_version")
       .get();
 
-    expect(versionRows?.count).toBe(2);
+    expect(versionRows?.count).toBe(3);
     db.close();
   });
 
@@ -66,16 +71,16 @@ describe("runMigrations", () => {
         { appliedAt: number; version: number },
         [number]
       >("SELECT version, applied_at AS appliedAt FROM schema_version WHERE version = ?")
-      .get(1);
+      .get(2);
 
-    expect(version?.version).toBe(1);
+    expect(version?.version).toBe(2);
     expect(version?.appliedAt).toBeGreaterThan(0);
     expect(version?.appliedAt).toBeGreaterThanOrEqual(before);
     expect(version?.appliedAt).toBeLessThanOrEqual(after);
     db.close();
   });
 
-  test("migrates an existing v0 database to v1", () => {
+  test("v0 store upgrades to module schema preserving sources rows", () => {
     const db = new Database(":memory:");
 
     db.exec(`
@@ -101,9 +106,13 @@ describe("runMigrations", () => {
       );
 
       INSERT INTO schema_version (version, applied_at) VALUES (0, 100);
+      INSERT INTO gunks (id, name, path, dropped_at, removed_at)
+      VALUES (1, 'older-source', '/code/older-source', 200, NULL);
+      INSERT INTO files (id, gunk_id, relpath, size)
+      VALUES (1, 1, 'README.md', 128);
     `);
 
-    expect(runMigrations(db)).toEqual({ from: 0, to: 1 });
+    expect(runMigrations(db)).toEqual({ from: 0, to: 2 });
 
     const version = db
       .query<
@@ -112,12 +121,105 @@ describe("runMigrations", () => {
       >("SELECT MAX(version) AS version FROM schema_version")
       .get();
 
-    const tagCount = db
-      .query<{ count: number }, []>("SELECT COUNT(*) AS count FROM tags")
+    const source = db
+      .query<
+        { id: number; name: string; path: string; droppedAt: number },
+        []
+      >("SELECT id, name, path, dropped_at AS droppedAt FROM sources")
       .get();
 
-    expect(version?.version).toBe(1);
-    expect(tagCount?.count).toBe(10);
+    const file = db
+      .query<
+        { sourceId: number; relpath: string; size: number },
+        []
+      >("SELECT source_id AS sourceId, relpath, size FROM files")
+      .get();
+
+    expect(version?.version).toBe(2);
+    expect(source).toEqual({
+      id: 1,
+      name: "older-source",
+      path: "/code/older-source",
+      droppedAt: 200,
+    });
+    expect(file).toEqual({
+      sourceId: 1,
+      relpath: "README.md",
+      size: 128,
+    });
+    db.close();
+  });
+
+  test("real on-disk v0 fixture upgrades to module schema preserving sources", () => {
+    const directory = mkdtempSync(join(tmpdir(), "gunk-schema-fixture-"));
+    temporaryDirectories.push(directory);
+
+    const fixturePath = join(directory, "store.db");
+    copyFileSync(join("test", "fixtures", "store-v0.db"), fixturePath);
+
+    const db = openStore(fixturePath);
+    const source = db
+      .query<
+        { id: number; name: string; path: string; droppedAt: number },
+        []
+      >("SELECT id, name, path, dropped_at AS droppedAt FROM sources")
+      .get();
+
+    const files = db
+      .query<
+        { sourceId: number; relpath: string; size: number },
+        []
+      >("SELECT source_id AS sourceId, relpath, size FROM files ORDER BY relpath")
+      .all();
+
+    expect(source).toEqual({
+      id: 1,
+      name: "fixture-source",
+      path: "/tmp/gunk-fixture-source",
+      droppedAt: 2000,
+    });
+    expect(files).toEqual([
+      { sourceId: 1, relpath: "README.md", size: 12 },
+      { sourceId: 1, relpath: "src/index.ts", size: 34 },
+    ]);
+    db.close();
+  });
+
+  test("existing v1 store upgrades to module schema preserving sources", () => {
+    const db = new Database(":memory:");
+
+    db.exec(v0Sql);
+    db.query(
+      "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+    ).run(0, 100);
+    db.query(
+      "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(1, "v1-source", "/code/v1-source", 200, null);
+    db.query(
+      "INSERT INTO files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
+    ).run(1, 1, "package.json", 64);
+    db.exec(v1Sql);
+    db.query(
+      "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+    ).run(1, 150);
+
+    expect(runMigrations(db)).toEqual({ from: 1, to: 2 });
+
+    const source = db
+      .query<
+        { name: string; path: string },
+        []
+      >("SELECT name, path FROM sources")
+      .get();
+    const file = db
+      .query<
+        { relpath: string; size: number },
+        []
+      >("SELECT relpath, size FROM files")
+      .get();
+
+    expect(source).toEqual({ name: "v1-source", path: "/code/v1-source" });
+    expect(file).toEqual({ relpath: "package.json", size: 64 });
     db.close();
   });
 

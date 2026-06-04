@@ -7,7 +7,7 @@ import { openDefaultStore, type StoreOpener } from "./list_gunks.js";
 
 export const GET_GUNK_TOOL = {
   name: "get_gunk",
-  description: "Get a gunk's metadata, README, and shallow file tree.",
+  description: "Get a module gunk's metadata, README, and shallow file tree.",
   inputSchema: {
     type: "object",
     properties: {
@@ -29,7 +29,7 @@ export function createGetGunkHandler(
     try {
       const gunk = getGunk(db, id);
 
-      if (!gunk || gunk.removedAt !== null) {
+      if (!gunk || gunk.removedAt !== null || !gunk.bundlePath) {
         return {
           isError: true,
           content: [
@@ -47,11 +47,17 @@ export function createGetGunkHandler(
             type: "text",
             text: JSON.stringify({
               id: gunk.id,
+              sourceId: gunk.sourceId,
               name: gunk.name,
-              path: gunk.path,
-              droppedAt: gunk.droppedAt,
-              readme: readReadme(gunk.path),
-              tree: shallowTree(gunk.path),
+              purpose: gunk.purpose,
+              language: gunk.language,
+              confidence: gunk.confidence,
+              bundlePath: gunk.bundlePath,
+              manifestPath: gunk.manifestPath,
+              extractedAt: gunk.extractedAt,
+              approvedAt: gunk.approvedAt,
+              readme: readReadme(gunk.bundlePath),
+              tree: shallowTree(gunk.bundlePath),
             }),
           },
         ],

@@ -7,6 +7,7 @@ import {
   getGunkFiles,
   listGunks,
   listGunkTags,
+  listSources,
   listTags,
 } from "../src/store/index.js";
 
@@ -18,74 +19,145 @@ describe("store reader", () => {
     runMigrations(db);
 
     db.query(
-      "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(1, "older", "/code/older", 100, null);
+      "INSERT INTO sources (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(1, "source", "/code/source", 100, null);
     db.query(
-      "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(2, "newer", "/code/newer", 300, null);
-    db.query(
-      "INSERT INTO gunks (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(3, "removed", "/code/removed", 400, 500);
+      "INSERT INTO sources (id, name, path, dropped_at, removed_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(2, "removed-source", "/code/removed-source", 200, 300);
 
     db.query(
-      "INSERT INTO files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
+      "INSERT INTO files (id, source_id, relpath, size) VALUES (?, ?, ?, ?)",
     ).run(1, 1, "README.md", 128);
-    db.query(
-      "INSERT INTO files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
-    ).run(2, 1, "src/index.ts", null);
-    db.query(
-      "INSERT INTO files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
-    ).run(3, 2, "package.json", 256);
 
     db.query(
-      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(1, "auth", 0.9, "manual", 600);
+      "INSERT INTO gunks (id, source_id, name, purpose, language, confidence, bundle_path, manifest_path, extracted_at, approved_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      1,
+      1,
+      "auth-module",
+      "Google OAuth flow",
+      "TypeScript",
+      0.9,
+      "/tmp/modules/1",
+      "/tmp/modules/1/gunk.yml",
+      400,
+      null,
+      null,
+    );
     db.query(
-      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(1, "api", 0.7, "heuristic", 500);
+      "INSERT INTO gunks (id, source_id, name, purpose, language, confidence, bundle_path, manifest_path, extracted_at, approved_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      2,
+      1,
+      "payments-module",
+      null,
+      null,
+      0.7,
+      null,
+      null,
+      null,
+      null,
+      null,
+    );
     db.query(
-      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
-    ).run(2, "payments", 0.8, "llm", 700);
+      "INSERT INTO gunks (id, source_id, name, purpose, language, confidence, bundle_path, manifest_path, extracted_at, approved_at, removed_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+    ).run(
+      3,
+      1,
+      "removed-module",
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      null,
+      500,
+    );
+
+    db.query(
+      "INSERT INTO gunk_files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
+    ).run(1, 1, "auth.ts", 256);
+    db.query(
+      "INSERT INTO gunk_files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
+    ).run(2, 1, "oauth.ts", null);
+
+    const authTag = db
+      .query<{ id: number }, []>("SELECT id FROM tags WHERE name = 'auth'")
+      .get();
+    const apiTag = db
+      .query<{ id: number }, []>("SELECT id FROM tags WHERE name = 'api'")
+      .get();
+
+    expect(authTag).toBeDefined();
+    expect(apiTag).toBeDefined();
+
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
+    ).run(1, authTag!.id, 0.9);
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
+    ).run(1, apiTag!.id, 0.7);
   });
 
   afterEach(() => {
     db.close();
   });
 
-  test("listGunks returns rows in dropped_at desc order", () => {
+  test("listSources returns active rows in dropped_at desc order", () => {
+    expect(listSources(db)).toEqual([
+      {
+        id: 1,
+        name: "source",
+        path: "/code/source",
+        droppedAt: 100,
+        removedAt: null,
+      },
+    ]);
+  });
+
+  test("listGunks returns active modules in id desc order", () => {
     expect(listGunks(db).map(({ id }) => id)).toEqual([2, 1]);
   });
 
   test("listGunks excludes rows with removed_at set", () => {
-    expect(listGunks(db).map(({ name }) => name)).not.toContain("removed");
+    expect(listGunks(db).map(({ name }) => name)).not.toContain(
+      "removed-module",
+    );
   });
 
   test("getGunk returns null for unknown id", () => {
     expect(getGunk(db, 999)).toBeNull();
   });
 
-  test("getGunk returns full record for known id", () => {
+  test("getGunk returns full module record for known id", () => {
     expect(getGunk(db, 1)).toEqual({
       id: 1,
-      name: "older",
-      path: "/code/older",
-      droppedAt: 100,
+      sourceId: 1,
+      name: "auth-module",
+      purpose: "Google OAuth flow",
+      language: "TypeScript",
+      confidence: 0.9,
+      bundlePath: "/tmp/modules/1",
+      manifestPath: "/tmp/modules/1/gunk.yml",
+      extractedAt: 400,
+      approvedAt: null,
       removedAt: null,
     });
   });
 
-  test("getGunkFiles returns rows for that gunk only", () => {
+  test("getGunkFiles returns module file rows for that gunk only", () => {
     expect(getGunkFiles(db, 1)).toEqual([
       {
         id: 1,
         gunkId: 1,
-        relpath: "README.md",
-        size: 128,
+        relpath: "auth.ts",
+        size: 256,
       },
       {
         id: 2,
         gunkId: 1,
-        relpath: "src/index.ts",
+        relpath: "oauth.ts",
         size: null,
       },
     ]);
@@ -107,21 +179,12 @@ describe("store reader", () => {
   });
 
   test("listGunkTags returns tags for that gunk ordered by confidence", () => {
-    expect(listGunkTags(db, 1)).toEqual([
-      {
-        gunkId: 1,
-        tag: "auth",
-        confidence: 0.9,
-        source: "manual",
-        taggedAt: 600,
-      },
-      {
-        gunkId: 1,
-        tag: "api",
-        confidence: 0.7,
-        source: "heuristic",
-        taggedAt: 500,
-      },
+    const tags = listGunkTags(db, 1);
+
+    expect(tags.map(({ tag, confidence }) => ({ tag, confidence }))).toEqual([
+      { tag: "auth", confidence: 0.9 },
+      { tag: "api", confidence: 0.7 },
     ]);
+    expect(tags.map(({ gunkId }) => gunkId)).toEqual([1, 1]);
   });
 });

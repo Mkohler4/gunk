@@ -2,10 +2,12 @@ import type { Database } from "bun:sqlite";
 
 import v0Sql from "./v0.sql" with { type: "text" };
 import v1Sql from "./v1.sql" with { type: "text" };
+import v2Sql from "./v2.sql" with { type: "text" };
 
 const MIGRATIONS = [
   { sql: v0Sql, version: 0 },
   { sql: v1Sql, version: 1 },
+  { sql: v2Sql, version: 2 },
 ] as const;
 
 const LATEST_VERSION = MIGRATIONS.at(-1)?.version ?? -1;
