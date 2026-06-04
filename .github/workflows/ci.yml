@@ -67,6 +67,47 @@ jobs:
       - name: Test
         run: bun test
 
+  mcp-binary:
+    name: MCP binary
+    runs-on: macos-14
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    defaults:
+      run:
+        working-directory: mcp
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build binary
+        run: bun run build
+
+      - name: Smoke-test binary without Bun on PATH
+        run: |
+          if PATH=/usr/bin:/bin command -v bun; then
+            echo "bun should not be available in the restricted smoke-test PATH"
+            exit 1
+          fi
+          fifo="$(mktemp -u)"
+          mkfifo "$fifo"
+          exec 3<>"$fifo"
+          PATH=/usr/bin:/bin ./dist/gunk-mcp <&3 &
+          pid=$!
+          sleep 2
+          kill -0 "$pid"
+          kill "$pid"
+          wait "$pid" || test "$?" -eq 143
+          exec 3>&-
+          rm "$fifo"
+
   app:
     name: App
     runs-on: macos-14

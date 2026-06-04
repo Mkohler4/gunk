@@ -10,7 +10,7 @@
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",
     "format": "prettier --check .",
-    "build": "bun build src/index.ts --outdir dist --target bun"
+    "build": "bun run scripts/build.ts"
   },
   "devDependencies": {
     "@types/bun": "^1.3.14",
