@@ -91,7 +91,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   }
 
   private func enqueueDecomposition(for source: Source) {
-    // T-3.9 wires the real decomposition engine here.
+    // T-3.11 wires drop-time decomposition orchestration and progress.
     _ = source
   }
 }
