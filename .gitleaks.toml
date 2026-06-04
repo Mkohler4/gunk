@@ -1,0 +1,12 @@
+title = "gunk gitleaks config"
+
+# Use the full default gitleaks ruleset, then add gunk-specific allowlisting.
+[extend]
+useDefault = true
+
+[[allowlists]]
+description = "Intentionally-committed, secret-free test fixtures"
+paths = [
+  # Real on-disk v0 SQLite fixture used by the schema migration tests (T-3.2).
+  '''mcp/test/fixtures/.*\.db''',
+]
