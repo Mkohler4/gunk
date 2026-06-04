@@ -54,8 +54,8 @@ architecture is allowed to ship in isolation.
 ### App side
 
 - [ ] Swift menubar app skeleton (NSStatusItem, popover or panel, Defaults)
-- [ ] A single window with a drop zone ("Drag folders here")
-- [ ] Drop handler: copy folder *path* (not contents) into `~/.gunk/store.db`
+- [x] A single window with a drop zone ("Drag folders here")
+- [x] Drop handler: copy folder *path* (not contents) into `~/.gunk/store.db`
 - [ ] List view: dropped folders, with name, path, file count, drop date
 - [ ] Delete affordance: remove a folder from gunk
 - [x] SQLite schema v0 (using GRDB): `gunks`, `files`

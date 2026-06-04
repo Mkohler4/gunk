@@ -6,6 +6,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
   func applicationDidFinishLaunching(_ notification: Notification) {
     NSApp.setActivationPolicy(.accessory)
-    menubarController = MenubarController()
+
+    do {
+      let store = try Store(path: Store.defaultURL)
+      menubarController = MenubarController(store: store)
+    } catch {
+      NSApp.presentError(error)
+    }
   }
 }
