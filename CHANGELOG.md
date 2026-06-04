@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` physical extractor (bundle + gunk.yml + mini-README + secret redaction + license flagging).
 - `gunk.app` AI decomposition engine (project -> tagged modules).
 - `gunk.app` source scanner + token-budgeted context builder (secret-aware ignore rules).
 - `gunk.app` pluggable LLM client (OpenAI, Anthropic, Ollama) + settings.
