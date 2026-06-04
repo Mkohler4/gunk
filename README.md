@@ -1,5 +1,7 @@
 # gunk
 
+[![CI](https://github.com/Mkohler4/gunk/actions/workflows/ci.yml/badge.svg)](https://github.com/Mkohler4/gunk/actions/workflows/ci.yml)
+
 > **Reframe, don't recode. Less tokens, more shipping.**
 
 Gunk is your shit code, modularized — and silently fed back into your AI.
