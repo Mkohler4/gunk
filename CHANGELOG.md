@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- MCP tool `list_gunks`.
 - MCP server skeleton (stdio transport, tools capability).
 - `gunk-mcp` store reader (`listGunks`, `getGunk`, `getGunkFiles`).
 - SQLite schema v0 (`gunks`, `files`, `schema_version`) and idempotent

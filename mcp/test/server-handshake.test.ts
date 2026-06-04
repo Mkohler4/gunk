@@ -44,8 +44,17 @@ test("server starts and advertises tools capability", () => {
   });
 });
 
-test("tools/list returns empty array when no tools registered", async () => {
+test("tools/list advertises registered tools", async () => {
   await expect(client.listTools()).resolves.toEqual({
-    tools: [],
+    tools: [
+      {
+        name: "list_gunks",
+        description: "List the user's gunks (folders dropped onto gunk.app).",
+        inputSchema: {
+          type: "object",
+          properties: {},
+        },
+      },
+    ],
   });
 });

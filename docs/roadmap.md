@@ -64,8 +64,9 @@ architecture is allowed to ship in isolation.
 
 - [x] `gunk-mcp` skeleton using `@modelcontextprotocol/sdk`
 - [x] `bun:sqlite` reader of `~/.gunk/store.db`
-- [ ] MCP tools: `list_gunks`, `get_gunk` (returns name, path, README content,
-      shallow file tree)
+- [x] MCP tool: `list_gunks`
+- [ ] MCP tool: `get_gunk` (returns name, path, README content, shallow file
+      tree)
 - [ ] Bun-compiled single binary; manual MCP config snippet for one tool
       (Cursor) in docs
 
