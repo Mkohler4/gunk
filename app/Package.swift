@@ -13,13 +13,22 @@ let package = Package(
       targets: ["GunkApp"]
     )
   ],
+  dependencies: [
+    .package(url: "https://github.com/groue/GRDB.swift.git", from: "6.29.3")
+  ],
   targets: [
     .executableTarget(
-      name: "GunkApp"
+      name: "GunkApp",
+      dependencies: [
+        .product(name: "GRDB", package: "GRDB.swift")
+      ]
     ),
     .testTarget(
       name: "GunkAppTests",
-      dependencies: ["GunkApp"]
+      dependencies: [
+        "GunkApp",
+        .product(name: "GRDB", package: "GRDB.swift")
+      ]
     )
   ]
 )

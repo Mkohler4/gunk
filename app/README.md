@@ -26,3 +26,23 @@ will replace with the drop-zone and list views.
 
 After `make app`, open `build/gunk.app`. The app runs as a menu bar accessory
 and shows a `G` status item with a placeholder popover.
+
+## Store
+
+The app uses [GRDB](https://github.com/groue/GRDB.swift) to write the shared
+SQLite store. GRDB was chosen over SQLite.swift for its active development,
+ergonomic transaction APIs, and support for both file-backed and in-memory
+database queues.
+
+`Store(path:)` creates the parent directory, opens the database in WAL mode,
+enables foreign keys, and applies the v0 schema migration. The typed API is:
+
+| Method | Behavior |
+| --- | --- |
+| `insertGunk(name:path:)` | Inserts a dropped folder and returns its `Gunk`. |
+| `listGunks()` | Returns active gunks ordered newest-first. |
+| `removeGunk(id:)` | Soft-removes a gunk by setting `removed_at`. |
+
+The Swift v0 schema in `Sources/GunkApp/Store/Schema.swift` is kept
+byte-for-byte identical to the MCP source of truth at
+`../mcp/src/schema/v0.sql`.
