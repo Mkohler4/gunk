@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` pluggable LLM client (OpenAI, Anthropic, Ollama) + settings.
 - `gunk.app` Dock drop handling + source detection.
 - `gunk.app` Dock recycling-bin icon with empty/full/processing states.
 - ADR-0011 (AI decomposition pipeline + gunk.yml spec).

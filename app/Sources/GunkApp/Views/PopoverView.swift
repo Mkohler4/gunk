@@ -1,14 +1,28 @@
 import SwiftUI
 
+@MainActor
 struct PopoverView: View {
   let dropHandler: DropZoneHandler
   let listModel: GunkListModel
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      Text("gunk")
-        .font(.headline)
+    TabView {
+      sourcesTab
+        .tabItem {
+          Text("Sources")
+        }
 
+      SettingsView()
+        .tabItem {
+          Text("Settings")
+        }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+    .padding(20)
+  }
+
+  private var sourcesTab: some View {
+    VStack(alignment: .leading, spacing: 16) {
       DropZoneView(handler: dropHandler)
         .frame(height: 130)
 
@@ -21,7 +35,6 @@ struct PopoverView: View {
       GunkListView(model: listModel)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .padding(20)
     .onAppear {
       listModel.refresh()
     }
