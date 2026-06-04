@@ -68,7 +68,7 @@ architecture is allowed to ship in isolation.
 - [x] MCP tool: `get_gunk` (returns name, path, README content, shallow file
       tree)
 - [x] Bun-compiled single binary
-- [ ] Manual MCP config snippet for one tool (Cursor) in docs
+- [x] Manual MCP config snippet for one tool (Cursor) in docs
 
 ### Demo
 

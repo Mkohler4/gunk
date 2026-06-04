@@ -95,6 +95,9 @@ What exists today: this README, four ADRs, a roadmap, and a clear thesis. That's
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the week-by-week version.
 
+For the Phase 2 end-to-end path, see the manual
+[Cursor MCP integration guide](docs/integration/cursor.md).
+
 **Explicitly out of scope for v0:** any cloud component, any public/shared registry, any team features, any monetization, any filesystem watching. Everything is local; everything is user-curated. We re-evaluate after the local product is real.
 
 ## Principles
