@@ -2,6 +2,9 @@ import Foundation
 import GRDB
 
 final class Store {
+  static let defaultURL = FileManager.default.homeDirectoryForCurrentUser
+    .appendingPathComponent(".gunk/store.db")
+
   private let databaseQueue: DatabaseQueue
   private let now: () -> Int64
 

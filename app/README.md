@@ -25,7 +25,10 @@ will replace with the drop-zone and list views.
 ## Launching Locally
 
 After `make app`, open `build/gunk.app`. The app runs as a menu bar accessory
-and shows a `G` status item with a placeholder popover.
+and shows a `G` status item. Open the popover and drag a folder onto the
+drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs are rejected.
+Successful drops post a `gunkInserted` notification so the list view can
+refresh immediately.
 
 ## Store
 
