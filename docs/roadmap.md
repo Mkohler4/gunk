@@ -63,7 +63,7 @@ architecture is allowed to ship in isolation.
 ### MCP server side
 
 - [ ] `gunk-mcp` skeleton using `@modelcontextprotocol/sdk`
-- [ ] `bun:sqlite` reader of `~/.gunk/store.db`
+- [x] `bun:sqlite` reader of `~/.gunk/store.db`
 - [ ] MCP tools: `list_gunks`, `get_gunk` (returns name, path, README content,
       shallow file tree)
 - [ ] Bun-compiled single binary; manual MCP config snippet for one tool

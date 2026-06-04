@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk-mcp` store reader (`listGunks`, `getGunk`, `getGunkFiles`).
 - SQLite schema v0 (`gunks`, `files`, `schema_version`) and idempotent
   migration runner.
 - GitHub Actions CI workflow (mcp + app jobs).

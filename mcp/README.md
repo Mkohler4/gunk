@@ -40,6 +40,18 @@ applies pending migrations, and returns the `bun:sqlite` database handle.
 Fresh databases start at version `-1`; applying v0 records version `0` with a
 Unix epoch millisecond timestamp. Re-running migrations is a no-op.
 
+## Store Reader
+
+The typed store reader in `src/store/` is the database boundary used by future
+MCP tools. It returns camel-case `Gunk` and `GunkFile` records while keeping SQL
+and schema column names inside the store layer.
+
+| Function                   | Behavior                                                    |
+| -------------------------- | ----------------------------------------------------------- |
+| `listGunks(db)`            | Returns active gunks ordered by newest `droppedAt` first.   |
+| `getGunk(db, id)`          | Returns the matching gunk or `null` when the ID is unknown. |
+| `getGunkFiles(db, gunkId)` | Returns files for one gunk ordered by `relpath`.            |
+
 ## Context
 
 - Root README: [../README.md](../README.md)
