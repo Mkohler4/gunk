@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` Browse view, re-classify, and approval queue.
 - `gunk.app` cost meter + Dock processing/progress UI.
 - `gunk.app` physical extractor (bundle + gunk.yml + mini-README + secret redaction + license flagging).
 - `gunk.app` AI decomposition engine (project -> tagged modules).

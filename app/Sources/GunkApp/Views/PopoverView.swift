@@ -2,15 +2,14 @@ import SwiftUI
 
 @MainActor
 struct PopoverView: View {
-  let dropHandler: DropZoneHandler
-  let listModel: GunkListModel
+  let browseModel: BrowseModel
   let store: Store
 
   var body: some View {
     TabView {
-      sourcesTab
+      browseTab
         .tabItem {
-          Text("Sources")
+          Text("Browse")
         }
 
       SettingsView(store: store)
@@ -22,25 +21,27 @@ struct PopoverView: View {
     .padding(20)
   }
 
-  private var sourcesTab: some View {
+  private var browseTab: some View {
     VStack(alignment: .leading, spacing: 16) {
-      DropZoneView(handler: dropHandler)
-        .frame(height: 130)
-
-      if let errorMessage = listModel.errorMessage {
+      if let errorMessage = browseModel.errorMessage {
         Text(errorMessage)
           .font(.caption)
           .foregroundStyle(.red)
       }
 
-      GunkListView(model: listModel)
+      BrowseView(model: browseModel)
+        .frame(minHeight: 260)
+
+      Divider()
+
+      ApprovalQueueView(model: browseModel)
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .onAppear {
-      listModel.refresh()
+      browseModel.refresh()
     }
     .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
-      listModel.refresh()
+      browseModel.refresh()
     }
   }
 }

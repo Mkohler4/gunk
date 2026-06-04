@@ -137,3 +137,15 @@ count as the idle Dock badge.
 `CostMeterView` appears in Settings and summarizes token and USD spend from
 `llm_runs` for today and all time. The aggregation treats missing token or cost
 fields as zero so partial provider responses still render cleanly.
+
+## Browse and Approval
+
+The menubar popover opens Browse and Settings. `BrowseModel` loads module
+gunks, groups them by tag, attaches their source information for provenance,
+and exposes actions to open an extracted bundle, re-classify the source, or
+delete the module.
+
+Below-threshold modules that have not been approved or extracted appear in the
+approval queue. Approving a module marks `approved_at`, runs extraction through
+an injected extractor path, and refreshes the Browse list; rejecting a module
+soft-removes it from the store.
