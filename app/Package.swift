@@ -21,6 +21,9 @@ let package = Package(
       name: "GunkApp",
       dependencies: [
         .product(name: "GRDB", package: "GRDB.swift")
+      ],
+      resources: [
+        .copy("Resources/Assets.xcassets")
       ]
     ),
     .testTarget(

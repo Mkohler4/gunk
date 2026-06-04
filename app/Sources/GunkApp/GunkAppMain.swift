@@ -8,7 +8,7 @@ enum GunkAppMain {
     let delegate = AppDelegate()
 
     application.delegate = delegate
-    application.setActivationPolicy(.accessory)
+    application.setActivationPolicy(.regular)
     application.run()
   }
 }
