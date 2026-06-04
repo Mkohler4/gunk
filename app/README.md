@@ -57,6 +57,8 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 | `addTag(name:)` | Inserts or returns a taxonomy tag. |
 | `addGunkTag(gunkId:tagId:confidence:)` | Adds or updates one module tag. |
 | `listGunkTags(gunkId:)` | Returns one module's tags ordered by confidence. |
+| `addSourceFile(sourceId:relpath:size:)` | Records one scanned file for a source. |
+| `filesForSource(sourceId:)` | Returns scanned files for one source ordered by path. |
 | `addGunkFile(gunkId:relpath:size:)` | Records one file in a module bundle. |
 | `filesForGunk(gunkId:)` | Returns files for one module ordered by path. |
 | `recordLLMRun(...)` | Records provider/model token and cost accounting for a source. |
@@ -64,3 +66,19 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
 byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.
 `scripts/check-schema-parity.sh` enforces parity for the module schema in CI.
+
+## Source Scanning
+
+`SourceScanner` walks a dropped source before AI decomposition. It skips noisy
+directories (`.git`, `node_modules`, `build`, `dist`, `.build`), `.DS_Store`,
+binary files, and files over the scanner size cap.
+
+Secret-like files are skipped before they enter the file index or LLM context:
+`.env*`, `*.pem`, `*.key`, `id_rsa*`, `credentials*`, `*.p12`, and `*.pfx`.
+Projects may add a root `.gunkignore` with gitignore-style entries such as
+`Generated.swift`, `ignored-dir/`, or `*.snap`.
+
+`ContextBuilder` turns scanned files into LLM input with a simple token estimate
+of `characters / 4`. It emits a file tree first, then prioritized contents
+(`README`, project manifests, entrypoints, then smaller source files) until the
+configured budget is reached.

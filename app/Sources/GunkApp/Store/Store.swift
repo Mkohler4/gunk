@@ -329,6 +329,50 @@ final class Store {
   }
 
   @discardableResult
+  func addSourceFile(sourceId: Int64, relpath: String, size: Int64?) throws -> SourceFile {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO files (source_id, relpath, size)
+          VALUES (?, ?, ?)
+          ON CONFLICT(source_id, relpath) DO UPDATE
+          SET size = excluded.size
+          """,
+        arguments: [sourceId, relpath, size]
+      )
+
+      let row = try Row.fetchOne(
+        db,
+        sql: """
+          SELECT id, source_id, relpath, size
+          FROM files
+          WHERE source_id = ? AND relpath = ?
+          """,
+        arguments: [sourceId, relpath]
+      )!
+
+      return Store.sourceFile(from: row)
+    }
+  }
+
+  func filesForSource(sourceId: Int64) throws -> [SourceFile] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT id, source_id, relpath, size
+          FROM files
+          WHERE source_id = ?
+          ORDER BY relpath ASC
+          """,
+        arguments: [sourceId]
+      )
+
+      return rows.map(Store.sourceFile(from:))
+    }
+  }
+
+  @discardableResult
   func addGunkFile(gunkId: Int64, relpath: String, size: Int64?) throws -> GunkFile {
     try databaseQueue.write { db in
       try db.execute(
@@ -488,6 +532,15 @@ final class Store {
       tagId: row["tag_id"],
       tag: row["tag"],
       confidence: row["confidence"]
+    )
+  }
+
+  private static func sourceFile(from row: Row) -> SourceFile {
+    SourceFile(
+      id: row["id"],
+      sourceId: row["source_id"],
+      relpath: row["relpath"],
+      size: row["size"]
     )
   }
 
