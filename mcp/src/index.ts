@@ -1,11 +1,14 @@
-import packageJson from "../package.json" with { type: "json" };
+import { startServer } from "./server/index.js";
 
-export function main(): void {
-  console.error(`gunk-mcp ${packageJson.version}`);
+export async function main(): Promise<void> {
+  await startServer();
 }
 
 const isDirectRun = import.meta.path === Bun.main;
 
 if (isDirectRun) {
-  main();
+  main().catch((error: unknown) => {
+    console.error("gunk-mcp server error:", error);
+    process.exitCode = 1;
+  });
 }

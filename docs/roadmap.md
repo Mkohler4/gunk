@@ -62,7 +62,7 @@ architecture is allowed to ship in isolation.
 
 ### MCP server side
 
-- [ ] `gunk-mcp` skeleton using `@modelcontextprotocol/sdk`
+- [x] `gunk-mcp` skeleton using `@modelcontextprotocol/sdk`
 - [x] `bun:sqlite` reader of `~/.gunk/store.db`
 - [ ] MCP tools: `list_gunks`, `get_gunk` (returns name, path, README content,
       shallow file tree)

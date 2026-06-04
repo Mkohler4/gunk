@@ -4,8 +4,9 @@
 it over stdio, it reads the local gunk store, returns context, and then exits
 with the parent tool.
 
-This package is intentionally small for T-2.2: it proves the Bun + TypeScript
-toolchain works before T-2.7 adds the real MCP server surface.
+This package runs an MCP server over stdio. AI tools start the process, complete
+the MCP handshake, and keep it alive while they need access to the local gunk
+store.
 
 ## Install
 
@@ -18,7 +19,7 @@ bun install
 
 | Script              | What it does                                |
 | ------------------- | ------------------------------------------- |
-| `bun run start`     | Print `gunk-mcp 0.0.1` to stderr and exit.  |
+| `bun run start`     | Start the MCP server over stdio.            |
 | `bun test`          | Run Vitest tests.                           |
 | `bun run lint`      | Run ESLint.                                 |
 | `bun run typecheck` | Run TypeScript without emitting files.      |
@@ -51,6 +52,16 @@ and schema column names inside the store layer.
 | `listGunks(db)`            | Returns active gunks ordered by newest `droppedAt` first.   |
 | `getGunk(db, id)`          | Returns the matching gunk or `null` when the ID is unknown. |
 | `getGunkFiles(db, gunkId)` | Returns files for one gunk ordered by `relpath`.            |
+
+## MCP Entrypoint
+
+`src/index.ts` starts the `gunk-mcp` server using the standard MCP stdio
+transport. The server advertises the tools capability and currently returns an
+empty list for `tools/list`; T-2.8 adds the first tool.
+
+Run `bun run start` from `mcp/` to start the server. It stays alive while stdin
+is open and exits when its parent MCP client closes the connection or the
+process receives `Ctrl-C`.
 
 ## Context
 
