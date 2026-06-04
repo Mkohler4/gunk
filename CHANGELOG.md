@@ -9,6 +9,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Added
 - SQLite schema v1 tag taxonomy (`tags`, `gunk_tags`) and shared store helpers.
+- CI hardening: secret scan, PR-title lint, CHANGELOG gate.
 - Cursor MCP integration docs.
 - Single-binary build of `gunk-mcp` via Bun.
 - `gunk.app` list view + delete.

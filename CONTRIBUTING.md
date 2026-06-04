@@ -27,10 +27,19 @@ yet, but we are absolutely ready for **issues, ideas, and small fixes**.
    plain English, not the implementation.
 2. **One commit, one logical change.** We use [Conventional
    Commits](https://www.conventionalcommits.org/en/v1.0.0/) (`feat:`, `fix:`,
-   `docs:`, `chore:`, `refactor:`, `test:`).
+   `docs:`, `chore:`, `refactor:`, `test:`, `ci:`, `build:`, `perf:`,
+   `style:`, `revert:`).
 3. **Keep PRs small.** A 50-line PR gets reviewed today; a 500-line PR gets
    reviewed someday.
-4. **CI must be green.** Lint + typecheck + test all pass before merge.
+4. **CI must be green.** In addition to lint + typecheck + test, every PR runs:
+   - **Secret scan** (`gitleaks`) — no keys, tokens, or credentials may land,
+     including in fixtures, bundles, or screenshots.
+   - **PR-title lint** — the PR title must follow Conventional Commits, because
+     we squash-merge and the title becomes the commit subject.
+   - **CHANGELOG gate** — code PRs must update `CHANGELOG.md`. For pure
+     refactors with no user-visible change, apply the `no-changelog` label.
+     Do not use the label to skip release notes for bug fixes, features, or
+     safety changes.
 5. **Update the CHANGELOG** under `[Unreleased]` for any user-visible change.
 
 ## Code of conduct
