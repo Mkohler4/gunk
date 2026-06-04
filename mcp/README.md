@@ -17,14 +17,14 @@ bun install
 
 ## Scripts
 
-| Script              | What it does                                |
-| ------------------- | ------------------------------------------- |
-| `bun run start`     | Start the MCP server over stdio.            |
-| `bun test`          | Run Vitest tests.                           |
-| `bun run lint`      | Run ESLint.                                 |
-| `bun run typecheck` | Run TypeScript without emitting files.      |
-| `bun run format`    | Check formatting with Prettier.             |
-| `bun run build`     | Bundle `src/index.ts` into `dist/` for Bun. |
+| Script              | What it does                                   |
+| ------------------- | ---------------------------------------------- |
+| `bun run start`     | Start the MCP server over stdio.               |
+| `bun test`          | Run Vitest tests.                              |
+| `bun run lint`      | Run ESLint.                                    |
+| `bun run typecheck` | Run TypeScript without emitting files.         |
+| `bun run format`    | Check formatting with Prettier.                |
+| `bun run build`     | Compile the standalone `dist/gunk-mcp` binary. |
 
 ## Schema (v0)
 
@@ -62,6 +62,19 @@ through `src/server/registerTools.ts`.
 Run `bun run start` from `mcp/` to start the server. It stays alive while stdin
 is open and exits when its parent MCP client closes the connection or the
 process receives `Ctrl-C`.
+
+## Standalone Binary
+
+Run `bun run build` from `mcp/` to compile `dist/gunk-mcp`. The resulting
+executable includes the Bun runtime, so an MCP client can launch it without Bun
+installed:
+
+```bash
+/absolute/path/to/gunk/mcp/dist/gunk-mcp
+```
+
+The binary communicates over stdio and waits for MCP messages while stdin
+remains open.
 
 ## Tools
 
