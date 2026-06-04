@@ -463,6 +463,32 @@ final class Store {
     }
   }
 
+  func llmRunsForSource(sourceId: Int64) throws -> [LLMRun] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            cost_usd,
+            started_at,
+            finished_at
+          FROM llm_runs
+          WHERE source_id = ?
+          ORDER BY id ASC
+          """,
+        arguments: [sourceId]
+      )
+
+      return rows.map(Store.llmRun(from:))
+    }
+  }
+
   private func prepareDatabase() throws {
     try databaseQueue.writeWithoutTransaction { db in
       try db.execute(sql: "PRAGMA journal_mode = WAL")
@@ -553,13 +579,27 @@ final class Store {
     )
   }
 
+  private static func llmRun(from row: Row) -> LLMRun {
+    LLMRun(
+      id: row["id"],
+      sourceId: row["source_id"],
+      provider: row["provider"],
+      model: row["model"],
+      inputTokens: row["input_tokens"],
+      outputTokens: row["output_tokens"],
+      costUsd: row["cost_usd"],
+      startedAt: row["started_at"],
+      finishedAt: row["finished_at"]
+    )
+  }
+
   private static func databaseConfiguration() -> Configuration {
     var configuration = Configuration()
     configuration.foreignKeysEnabled = true
     return configuration
   }
 
-  private static func currentTimeInMilliseconds() -> Int64 {
+  static func currentTimeInMilliseconds() -> Int64 {
     Int64(Date().timeIntervalSince1970 * 1_000)
   }
 }

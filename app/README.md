@@ -62,6 +62,7 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 | `addGunkFile(gunkId:relpath:size:)` | Records one file in a module bundle. |
 | `filesForGunk(gunkId:)` | Returns files for one module ordered by path. |
 | `recordLLMRun(...)` | Records provider/model token and cost accounting for a source. |
+| `llmRunsForSource(sourceId:)` | Returns LLM runs for one source ordered by insertion. |
 
 The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
 byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.
@@ -82,3 +83,11 @@ Projects may add a root `.gunkignore` with gitignore-style entries such as
 of `characters / 4`. It emits a file tree first, then prioritized contents
 (`README`, project manifests, entrypoints, then smaller source files) until the
 configured budget is reached.
+
+## Decomposition
+
+`DecompositionEngine` sends a token-budgeted context to an injected `LLMClient`
+using the ADR-0011 structured module schema. It validates module files against
+the scanned source file index, filters tags to the seeded taxonomy, clamps
+confidence to `0...1`, records token usage in `llm_runs`, and persists module,
+tag, and file membership rows.
