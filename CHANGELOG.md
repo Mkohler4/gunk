@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` list view + delete.
 - `gunk.app` drop zone (drag a folder, it lands in the store).
 - `gunk.app` store writer (insert/list/remove + migrations).
 - MCP tool `get_gunk` (returns README + shallow tree).
