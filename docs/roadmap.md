@@ -92,7 +92,7 @@ gunk.
 - [ ] Pluggable LLM client (OpenAI, Anthropic, local via Ollama) inside
       `gunk.app`
 - [ ] Per-folder semantic tagging at drop-time, with confidence scores
-- [ ] Tag taxonomy v0: `auth`, `payments`, `ui-kit`, `scraper`, `dashboard`,
+- [x] Tag taxonomy v0: `auth`, `payments`, `ui-kit`, `scraper`, `dashboard`,
       `cli`, `api`, `db-layer`, `email`, `search`
 - [ ] LLM cost meter (reuse the spend-tracking insight from AICockpit)
 - [ ] Re-classify affordance per gunk

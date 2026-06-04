@@ -41,14 +41,16 @@ ergonomic transaction APIs, and support for both file-backed and in-memory
 database queues.
 
 `Store(path:)` creates the parent directory, opens the database in WAL mode,
-enables foreign keys, and applies the v0 schema migration. The typed API is:
+enables foreign keys, and applies pending schema migrations. The typed API is:
 
 | Method | Behavior |
 | --- | --- |
 | `insertGunk(name:path:)` | Inserts a dropped folder and returns its `Gunk`. |
 | `listGunks()` | Returns active gunks ordered newest-first. |
 | `removeGunk(id:)` | Soft-removes a gunk by setting `removed_at`. |
+| `listTags()` | Returns the seeded classifier tag taxonomy. |
+| `setGunkTags(gunkId:tags:)` | Replaces one gunk's classifier tags. |
+| `listGunkTags(gunkId:)` | Returns one gunk's tags ordered by confidence. |
 
-The Swift v0 schema in `Sources/GunkApp/Store/Schema.swift` is kept
-byte-for-byte identical to the MCP source of truth at
-`../mcp/src/schema/v0.sql`.
+The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
+byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.

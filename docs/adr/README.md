@@ -13,6 +13,7 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0004  | Drag-in over file-watch        | Accepted |
 | 0005  | Monorepo layout                | Accepted |
 | 0006  | SQLite schema v0               | Accepted |
+| 0007  | SQLite schema v1 tags          | Accepted |
 
 ## Format
 

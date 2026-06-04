@@ -26,9 +26,9 @@ bun install
 | `bun run format`    | Check formatting with Prettier.                |
 | `bun run build`     | Compile the standalone `dist/gunk-mcp` binary. |
 
-## Schema (v0)
+## Schema (v1)
 
-`src/schema/v0.sql` is the source of truth for the shared SQLite contract.
+`src/schema/` is the source of truth for the shared SQLite contract.
 `openStore(path)` opens a database with WAL mode and foreign keys enabled,
 applies pending migrations, and returns the `bun:sqlite` database handle.
 
@@ -37,9 +37,12 @@ applies pending migrations, and returns the `bun:sqlite` database handle.
 | `schema_version` | `version INTEGER PRIMARY KEY`, `applied_at INTEGER NOT NULL`                                                                                                                         |
 | `gunks`          | `id INTEGER PRIMARY KEY AUTOINCREMENT`, `name TEXT NOT NULL`, `path TEXT NOT NULL UNIQUE`, `dropped_at INTEGER NOT NULL`, `removed_at INTEGER`                                       |
 | `files`          | `id INTEGER PRIMARY KEY AUTOINCREMENT`, `gunk_id INTEGER NOT NULL` referencing `gunks(id)` with cascade delete, `relpath TEXT NOT NULL`, `size INTEGER`, unique `(gunk_id, relpath)` |
+| `tags`           | `name TEXT PRIMARY KEY`, `description TEXT NOT NULL`                                                                                                                                 |
+| `gunk_tags`      | `gunk_id INTEGER NOT NULL` referencing `gunks(id)`, `tag TEXT NOT NULL` referencing `tags(name)`, `confidence REAL NOT NULL`, `source TEXT NOT NULL`, `tagged_at INTEGER NOT NULL`   |
 
-Fresh databases start at version `-1`; applying v0 records version `0` with a
-Unix epoch millisecond timestamp. Re-running migrations is a no-op.
+Fresh databases start at version `-1`; applying migrations records each schema
+version with a Unix epoch millisecond timestamp. Re-running migrations is a
+no-op.
 
 ## Store Reader
 
@@ -52,6 +55,8 @@ and schema column names inside the store layer.
 | `listGunks(db)`            | Returns active gunks ordered by newest `droppedAt` first.   |
 | `getGunk(db, id)`          | Returns the matching gunk or `null` when the ID is unknown. |
 | `getGunkFiles(db, gunkId)` | Returns files for one gunk ordered by `relpath`.            |
+| `listTags(db)`             | Returns the seeded classifier tag taxonomy.                 |
+| `listGunkTags(db, gunkId)` | Returns one gunk's tags ordered by confidence.              |
 
 ## MCP Entrypoint
 

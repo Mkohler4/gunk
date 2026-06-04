@@ -2,7 +2,13 @@ import { Database } from "bun:sqlite";
 import { afterEach, beforeEach, describe, expect, test } from "vitest";
 
 import { runMigrations } from "../src/schema/index.js";
-import { getGunk, getGunkFiles, listGunks } from "../src/store/index.js";
+import {
+  getGunk,
+  getGunkFiles,
+  listGunks,
+  listGunkTags,
+  listTags,
+} from "../src/store/index.js";
 
 describe("store reader", () => {
   let db: Database;
@@ -30,6 +36,16 @@ describe("store reader", () => {
     db.query(
       "INSERT INTO files (id, gunk_id, relpath, size) VALUES (?, ?, ?, ?)",
     ).run(3, 2, "package.json", 256);
+
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(1, "auth", 0.9, "manual", 600);
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(1, "api", 0.7, "heuristic", 500);
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag, confidence, source, tagged_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(2, "payments", 0.8, "llm", 700);
   });
 
   afterEach(() => {
@@ -71,6 +87,40 @@ describe("store reader", () => {
         gunkId: 1,
         relpath: "src/index.ts",
         size: null,
+      },
+    ]);
+  });
+
+  test("listTags returns the seeded taxonomy", () => {
+    expect(listTags(db).map(({ name }) => name)).toEqual([
+      "api",
+      "auth",
+      "cli",
+      "dashboard",
+      "db-layer",
+      "email",
+      "payments",
+      "scraper",
+      "search",
+      "ui-kit",
+    ]);
+  });
+
+  test("listGunkTags returns tags for that gunk ordered by confidence", () => {
+    expect(listGunkTags(db, 1)).toEqual([
+      {
+        gunkId: 1,
+        tag: "auth",
+        confidence: 0.9,
+        source: "manual",
+        taggedAt: 600,
+      },
+      {
+        gunkId: 1,
+        tag: "api",
+        confidence: 0.7,
+        source: "heuristic",
+        taggedAt: 500,
       },
     ]);
   });
