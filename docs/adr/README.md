@@ -14,6 +14,8 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0005  | Monorepo layout                | Accepted |
 | 0006  | SQLite schema v0               | Accepted |
 | 0007  | SQLite schema v1 tags          | Accepted |
+| 0008  | Gunks are modules              | Accepted |
+| 0009  | Dock recycling-bin surface     | Accepted |
 
 ## Format
 
