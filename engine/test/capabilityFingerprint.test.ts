@@ -20,6 +20,7 @@ function fileSymbols(
   return {
     path: filePath,
     language: languageKindForPath(filePath),
+    viaFallback: false,
     symbols: options.symbols ?? [],
     imports: options.imports ?? [],
     exports: options.exports ?? [],
