@@ -2,7 +2,8 @@
 // app/Sources/GunkApp/Decompose/DecompositionEval.swift. This is the acceptance
 // gate: the engine must meet or beat the recorded baseline scorecard.
 
-import type { Module } from "../models.js";
+import type { Module, QualityGateReason } from "../models.js";
+import type { RunTrace, StageRecord } from "../trace/trace.js";
 
 export interface ExpectedModule {
   name: string;
@@ -36,6 +37,29 @@ export interface Scorecard {
   filePrecision: number;
   fileRecall: number;
   tagAccuracy: number;
+}
+
+export interface SignalMetrics {
+  totalSymbolFiles: number;
+  parsedFiles: number;
+  fallbackFiles: number;
+  realSymbolFiles: number;
+  parseCoverage: number;
+  graphNodes: number;
+  graphEdges: number;
+  graphEdgeDensity: number;
+  surveyHypothesisCount: number;
+  meanExpansionClosureSize: number;
+  medianExpansionClosureSize: number;
+  gateRejectionHistogram: Partial<Record<QualityGateReason, number>>;
+}
+
+export interface SignalFloor {
+  minParseCoverage?: number;
+  minGraphEdgeDensity?: number;
+  minSurveyHypotheses?: number;
+  minMeanExpansionClosureSize?: number;
+  minMedianExpansionClosureSize?: number;
 }
 
 function ratio(numerator: number, denominator: number): number {
@@ -103,6 +127,20 @@ function average(values: number[]): number {
   return values.reduce((sum, v) => sum + v, 0) / values.length;
 }
 
+function median(values: number[]): number {
+  if (values.length === 0) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  if (sorted.length % 2 === 1) {
+    return sorted[middle] ?? 0;
+  }
+  return ((sorted[middle - 1] ?? 0) + (sorted[middle] ?? 0)) / 2;
+}
+
+function stage(trace: RunTrace, name: StageRecord["stage"]): StageRecord | undefined {
+  return trace.stages.find((record) => record.stage === name && record.status === "ok");
+}
+
 export function score(actual: Module[], expected: ExpectedDecomposition): Scorecard {
   let unusedActual = actual.map((element, offset) => ({ offset, element }));
   const moduleScores: ModuleScore[] = [];
@@ -153,6 +191,75 @@ export function summary(card: Scorecard): string {
     `trivial_module_false_positives: ${card.trivialModuleFalsePositiveCount}`,
     `trivial_module_false_positive_rate: ${pct(card.trivialModuleFalsePositiveRate)}`,
   ].join("\n");
+}
+
+export function signalMetrics(trace: RunTrace): SignalMetrics {
+  const symbolCounts = stage(trace, "symbols")?.counts ?? {};
+  const graphCounts = stage(trace, "graph")?.counts ?? {};
+  const surveyCounts = stage(trace, "survey")?.counts ?? {};
+  const closureSizes = trace.expansions.map((expansion) => expansion.closureFiles.length);
+  const gateRejectionHistogram: Partial<Record<QualityGateReason, number>> = {};
+
+  for (const evaluation of trace.gateEvaluations) {
+    if (evaluation.decision !== "rejected") continue;
+    for (const reason of evaluation.reasons) {
+      const key = reason as QualityGateReason;
+      gateRejectionHistogram[key] = (gateRejectionHistogram[key] ?? 0) + 1;
+    }
+  }
+
+  const totalSymbolFiles = symbolCounts.files ?? 0;
+  const realSymbolFiles = symbolCounts.realSymbolFiles ?? 0;
+  const graphNodes = graphCounts.nodes ?? 0;
+  const graphEdges = graphCounts.edges ?? 0;
+
+  return {
+    totalSymbolFiles,
+    parsedFiles: symbolCounts.parsedFiles ?? 0,
+    fallbackFiles: symbolCounts.fallbackFiles ?? 0,
+    realSymbolFiles,
+    parseCoverage: ratio(realSymbolFiles, totalSymbolFiles),
+    graphNodes,
+    graphEdges,
+    graphEdgeDensity: ratio(graphEdges, graphNodes),
+    surveyHypothesisCount: surveyCounts.hypotheses ?? trace.hypotheses.length,
+    meanExpansionClosureSize: average(closureSizes),
+    medianExpansionClosureSize: median(closureSizes),
+    gateRejectionHistogram,
+  };
+}
+
+export function assertSignalFloor(metrics: SignalMetrics, floor: SignalFloor): void {
+  const failures: string[] = [];
+  const pushFailure = (name: string, actual: number, expected: number) => {
+    failures.push(`${name} ${actual.toFixed(3)} is below floor ${expected.toFixed(3)}`);
+  };
+
+  if (floor.minParseCoverage !== undefined && metrics.parseCoverage < floor.minParseCoverage) {
+    pushFailure("parseCoverage", metrics.parseCoverage, floor.minParseCoverage);
+  }
+  if (floor.minGraphEdgeDensity !== undefined && metrics.graphEdgeDensity < floor.minGraphEdgeDensity) {
+    pushFailure("graphEdgeDensity", metrics.graphEdgeDensity, floor.minGraphEdgeDensity);
+  }
+  if (floor.minSurveyHypotheses !== undefined && metrics.surveyHypothesisCount < floor.minSurveyHypotheses) {
+    pushFailure("surveyHypothesisCount", metrics.surveyHypothesisCount, floor.minSurveyHypotheses);
+  }
+  if (
+    floor.minMeanExpansionClosureSize !== undefined &&
+    metrics.meanExpansionClosureSize < floor.minMeanExpansionClosureSize
+  ) {
+    pushFailure("meanExpansionClosureSize", metrics.meanExpansionClosureSize, floor.minMeanExpansionClosureSize);
+  }
+  if (
+    floor.minMedianExpansionClosureSize !== undefined &&
+    metrics.medianExpansionClosureSize < floor.minMedianExpansionClosureSize
+  ) {
+    pushFailure("medianExpansionClosureSize", metrics.medianExpansionClosureSize, floor.minMedianExpansionClosureSize);
+  }
+
+  if (failures.length > 0) {
+    throw new Error(`Signal floor failed: ${failures.join("; ")}`);
+  }
 }
 
 export function loadExpected(json: unknown): ExpectedDecomposition {

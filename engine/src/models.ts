@@ -51,6 +51,7 @@ export interface ExportRef {
 export interface FileSymbols {
   path: string;
   language: LanguageKind;
+  viaFallback: boolean;
   symbols: Symbol[];
   imports: ImportRef[];
   exports: ExportRef[];

@@ -485,6 +485,7 @@ function fallbackExtract(file: SymbolFile, language: LanguageKind): FileSymbols 
   return {
     path: file.path,
     language,
+    viaFallback: true,
     symbols: fallbackSymbols(file.contents),
     imports: fallbackImports(file.contents),
     exports: [],
@@ -565,6 +566,7 @@ class TreeSitterSymbolExtractor implements SymbolExtractor {
     return {
       path: file.path,
       language,
+      viaFallback: false,
       symbols: uniquedBy(symbols, symbolKey),
       imports: uniquedBy(imports, importKey),
       exports: uniquedBy(exports, exportKey),

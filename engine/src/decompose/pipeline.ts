@@ -129,7 +129,15 @@ export class DecompositionPipeline {
       const symbols: FileSymbols[] = scannedFiles.map((file) =>
         symbolExtractor.extract({ path: file.relpath, contents: contentsByPath[file.relpath] ?? "" }),
       );
-      return { value: symbols, counts: { files: symbols.length } };
+      return {
+        value: symbols,
+        counts: {
+          files: symbols.length,
+          parsedFiles: symbols.filter((file) => !file.viaFallback).length,
+          fallbackFiles: symbols.filter((file) => file.viaFallback).length,
+          realSymbolFiles: symbols.filter((file) => !file.viaFallback && file.symbols.length > 0).length,
+        },
+      };
     });
 
     // 3. graph
