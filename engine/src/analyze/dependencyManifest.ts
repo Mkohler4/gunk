@@ -2,9 +2,11 @@ import { analysisFirstMatch, analysisMatches } from "./analysisRegex.js";
 
 export type DependencyManifestKind =
   | "cargoToml"
+  | "gradle"
   | "goMod"
   | "packageJson"
   | "packageSwift"
+  | "pubspecYaml"
   | "pyprojectToml"
   | "requirementsTxt";
 
@@ -36,6 +38,13 @@ export class DependencyManifestParser {
 
     if (lowercasedPath.endsWith("package.json")) {
       return { path, kind: "packageJson", dependencies: this.parsePackageJSON(contents) };
+    } else if (lowercasedPath.endsWith("pubspec.yaml")) {
+      return { path, kind: "pubspecYaml", dependencies: this.parsePubspecYaml(contents) };
+    } else if (
+      lowercasedPath.endsWith("build.gradle") ||
+      lowercasedPath.endsWith("build.gradle.kts")
+    ) {
+      return { path, kind: "gradle", dependencies: this.parseGradle(contents) };
     } else if (lowercasedPath.endsWith("package.swift")) {
       return { path, kind: "packageSwift", dependencies: this.parsePackageSwift(contents) };
     } else if (lowercasedPath.endsWith("pyproject.toml")) {
@@ -85,6 +94,60 @@ export class DependencyManifestParser {
     }
 
     return dedupe(names);
+  }
+
+  private parsePubspecYaml(contents: string): string[] {
+    const dependencies: string[] = [];
+    let inDependencySection = false;
+
+    for (const line of splitLines(contents)) {
+      const trimmed = line.trim();
+      if (trimmed.length === 0 || trimmed.startsWith("#")) {
+        continue;
+      }
+
+      if (!line.startsWith(" ") && !line.startsWith("\t")) {
+        inDependencySection =
+          trimmed === "dependencies:" || trimmed === "dev_dependencies:";
+        continue;
+      }
+
+      if (!inDependencySection) {
+        continue;
+      }
+
+      const dependency = analysisFirstMatch(
+        line,
+        String.raw`^ {2}([A-Za-z0-9_\-\.]+)\s*:`,
+      );
+      if (dependency !== undefined) {
+        dependencies.push(dependency);
+      }
+    }
+
+    return dedupe(dependencies);
+  }
+
+  private parseGradle(contents: string): string[] {
+    const dependencies: string[] = [];
+
+    for (const match of analysisMatches(
+      contents,
+      String.raw`\b(?:api|compileOnly|debugImplementation|implementation|kapt|ksp|runtimeOnly|testImplementation)\s*(?:\(\s*)?["']([^"']+)["']`,
+    )) {
+      const coordinate = match[0];
+      if (coordinate === undefined) {
+        continue;
+      }
+
+      const parts = coordinate.split(":");
+      dependencies.push(parts.length >= 2 ? `${parts[0]}:${parts[1]}` : coordinate);
+      if (parts.length >= 2) {
+        dependencies.push(parts[1]);
+      }
+    }
+
+    return dedupe(dependencies);
   }
 
   private parsePackageSwift(contents: string): string[] {
