@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` per-capability refinement pass with closure-bounded membership validation and per-candidate `llm_runs`.
 - `gunk.app` deterministic capability closure expansion with shared dependency detection.
 - `gunk.app` capability survey pass with rubric-grounded structured hypotheses and `llm_runs` recording.
 - `gunk.app` structural repo-map context builder with symbols, edges, clusters, fingerprints, and budgeted snippets.
