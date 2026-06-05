@@ -151,6 +151,118 @@ func (c *OAuthClient) SignIn(ctx context.Context) {
     expect(symbols.exports).toContainEqual({ name: "SignIn", kind: "method", line: 15 });
   });
 
+  it("extracts Dart classes, methods, and functions", () => {
+    const symbols = extractor.extract({
+      path: "lib/auth_controller.dart",
+      contents: `import 'auth_repository.dart';
+
+class AuthController {
+  final AuthRepository repository = AuthRepository();
+  Future<AuthState> signInWithEmail(String email, String password) async {
+    return repository.signInWithEmail(email, password);
+  }
+}
+
+String compactDate(DateTime value) {
+  return value.toIso8601String();
+}`,
+    });
+
+    expect(symbols.language).toBe("dart");
+    expect(symbols.viaFallback).toBe(false);
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "auth_repository.dart",
+      resolvedTarget: null,
+      line: 1,
+    });
+    expect(symbols.symbols).toContainEqual({ name: "AuthController", kind: "class", line: 3 });
+    expect(symbols.symbols).toContainEqual({
+      name: "signInWithEmail",
+      kind: "method",
+      line: 5,
+    });
+    expect(symbols.symbols).toContainEqual({ name: "compactDate", kind: "function", line: 10 });
+  });
+
+  it("treats public top-level decls as exports", () => {
+    const symbols = extractor.extract({
+      path: "lib/types.dart",
+      contents: `class ApiEnvelope {
+  final Map<String, Object?> data;
+  const ApiEnvelope(this.data);
+}
+
+enum AuthState { signedOut, signedIn }
+typedef AuthBuilder = ApiEnvelope Function();
+const defaultTimeoutMs = 5000;
+final currentVersion = '1.0.0';
+String compactDate(DateTime value) => value.toIso8601String();`,
+    });
+
+    expect(symbols.exports).toContainEqual({ name: "ApiEnvelope", kind: "class", line: 1 });
+    expect(symbols.exports).toContainEqual({ name: "AuthState", kind: "enum", line: 6 });
+    expect(symbols.exports).toContainEqual({ name: "AuthBuilder", kind: "type", line: 7 });
+    expect(symbols.exports).toContainEqual({
+      name: "defaultTimeoutMs",
+      kind: "variable",
+      line: 8,
+    });
+    expect(symbols.exports).toContainEqual({
+      name: "currentVersion",
+      kind: "variable",
+      line: 9,
+    });
+    expect(symbols.exports).toContainEqual({ name: "compactDate", kind: "function", line: 10 });
+  });
+
+  it("underscore-prefixed members are not exported", () => {
+    const symbols = extractor.extract({
+      path: "lib/private_bits.dart",
+      contents: `class PublicController {
+  void restoreSession() {}
+  void _dropSession() {}
+}
+
+class _PrivateController {}
+void publicTopLevel() {}
+void _hiddenTopLevel() {}
+const publicValue = 1;
+const _privateValue = 2;`,
+    });
+
+    expect(symbols.symbols).toContainEqual({ name: "_dropSession", kind: "method", line: 3 });
+    expect(symbols.symbols).toContainEqual({
+      name: "_PrivateController",
+      kind: "class",
+      line: 6,
+    });
+    expect(symbols.symbols).toContainEqual({ name: "_hiddenTopLevel", kind: "function", line: 8 });
+    expect(symbols.symbols).toContainEqual({ name: "_privateValue", kind: "variable", line: 10 });
+    expect(symbols.exports).toContainEqual({ name: "PublicController", kind: "class", line: 1 });
+    expect(symbols.exports).toContainEqual({
+      name: "publicTopLevel",
+      kind: "function",
+      line: 7,
+    });
+    expect(symbols.exports).toContainEqual({ name: "publicValue", kind: "variable", line: 9 });
+    expect(symbols.exports).not.toContainEqual({ name: "_dropSession", kind: "method", line: 3 });
+    expect(symbols.exports).not.toContainEqual({
+      name: "_PrivateController",
+      kind: "class",
+      line: 6,
+    });
+    expect(symbols.exports).not.toContainEqual({
+      name: "_hiddenTopLevel",
+      kind: "function",
+      line: 8,
+    });
+    expect(symbols.exports).not.toContainEqual({
+      name: "_privateValue",
+      kind: "variable",
+      line: 10,
+    });
+  });
+
   it("falls back to regex for unknown languages", () => {
     const symbols = extractor.extract({
       path: "scripts/auth.custom",

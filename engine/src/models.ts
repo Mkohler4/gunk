@@ -2,6 +2,7 @@
 // These mirror the Swift structs in app/Sources/GunkApp/{Analyze,Decompose,Ingest}.
 
 export type LanguageKind =
+  | "dart"
   | "go"
   | "javaScript"
   | "python"
@@ -11,6 +12,7 @@ export type LanguageKind =
 
 export function languageKindForPath(path: string): LanguageKind {
   const p = path.toLowerCase();
+  if (p.endsWith(".dart")) return "dart";
   if (p.endsWith(".go")) return "go";
   if (p.endsWith(".js") || p.endsWith(".jsx") || p.endsWith(".mjs")) return "javaScript";
   if (p.endsWith(".py")) return "python";
