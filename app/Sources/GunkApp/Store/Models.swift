@@ -32,13 +32,6 @@ struct GunkTag: Equatable, Sendable {
   let confidence: Double?
 }
 
-struct SourceFile: Equatable, Identifiable, Sendable {
-  let id: Int64
-  let sourceId: Int64
-  let relpath: String
-  let size: Int64?
-}
-
 struct GunkFile: Equatable, Identifiable, Sendable {
   let id: Int64
   let gunkId: Int64
@@ -65,12 +58,4 @@ struct GunkEmbedding: Equatable, Identifiable, Sendable {
   let vector: [Double]
   let dim: Int
   let model: String
-}
-
-struct GunkClusterMembership: Equatable, Identifiable, Sendable {
-  var id: Int64 { memberGunkId }
-
-  let memberGunkId: Int64
-  let canonicalGunkId: Int64
-  let similarity: Double
 }

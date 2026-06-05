@@ -8,6 +8,10 @@ final class Store {
   private let databaseQueue: DatabaseQueue
   private let now: () -> Int64
 
+  /// On-disk path of the SQLite file, or `nil` for in-memory stores. The
+  /// `gunk-engine` subprocess needs this to write into the same database.
+  let databasePath: String?
+
   init(
     path: URL,
     now: @escaping () -> Int64 = Store.currentTimeInMilliseconds
@@ -22,6 +26,7 @@ final class Store {
       configuration: Store.databaseConfiguration()
     )
     self.now = now
+    self.databasePath = path.path
 
     try prepareDatabase()
   }
@@ -32,6 +37,7 @@ final class Store {
   ) throws {
     self.databaseQueue = databaseQueue
     self.now = now
+    self.databasePath = nil
 
     try prepareDatabase()
   }
@@ -388,50 +394,6 @@ final class Store {
   }
 
   @discardableResult
-  func addSourceFile(sourceId: Int64, relpath: String, size: Int64?) throws -> SourceFile {
-    try databaseQueue.write { db in
-      try db.execute(
-        sql: """
-          INSERT INTO files (source_id, relpath, size)
-          VALUES (?, ?, ?)
-          ON CONFLICT(source_id, relpath) DO UPDATE
-          SET size = excluded.size
-          """,
-        arguments: [sourceId, relpath, size]
-      )
-
-      let row = try Row.fetchOne(
-        db,
-        sql: """
-          SELECT id, source_id, relpath, size
-          FROM files
-          WHERE source_id = ? AND relpath = ?
-          """,
-        arguments: [sourceId, relpath]
-      )!
-
-      return Store.sourceFile(from: row)
-    }
-  }
-
-  func filesForSource(sourceId: Int64) throws -> [SourceFile] {
-    try databaseQueue.read { db in
-      let rows = try Row.fetchAll(
-        db,
-        sql: """
-          SELECT id, source_id, relpath, size
-          FROM files
-          WHERE source_id = ?
-          ORDER BY relpath ASC
-          """,
-        arguments: [sourceId]
-      )
-
-      return rows.map(Store.sourceFile(from:))
-    }
-  }
-
-  @discardableResult
   func addGunkFile(gunkId: Int64, relpath: String, size: Int64?) throws -> GunkFile {
     try databaseQueue.write { db in
       try db.execute(
@@ -522,56 +484,6 @@ final class Store {
     }
   }
 
-  func llmRunsForSource(sourceId: Int64) throws -> [LLMRun] {
-    try databaseQueue.read { db in
-      let rows = try Row.fetchAll(
-        db,
-        sql: """
-          SELECT
-            id,
-            source_id,
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            cost_usd,
-            started_at,
-            finished_at
-          FROM llm_runs
-          WHERE source_id = ?
-          ORDER BY id ASC
-          """,
-        arguments: [sourceId]
-      )
-
-      return rows.map(Store.llmRun(from:))
-    }
-  }
-
-  func listLLMRuns() throws -> [LLMRun] {
-    try databaseQueue.read { db in
-      let rows = try Row.fetchAll(
-        db,
-        sql: """
-          SELECT
-            id,
-            source_id,
-            provider,
-            model,
-            input_tokens,
-            output_tokens,
-            cost_usd,
-            started_at,
-            finished_at
-          FROM llm_runs
-          ORDER BY started_at ASC, id ASC
-          """
-      )
-
-      return rows.map(Store.llmRun(from:))
-    }
-  }
-
   @discardableResult
   func upsertGunkEmbedding(gunkId: Int64, vector: [Double], model: String) throws -> GunkEmbedding {
     let dim = vector.count
@@ -626,66 +538,6 @@ final class Store {
       )
 
       return rows.map(Store.gunkEmbedding(from:))
-    }
-  }
-
-  @discardableResult
-  func upsertGunkClusterMembership(
-    memberGunkId: Int64,
-    canonicalGunkId: Int64,
-    similarity: Double
-  ) throws -> GunkClusterMembership {
-    let clampedSimilarity = min(max(similarity, 0), 1)
-
-    return try databaseQueue.write { db in
-      try db.execute(
-        sql: """
-          INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity)
-          VALUES (?, ?, ?)
-          ON CONFLICT(member_gunk_id) DO UPDATE
-          SET canonical_gunk_id = excluded.canonical_gunk_id,
-              similarity = excluded.similarity
-          """,
-        arguments: [memberGunkId, canonicalGunkId, clampedSimilarity]
-      )
-
-      return GunkClusterMembership(
-        memberGunkId: memberGunkId,
-        canonicalGunkId: canonicalGunkId,
-        similarity: clampedSimilarity
-      )
-    }
-  }
-
-  func gunkClusterMembership(memberGunkId: Int64) throws -> GunkClusterMembership? {
-    try databaseQueue.read { db in
-      try Row.fetchOne(
-        db,
-        sql: """
-          SELECT member_gunk_id, canonical_gunk_id, similarity
-          FROM gunk_clusters
-          WHERE member_gunk_id = ?
-          """,
-        arguments: [memberGunkId]
-      )
-      .map(Store.gunkClusterMembership(from:))
-    }
-  }
-
-  func gunkClusterMembers(canonicalGunkId: Int64) throws -> [GunkClusterMembership] {
-    try databaseQueue.read { db in
-      let rows = try Row.fetchAll(
-        db,
-        sql: """
-          SELECT member_gunk_id, canonical_gunk_id, similarity
-          FROM gunk_clusters
-          WHERE canonical_gunk_id = ?
-          ORDER BY similarity DESC, member_gunk_id ASC
-          """,
-        arguments: [canonicalGunkId]
-      )
-
-      return rows.map(Store.gunkClusterMembership(from:))
     }
   }
 
@@ -761,35 +613,12 @@ final class Store {
     )
   }
 
-  private static func sourceFile(from row: Row) -> SourceFile {
-    SourceFile(
-      id: row["id"],
-      sourceId: row["source_id"],
-      relpath: row["relpath"],
-      size: row["size"]
-    )
-  }
-
   private static func gunkFile(from row: Row) -> GunkFile {
     GunkFile(
       id: row["id"],
       gunkId: row["gunk_id"],
       relpath: row["relpath"],
       size: row["size"]
-    )
-  }
-
-  private static func llmRun(from row: Row) -> LLMRun {
-    LLMRun(
-      id: row["id"],
-      sourceId: row["source_id"],
-      provider: row["provider"],
-      model: row["model"],
-      inputTokens: row["input_tokens"],
-      outputTokens: row["output_tokens"],
-      costUsd: row["cost_usd"],
-      startedAt: row["started_at"],
-      finishedAt: row["finished_at"]
     )
   }
 
@@ -802,14 +631,6 @@ final class Store {
       vector: decodeEmbeddingVector(data, dim: dim),
       dim: dim,
       model: row["model"]
-    )
-  }
-
-  private static func gunkClusterMembership(from row: Row) -> GunkClusterMembership {
-    GunkClusterMembership(
-      memberGunkId: row["member_gunk_id"],
-      canonicalGunkId: row["canonical_gunk_id"],
-      similarity: row["similarity"]
     )
   }
 

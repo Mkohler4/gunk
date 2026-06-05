@@ -20,129 +20,113 @@ final class SourceProcessingRunnerTests: XCTestCase {
     try FileManager.default.removeItem(at: temporaryDirectory)
   }
 
-  func testProcessesSourceIntoExtractedBundle() async throws {
-    let sourceURL = temporaryDirectory.appendingPathComponent("fixture")
-    try FileManager.default.createDirectory(
-      at: sourceURL.appendingPathComponent("src/routes"),
-      withIntermediateDirectories: true
-    )
-    try FileManager.default.createDirectory(
-      at: sourceURL.appendingPathComponent("src/services"),
-      withIntermediateDirectories: true
-    )
-    try Data(
-      """
-      import { login } from "../services/auth";
-
-      export async function authCallback(req, res) {
-        res.json(await login(req.query.code));
-      }
-
-      router.get("/auth/google", authCallback);
-      """.utf8
-    )
-    .write(to: sourceURL.appendingPathComponent("src/routes/auth.ts"))
-    try Data(
-      """
-      export async function login(code: string) {
-        return { code };
-      }
-      """.utf8
-    )
-    .write(to: sourceURL.appendingPathComponent("src/services/auth.ts"))
-
-    let store = try Store(databaseQueue: DatabaseQueue(), now: timestamps(100, 200, 300))
-    let source = try store.insertSource(name: "fixture", path: sourceURL.path)
-    let dockIconController = DockIconController()
-    let processingModel = ProcessingModel(
-      dockIconController: dockIconController,
-      gunkCount: { try store.listGunks().count }
-    )
-    let gunkHome = temporaryDirectory.appendingPathComponent("gunk-home")
+  func testStreamsEngineProgressAndCompletes() async throws {
+    let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
+    let store = try Store(path: databaseURL, now: timestamps(100, 200, 300))
+    let source = try store.insertSource(name: "fixture", path: "/tmp/fixture")
+    let processingModel = makeProcessingModel(store: store)
     let userDefaults = try temporaryUserDefaults()
     userDefaults.set(LLMProvider.openAI.rawValue, forKey: "llm.provider")
     userDefaults.set("gpt-fixture", forKey: "llm.model")
-    userDefaults.set(0.7, forKey: "llm.confidenceThreshold")
+
+    let launcher = FakeEngineLauncher(events: [
+      .stage(stage: "scan", phase: "started", durationMs: nil, counts: [:]),
+      .progress(stage: "scan", fraction: 0.1, modulesFound: nil),
+      .progress(stage: "refine", fraction: 0.78, modulesFound: 2),
+      .result(runId: "r1", gunkIds: [1, 2], accepted: 2, needsApproval: 0, rejected: 0, tracePath: nil),
+    ])
 
     let runner = SourceProcessingRunner(
       store: store,
       processingModel: processingModel,
+      secretStore: FakeSecretStore(secrets: [LLMProvider.openAI.secretAccount: "sk-test"]),
       userDefaults: userDefaults,
-      fileManager: .default,
-      gunkHome: gunkHome,
-      contextBudgetTokens: 2_000
-    ) { provider, model, _ in
-      XCTAssertEqual(provider, .openAI)
-      XCTAssertEqual(model, "gpt-fixture")
-      return FakeRunnerLLMClient(
-        responses: [
-          .object([
-            "hypotheses": .array([
-              .object([
-                "name": .string("auth-module"),
-                "rationale": .string("Route and service form an auth capability."),
-                "anchors": .array([.string("/auth/google")]),
-                "seedFiles": .array([.string("src/routes/auth.ts")]),
-                "expectedCollaborators": .array([.string("src/services/auth.ts")]),
-                "granularity": .string("feature")
-              ])
-            ])
-          ]),
-          .object([
-            "module": .object([
-              "name": .string("auth-module"),
-              "purpose": .string("Handles sign in"),
-              "tags": .array([.string("auth"), .string("api")]),
-              "language": .string("TypeScript"),
-              "ownedFiles": .array([
-                .string("src/routes/auth.ts"),
-                .string("src/services/auth.ts")
-              ]),
-              "sharedDependencies": .array([]),
-              "entrypoints": .array([
-                .object([
-                  "path": .string("src/routes/auth.ts"),
-                  "symbol": .string("authCallback")
-                ])
-              ]),
-              "anchors": .array([.string("/auth/google")]),
-              "confidence": .number(0.91)
-            ]),
-            "qualityGateHints": .object([
-              "externalFacingCapability": .bool(true),
-              "multiFileCohesion": .bool(true),
-              "anchorPresent": .bool(true),
-              "rightGranularity": .bool(true)
-            ]),
-            "reject": .null
-          ])
-        ],
-        usages: [
-          LLMTokenUsage(inputTokens: 120, outputTokens: 40),
-          LLMTokenUsage(inputTokens: 140, outputTokens: 50)
-        ]
-      )
-    }
+      gunkHome: temporaryDirectory.appendingPathComponent("gunk-home"),
+      launcher: launcher
+    )
 
     await runner.process(source: source)
 
-    let gunk = try XCTUnwrap(try store.gunksForSource(sourceId: source.id).first)
-    XCTAssertEqual(gunk.name, "auth-module")
-    XCTAssertEqual(gunk.bundlePath, gunkHome.appendingPathComponent("modules/1").path)
-    XCTAssertEqual(try store.filesForGunk(gunkId: gunk.id).map(\.relpath), [
-      "src/routes/auth.ts",
-      "src/services/auth.ts"
-    ])
-    XCTAssertTrue(
-      FileManager.default.fileExists(
-        atPath: gunkHome.appendingPathComponent("modules/1/gunk.yml").path
-      )
-    )
     XCTAssertFalse(processingModel.isProcessing)
+    XCTAssertNil(processingModel.errorMessage)
 
-    let runs = try store.llmRunsForSource(sourceId: source.id)
-    XCTAssertEqual(runs.map(\.inputTokens), [120, 140])
-    XCTAssertEqual(runs.map(\.outputTokens), [40, 50])
+    let arguments = try XCTUnwrap(launcher.lastArguments)
+    XCTAssertEqual(arguments.first, "/tmp/fixture")
+    XCTAssertTrue(arguments.contains("--json"))
+    XCTAssertTrue(arguments.contains("--trace"))
+    assertFlag(arguments, "--provider", "openai")
+    assertFlag(arguments, "--model", "gpt-fixture")
+    assertFlag(arguments, "--source-id", String(source.id))
+    assertFlag(arguments, "--db", databaseURL.path)
+    XCTAssertEqual(launcher.lastEnvironment?["GUNK_API_KEY"], "sk-test")
+  }
+
+  func testEngineErrorEventFailsRun() async throws {
+    let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
+    let store = try Store(path: databaseURL)
+    let source = try store.insertSource(name: "fixture", path: "/tmp/fixture")
+    let processingModel = makeProcessingModel(store: store)
+    let userDefaults = try temporaryUserDefaults()
+
+    let launcher = FakeEngineLauncher(events: [
+      .progress(stage: "survey", fraction: 0.58, modulesFound: nil),
+      .error(message: "LLM request failed with HTTP 401.", stage: "survey"),
+    ])
+
+    let runner = SourceProcessingRunner(
+      store: store,
+      processingModel: processingModel,
+      secretStore: FakeSecretStore(secrets: [:]),
+      userDefaults: userDefaults,
+      gunkHome: temporaryDirectory.appendingPathComponent("gunk-home"),
+      launcher: launcher
+    )
+
+    await runner.process(source: source)
+
+    XCTAssertFalse(processingModel.isProcessing)
+    XCTAssertEqual(processingModel.errorMessage, "LLM request failed with HTTP 401.")
+  }
+
+  func testMissingResultFailsRun() async throws {
+    let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
+    let store = try Store(path: databaseURL)
+    let source = try store.insertSource(name: "fixture", path: "/tmp/fixture")
+    let processingModel = makeProcessingModel(store: store)
+    let userDefaults = try temporaryUserDefaults()
+
+    let launcher = FakeEngineLauncher(events: [
+      .progress(stage: "scan", fraction: 0.1, modulesFound: nil),
+    ])
+
+    let runner = SourceProcessingRunner(
+      store: store,
+      processingModel: processingModel,
+      secretStore: FakeSecretStore(secrets: [:]),
+      userDefaults: userDefaults,
+      gunkHome: temporaryDirectory.appendingPathComponent("gunk-home"),
+      launcher: launcher
+    )
+
+    await runner.process(source: source)
+
+    XCTAssertFalse(processingModel.isProcessing)
+    XCTAssertNotNil(processingModel.errorMessage)
+  }
+
+  private func makeProcessingModel(store: Store) -> ProcessingModel {
+    ProcessingModel(
+      dockIconController: DockIconController(),
+      gunkCount: { try store.listGunks().count }
+    )
+  }
+
+  private func assertFlag(_ arguments: [String], _ flag: String, _ value: String) {
+    guard let index = arguments.firstIndex(of: flag), index + 1 < arguments.count else {
+      XCTFail("Missing flag \(flag)")
+      return
+    }
+    XCTAssertEqual(arguments[index + 1], value)
   }
 
   private func temporaryUserDefaults() throws -> UserDefaults {
@@ -164,17 +148,36 @@ final class SourceProcessingRunnerTests: XCTestCase {
   }
 }
 
-private final class FakeRunnerLLMClient: LLMClient {
-  private var responses: [JSONValue]
-  private var usages: [LLMTokenUsage]
+private final class FakeEngineLauncher: EngineLauncher {
+  private let events: [EngineEvent]
+  private(set) var lastArguments: [String]?
+  private(set) var lastEnvironment: [String: String]?
 
-  init(responses: [JSONValue], usages: [LLMTokenUsage]) {
-    self.responses = responses
-    self.usages = usages
+  init(events: [EngineEvent]) {
+    self.events = events
   }
 
-  func complete(request: LLMRequest) async throws -> LLMResponse {
-    _ = request
-    return LLMResponse(json: responses.removeFirst(), usage: usages.removeFirst())
+  func launch(arguments: [String], environment: [String: String]) -> AsyncThrowingStream<EngineEvent, Error> {
+    lastArguments = arguments
+    lastEnvironment = environment
+    let events = events
+    return AsyncThrowingStream { continuation in
+      for event in events {
+        continuation.yield(event)
+      }
+      continuation.finish()
+    }
+  }
+}
+
+private struct FakeSecretStore: SecretStore {
+  var secrets: [String: String]
+
+  func secret(for account: String) throws -> String? {
+    secrets[account]
+  }
+
+  func setSecret(_ secret: String?, for account: String) throws {
+    // not needed for these tests
   }
 }

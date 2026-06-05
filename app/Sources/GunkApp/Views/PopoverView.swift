@@ -14,6 +14,11 @@ struct PopoverView: View {
           Text("Browse")
         }
 
+      RunsView()
+        .tabItem {
+          Text("Runs")
+        }
+
       SettingsView()
         .tabItem {
           Text("Settings")

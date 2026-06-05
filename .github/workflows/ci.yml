@@ -144,6 +144,78 @@ jobs:
       - name: Test
         run: bun test
 
+  engine:
+    name: Engine
+    runs-on: ubuntu-latest
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Lint
+        run: bun run lint
+
+      - name: Typecheck
+        run: bun run typecheck
+
+      - name: Test (includes eval gate vs baseline scorecard)
+        run: bun test
+
+  engine-binary:
+    name: Engine binary
+    runs-on: macos-14
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
+    defaults:
+      run:
+        working-directory: engine
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v6
+
+      - name: Set up Bun
+        uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.3.14
+
+      - name: Install dependencies
+        run: bun install --frozen-lockfile
+
+      - name: Build binary
+        run: bun run build
+
+      - name: Smoke-test self-contained binary without Bun on PATH
+        run: |
+          if PATH=/usr/bin:/bin command -v bun; then
+            echo "bun should not be available in the restricted smoke-test PATH"
+            exit 1
+          fi
+          work="$(mktemp -d)"
+          cp -R test/fixtures/express-saas "$work/proj"
+          # Ollama is unreachable in CI, so the run fails at the survey LLM call.
+          # The point of this smoke test is that scan/symbols/graph/fingerprints
+          # (the embedded tree-sitter WASM grammars) run with no node_modules.
+          set +e
+          PATH=/usr/bin:/bin ./dist/gunk-engine "$work/proj" \
+            --provider ollama --model llama3.2 \
+            --db "$work/store.db" --gunk-home "$work/home" --json >"$work/out.ndjson" 2>"$work/err.log"
+          set -e
+          grep -q '"stage":"symbols","phase":"finished"' "$work/out.ndjson"
+          grep -q '"stage":"graph","phase":"finished"' "$work/out.ndjson"
+          grep -q '"stage":"fingerprints","phase":"finished"' "$work/out.ndjson"
+
   mcp-binary:
     name: MCP binary
     runs-on: macos-14
