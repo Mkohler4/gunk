@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk-mcp` store reader v1 (sources, modules, tags, search).
 - `gunk.app` Browse view, re-classify, and approval queue.
 - `gunk.app` cost meter + Dock processing/progress UI.
 - `gunk.app` physical extractor (bundle + gunk.yml + mini-README + secret redaction + license flagging).

@@ -1,6 +1,13 @@
 import type { Database } from "bun:sqlite";
 
-import type { Gunk, GunkFile, GunkTag, Source, Tag } from "./types.js";
+import type {
+  Gunk,
+  GunkFile,
+  GunkTag,
+  GunkWithFiles,
+  Source,
+  Tag,
+} from "./types.js";
 
 const SOURCE_COLUMNS = `
   id,
@@ -24,6 +31,13 @@ const GUNK_COLUMNS = `
   removed_at AS removedAt
 `;
 
+const VISIBLE_GUNK_FILTER = `
+  removed_at IS NULL
+  AND (extracted_at IS NOT NULL OR approved_at IS NOT NULL)
+`;
+
+type GunkRow = Omit<Gunk, "tags">;
+
 export function listSources(db: Database): Source[] {
   return db
     .query<Source, []>(
@@ -36,26 +50,56 @@ export function listSources(db: Database): Source[] {
 }
 
 export function listGunks(db: Database): Gunk[] {
-  return db
-    .query<Gunk, []>(
+  const rows = db
+    .query<GunkRow, []>(
       `SELECT ${GUNK_COLUMNS}
        FROM gunks
-       WHERE removed_at IS NULL
+       WHERE ${VISIBLE_GUNK_FILTER}
        ORDER BY id DESC`,
     )
     .all();
+
+  return rows.map((row) => withTags(db, row));
 }
 
-export function getGunk(db: Database, id: number): Gunk | null {
-  return (
+export function searchGunks(db: Database, query: string): Gunk[] {
+  const normalizedQuery = query.trim().toLocaleLowerCase();
+
+  if (normalizedQuery.length === 0) {
+    return listGunks(db);
+  }
+
+  return listGunks(db)
+    .filter((gunk) => matchesQuery(gunk, normalizedQuery))
+    .sort((left, right) => {
+      const confidenceDelta = (right.confidence ?? 0) - (left.confidence ?? 0);
+
+      if (confidenceDelta !== 0) {
+        return confidenceDelta;
+      }
+
+      return left.name.localeCompare(right.name);
+    });
+}
+
+export function getGunk(db: Database, id: number): GunkWithFiles | null {
+  const row =
     db
-      .query<Gunk, [number]>(
+      .query<GunkRow, [number]>(
         `SELECT ${GUNK_COLUMNS}
          FROM gunks
-         WHERE id = ?`,
+         WHERE id = ? AND ${VISIBLE_GUNK_FILTER}`,
       )
-      .get(id) ?? null
-  );
+      .get(id) ?? null;
+
+  if (!row) {
+    return null;
+  }
+
+  return {
+    ...withTags(db, row),
+    files: getGunkFiles(db, id),
+  };
 }
 
 export function getGunkFiles(db: Database, gunkId: number): GunkFile[] {
@@ -99,4 +143,26 @@ export function listGunkTags(db: Database, gunkId: number): GunkTag[] {
     .all(gunkId);
 }
 
-export type { Gunk, GunkFile, GunkTag, Source, Tag } from "./types.js";
+function withTags(db: Database, row: GunkRow): Gunk {
+  return {
+    ...row,
+    tags: listGunkTags(db, row.id).map(({ tag }) => tag),
+  };
+}
+
+function matchesQuery(gunk: Gunk, query: string): boolean {
+  return (
+    gunk.name.toLocaleLowerCase().includes(query) ||
+    (gunk.purpose?.toLocaleLowerCase().includes(query) ?? false) ||
+    gunk.tags.some((tag) => tag.toLocaleLowerCase().includes(query))
+  );
+}
+
+export type {
+  Gunk,
+  GunkFile,
+  GunkTag,
+  GunkWithFiles,
+  Source,
+  Tag,
+} from "./types.js";

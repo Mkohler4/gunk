@@ -50,18 +50,24 @@ and re-points `files` at `sources`.
 
 ## Store Reader
 
-The typed store reader in `src/store/` is the database boundary used by future
-MCP tools. It returns camel-case `Gunk` and `GunkFile` records while keeping SQL
-and schema column names inside the store layer.
+The typed store reader in `src/store/` is the database boundary used by MCP
+tools. It returns camel-case `Source`, module `Gunk`, `Tag`, and `GunkFile`
+records while keeping SQL and schema column names inside the store layer.
+Module rows include their tag names.
 
-| Function                   | Behavior                                                            |
-| -------------------------- | ------------------------------------------------------------------- |
-| `listSources(db)`          | Returns active dropped sources ordered by newest `droppedAt` first. |
-| `listGunks(db)`            | Returns active module gunks ordered by newest ID first.             |
-| `getGunk(db, id)`          | Returns the matching module gunk or `null` when the ID is unknown.  |
-| `getGunkFiles(db, gunkId)` | Returns module files for one gunk ordered by `relpath`.             |
-| `listTags(db)`             | Returns the seeded classifier tag taxonomy.                         |
-| `listGunkTags(db, gunkId)` | Returns one module gunk's tags ordered by confidence.               |
+The reader only exposes visible modules: rows with `removed_at IS NULL` and an
+`extracted_at` or `approved_at` value. Unextracted approval-queue modules stay
+app-side until the user approves/extracts them.
+
+| Function                   | Behavior                                                              |
+| -------------------------- | --------------------------------------------------------------------- |
+| `listSources(db)`          | Returns active dropped sources ordered by newest `droppedAt` first.   |
+| `listGunks(db)`            | Returns visible module gunks with `tags`, ordered by newest ID first. |
+| `searchGunks(db, query)`   | Case-insensitive match over module name, purpose, and tag names.      |
+| `getGunk(db, id)`          | Returns one visible module with `tags` and `files`, or `null`.        |
+| `getGunkFiles(db, gunkId)` | Returns module files for one gunk ordered by `relpath`.               |
+| `listTags(db)`             | Returns the seeded classifier tag taxonomy.                           |
+| `listGunkTags(db, gunkId)` | Returns one module gunk's tags ordered by confidence.                 |
 
 ## MCP Entrypoint
 
@@ -90,9 +96,10 @@ remains open.
 
 ### `list_gunks`
 
-Lists the user's active module gunks in newest-ID-first order. The tool takes no
-input. On each call, it opens `~/.gunk/store.db` through the schema opener,
-excludes soft-removed gunks, and returns JSON as MCP text content:
+Lists the user's visible module gunks in newest-ID-first order. The tool takes
+no input. On each call, it opens `~/.gunk/store.db` through the schema opener,
+excludes soft-removed and unextracted gunks, and returns JSON as MCP text
+content:
 
 ```json
 {
@@ -104,6 +111,7 @@ excludes soft-removed gunks, and returns JSON as MCP text content:
       "purpose": "Google OAuth flow",
       "language": "TypeScript",
       "confidence": 0.91,
+      "tags": ["auth", "api"],
       "bundlePath": "/Users/example/.gunk/modules/2",
       "manifestPath": "/Users/example/.gunk/modules/2/gunk.yml",
       "extractedAt": 200,
