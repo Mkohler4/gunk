@@ -9,4 +9,7 @@ description = "Intentionally-committed, secret-free test fixtures"
 paths = [
   # Real on-disk v0 SQLite fixture used by the schema migration tests (T-3.2).
   '''mcp/test/fixtures/.*\.db''',
+  # SecretRedactor unit test embeds fake secret-like strings on purpose to prove
+  # redaction works (ADR-0013 engine port).
+  '''engine/test/extract\.test\.ts''',
 ]
