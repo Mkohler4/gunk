@@ -23,13 +23,33 @@ final class SourceProcessingRunnerTests: XCTestCase {
   func testProcessesSourceIntoExtractedBundle() async throws {
     let sourceURL = temporaryDirectory.appendingPathComponent("fixture")
     try FileManager.default.createDirectory(
-      at: sourceURL.appendingPathComponent("Sources"),
+      at: sourceURL.appendingPathComponent("src/routes"),
       withIntermediateDirectories: true
     )
-    try Data("# Fixture\n".utf8)
-      .write(to: sourceURL.appendingPathComponent("README.md"))
-    try Data("func login() {}\n".utf8)
-      .write(to: sourceURL.appendingPathComponent("Sources/Auth.swift"))
+    try FileManager.default.createDirectory(
+      at: sourceURL.appendingPathComponent("src/services"),
+      withIntermediateDirectories: true
+    )
+    try Data(
+      """
+      import { login } from "../services/auth";
+
+      export async function authCallback(req, res) {
+        res.json(await login(req.query.code));
+      }
+
+      router.get("/auth/google", authCallback);
+      """.utf8
+    )
+    .write(to: sourceURL.appendingPathComponent("src/routes/auth.ts"))
+    try Data(
+      """
+      export async function login(code: string) {
+        return { code };
+      }
+      """.utf8
+    )
+    .write(to: sourceURL.appendingPathComponent("src/services/auth.ts"))
 
     let store = try Store(databaseQueue: DatabaseQueue(), now: timestamps(100, 200, 300))
     let source = try store.insertSource(name: "fixture", path: sourceURL.path)
@@ -54,23 +74,53 @@ final class SourceProcessingRunnerTests: XCTestCase {
     ) { provider, model, _ in
       XCTAssertEqual(provider, .openAI)
       XCTAssertEqual(model, "gpt-fixture")
-      return FakeLLMClient(
-        json: .object([
-          "modules": .array([
-            .object([
+      return FakeRunnerLLMClient(
+        responses: [
+          .object([
+            "hypotheses": .array([
+              .object([
+                "name": .string("auth-module"),
+                "rationale": .string("Route and service form an auth capability."),
+                "anchors": .array([.string("/auth/google")]),
+                "seedFiles": .array([.string("src/routes/auth.ts")]),
+                "expectedCollaborators": .array([.string("src/services/auth.ts")]),
+                "granularity": .string("feature")
+              ])
+            ])
+          ]),
+          .object([
+            "module": .object([
               "name": .string("auth-module"),
               "purpose": .string("Handles sign in"),
-              "tags": .array([.string("auth")]),
-              "files": .array([
-                .string("README.md"),
-                .string("Sources/Auth.swift")
+              "tags": .array([.string("auth"), .string("api")]),
+              "language": .string("TypeScript"),
+              "ownedFiles": .array([
+                .string("src/routes/auth.ts"),
+                .string("src/services/auth.ts")
               ]),
-              "language": .string("Swift"),
+              "sharedDependencies": .array([]),
+              "entrypoints": .array([
+                .object([
+                  "path": .string("src/routes/auth.ts"),
+                  "symbol": .string("authCallback")
+                ])
+              ]),
+              "anchors": .array([.string("/auth/google")]),
               "confidence": .number(0.91)
-            ])
+            ]),
+            "qualityGateHints": .object([
+              "externalFacingCapability": .bool(true),
+              "multiFileCohesion": .bool(true),
+              "anchorPresent": .bool(true),
+              "rightGranularity": .bool(true)
+            ]),
+            "reject": .null
           ])
-        ]),
-        usage: LLMTokenUsage(inputTokens: 120, outputTokens: 40)
+        ],
+        usages: [
+          LLMTokenUsage(inputTokens: 120, outputTokens: 40),
+          LLMTokenUsage(inputTokens: 140, outputTokens: 50)
+        ]
       )
     }
 
@@ -80,8 +130,8 @@ final class SourceProcessingRunnerTests: XCTestCase {
     XCTAssertEqual(gunk.name, "auth-module")
     XCTAssertEqual(gunk.bundlePath, gunkHome.appendingPathComponent("modules/1").path)
     XCTAssertEqual(try store.filesForGunk(gunkId: gunk.id).map(\.relpath), [
-      "README.md",
-      "Sources/Auth.swift"
+      "src/routes/auth.ts",
+      "src/services/auth.ts"
     ])
     XCTAssertTrue(
       FileManager.default.fileExists(
@@ -90,9 +140,9 @@ final class SourceProcessingRunnerTests: XCTestCase {
     )
     XCTAssertFalse(processingModel.isProcessing)
 
-    let run = try XCTUnwrap(try store.llmRunsForSource(sourceId: source.id).first)
-    XCTAssertEqual(run.inputTokens, 120)
-    XCTAssertEqual(run.outputTokens, 40)
+    let runs = try store.llmRunsForSource(sourceId: source.id)
+    XCTAssertEqual(runs.map(\.inputTokens), [120, 140])
+    XCTAssertEqual(runs.map(\.outputTokens), [40, 50])
   }
 
   private func temporaryUserDefaults() throws -> UserDefaults {
@@ -114,12 +164,17 @@ final class SourceProcessingRunnerTests: XCTestCase {
   }
 }
 
-private struct FakeLLMClient: LLMClient {
-  let json: JSONValue
-  let usage: LLMTokenUsage
+private final class FakeRunnerLLMClient: LLMClient {
+  private var responses: [JSONValue]
+  private var usages: [LLMTokenUsage]
+
+  init(responses: [JSONValue], usages: [LLMTokenUsage]) {
+    self.responses = responses
+    self.usages = usages
+  }
 
   func complete(request: LLMRequest) async throws -> LLMResponse {
     _ = request
-    return LLMResponse(json: json, usage: usage)
+    return LLMResponse(json: responses.removeFirst(), usage: usages.removeFirst())
   }
 }
