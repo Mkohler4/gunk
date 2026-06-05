@@ -13,11 +13,16 @@ export interface Gunk {
   purpose: string | null;
   language: string | null;
   confidence: number | null;
+  tags: string[];
   bundlePath: string | null;
   manifestPath: string | null;
   extractedAt: number | null;
   approvedAt: number | null;
   removedAt: number | null;
+}
+
+export interface GunkWithFiles extends Gunk {
+  files: GunkFile[];
 }
 
 export interface GunkFile {
