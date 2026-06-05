@@ -6,6 +6,8 @@ import { afterEach, beforeEach, expect, test } from "vitest";
 import { createServer } from "../src/server/index.js";
 import { GET_GUNK_TOOL } from "../src/tools/get_gunk.js";
 import { LIST_GUNKS_TOOL } from "../src/tools/list_gunks.js";
+import { LIST_SOURCES_TOOL } from "../src/tools/list_sources.js";
+import { SEARCH_GUNKS_TOOL } from "../src/tools/search_gunks.js";
 
 let client: Client;
 let server: Server;
@@ -48,6 +50,11 @@ test("server starts and advertises tools capability", () => {
 
 test("tools/list advertises registered tools", async () => {
   await expect(client.listTools()).resolves.toEqual({
-    tools: [LIST_GUNKS_TOOL, GET_GUNK_TOOL],
+    tools: [
+      LIST_GUNKS_TOOL,
+      LIST_SOURCES_TOOL,
+      SEARCH_GUNKS_TOOL,
+      GET_GUNK_TOOL,
+    ],
   });
 });

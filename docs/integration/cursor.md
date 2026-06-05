@@ -1,7 +1,7 @@
 # Cursor MCP Integration
 
 This guide wires Cursor to `gunk-mcp` manually. Phase 5 will replace this with
-one-click setup from `gunk.app`; for Phase 2, this is the demo path.
+one-click setup from `gunk.app`; for Phase 3, this is the demo path.
 
 Cursor supports global MCP servers in `~/.cursor/mcp.json` and project-specific
 servers in `.cursor/mcp.json`. Use the global file for gunk so Cursor can see
@@ -10,8 +10,8 @@ your dropped folders from any workspace.
 ## Prerequisites
 
 - A built `gunk-mcp` binary from `mcp/dist/gunk-mcp`.
-- At least one active folder dropped into `gunk.app`, so
-  `~/.gunk/store.db` has data.
+- At least one active folder dropped into `gunk.app` and at least one extracted
+  module bundle, so `~/.gunk/store.db` and `~/.gunk/modules/` have data.
 - Cursor installed.
 
 Build the binary from a repo checkout:
@@ -83,14 +83,19 @@ Restart Cursor, or run **Developer: Reload Window** from the command palette.
 1. Open any workspace in Cursor.
 2. Open Cursor chat in agent mode.
 3. Ask: `What gunks do I have?`
-4. Confirm the agent calls `list_gunks` and returns the folder you dropped into
-   `gunk.app`.
-5. Ask: `Show me the README of the first gunk.`
-6. Confirm the agent calls `get_gunk` and summarizes or quotes the README from
-   that folder.
+4. Confirm the agent calls `list_gunks` and returns extracted module gunks with
+   tags, language, confidence, and source IDs.
+5. Ask: `Search my gunks for auth.`
+6. Confirm the agent calls `search_gunks` and returns matching modules by name,
+   purpose, or tag.
+7. Ask: `Show me the first gunk bundle.`
+8. Confirm the agent calls `get_gunk` and summarizes the bundle manifest,
+   generated mini-README, and module files.
+9. Ask: `What source folders has gunk seen?`
+10. Confirm the agent calls `list_sources` and returns active dropped sources.
 
-For the Phase 2 demo, capture a screenshot of Cursor showing the `list_gunks`
-tool call and include it in the PR or release notes.
+For the Phase 3 demo, capture a screenshot of Cursor showing the `list_gunks`
+or `search_gunks` tool call and include it in the PR or release notes.
 
 ## Troubleshooting
 
@@ -100,11 +105,14 @@ tool call and include it in the PR or release notes.
 
   ```bash
   sqlite3 ~/.gunk/store.db \
-    "SELECT id, name, path FROM gunks WHERE removed_at IS NULL;"
+    "SELECT id, name, bundle_path FROM gunks WHERE removed_at IS NULL AND extracted_at IS NOT NULL;"
   ```
+
+- If `get_gunk` returns `Gunk not found`, make sure the row has a non-empty
+  `bundle_path` and the corresponding bundle still exists under
+  `~/.gunk/modules/`.
 
 - If Cursor still does not reconnect, quit and reopen Cursor after editing
   `~/.cursor/mcp.json`.
 - This is intentionally manual. Per ADR-0003, gunk's happy path is ambient; the
   app will own this setup flow in Phase 5.
-

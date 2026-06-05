@@ -99,24 +99,64 @@ remains open.
 Lists the user's visible module gunks in newest-ID-first order. The tool takes
 no input. On each call, it opens `~/.gunk/store.db` through the schema opener,
 excludes soft-removed and unextracted gunks, and returns JSON as MCP text
-content:
+content. Results are compact module summaries designed for choosing a module
+before calling `get_gunk`:
 
 ```json
 {
   "gunks": [
     {
       "id": 2,
-      "sourceId": 1,
       "name": "auth-module",
-      "purpose": "Google OAuth flow",
+      "tags": ["auth", "api"],
       "language": "TypeScript",
       "confidence": 0.91,
+      "sourceId": 1
+    }
+  ]
+}
+```
+
+### `list_sources`
+
+Lists the active dropped source folders in newest-drop-first order. The tool
+takes no input and returns source rows, not extracted modules:
+
+```json
+{
+  "sources": [
+    {
+      "id": 1,
+      "name": "project",
+      "path": "/Users/example/Documents/project",
+      "droppedAt": 1760000000000
+    }
+  ]
+}
+```
+
+### `search_gunks`
+
+Searches visible module gunks by name, purpose, and tag. The tool accepts a
+string `query`; empty or whitespace-only queries behave like `list_gunks`.
+Matches are sorted by confidence and then name:
+
+```json
+{
+  "query": "oauth"
+}
+```
+
+```json
+{
+  "gunks": [
+    {
+      "id": 2,
+      "name": "auth-module",
       "tags": ["auth", "api"],
-      "bundlePath": "/Users/example/.gunk/modules/2",
-      "manifestPath": "/Users/example/.gunk/modules/2/gunk.yml",
-      "extractedAt": 200,
-      "approvedAt": null,
-      "removedAt": null
+      "language": "TypeScript",
+      "confidence": 0.91,
+      "sourceId": 1
     }
   ]
 }
@@ -124,8 +164,8 @@ content:
 
 ### `get_gunk`
 
-Returns one active extracted module gunk's metadata, bundle README content, and
-shallow bundle file tree. Call it with an integer `id` returned by `list_gunks`:
+Returns one active extracted module gunk's portable bundle contents. Call it
+with an integer `id` returned by `list_gunks` or `search_gunks`:
 
 ```json
 {
@@ -133,25 +173,24 @@ shallow bundle file tree. Call it with an integer `id` returned by `list_gunks`:
 }
 ```
 
-The tool checks for a root README, caps its content at 64 KiB, and returns at
-most 200 root entries while skipping `.git`, `node_modules`, and `.DS_Store`:
+The tool reads `gunk.yml`, prefers the generated mini-README
+`README.gunk.md`, and returns file contents for the module's recorded
+`gunk_files`. Total returned file content is capped at 64 KiB and unsafe or
+missing file paths are skipped:
 
 ```json
 {
   "id": 2,
-  "sourceId": 1,
   "name": "auth-module",
-  "purpose": "Google OAuth flow",
+  "tags": ["auth", "api"],
   "language": "TypeScript",
   "confidence": 0.91,
-  "bundlePath": "/Users/example/.gunk/modules/2",
-  "manifestPath": "/Users/example/.gunk/modules/2/gunk.yml",
-  "extractedAt": 200,
-  "approvedAt": null,
-  "readme": "# Auth module\n",
-  "tree": [
-    { "name": "README.md", "type": "file", "size": 14 },
-    { "name": "src", "type": "dir" }
+  "sourceId": 1,
+  "manifest": "schema_version: 1\nid: auth-module\n...",
+  "readme": "# Auth module\n\nTags: auth, api\n",
+  "files": [
+    { "relpath": "package.json", "content": "{\"type\":\"module\"}\n" },
+    { "relpath": "src/index.ts", "content": "export function login() {}\n" }
   ]
 }
 ```
