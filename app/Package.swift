@@ -31,6 +31,9 @@ let package = Package(
       dependencies: [
         "GunkApp",
         .product(name: "GRDB", package: "GRDB.swift")
+      ],
+      resources: [
+        .copy("Fixtures")
       ]
     )
   ]
