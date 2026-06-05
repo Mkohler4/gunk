@@ -1,10 +1,11 @@
 enum Schema {
-  static let version = 2
+  static let version = 3
 
   static let migrations = [
     (version: 0, sql: v0),
     (version: 1, sql: v1),
-    (version: 2, sql: v2)
+    (version: 2, sql: v2),
+    (version: 3, sql: v3)
   ]
 
   // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
@@ -157,4 +158,16 @@ INSERT INTO tags (name) VALUES
   ('search');
 """ + "\n"
   // schema:v2:end
+
+  // Keep byte-for-byte identical to mcp/src/schema/v3.sql.
+  // schema:v3:begin
+  static let v3 = """
+CREATE TABLE gunk_embeddings (
+  gunk_id INTEGER PRIMARY KEY REFERENCES gunks(id) ON DELETE CASCADE,
+  vector BLOB NOT NULL,
+  dim INTEGER NOT NULL CHECK (dim > 0),
+  model TEXT NOT NULL
+);
+""" + "\n"
+  // schema:v3:end
 }

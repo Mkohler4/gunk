@@ -45,6 +45,7 @@ final class DecompositionPipeline {
   private let symbolExtractor: SymbolExtractor
   private let manifestParser: DependencyManifestParser
   private let fingerprintBuilder: CapabilityFingerprintBuilder
+  private let embeddingIndex: EmbeddingIndex?
   private let progress: ProgressHandler
 
   init(
@@ -57,6 +58,7 @@ final class DecompositionPipeline {
     symbolExtractor: SymbolExtractor = TreeSitterSymbolExtractor(),
     manifestParser: DependencyManifestParser = DependencyManifestParser(),
     fingerprintBuilder: CapabilityFingerprintBuilder = CapabilityFingerprintBuilder(),
+    embeddingIndex: EmbeddingIndex? = nil,
     progress: @escaping ProgressHandler = { _ in }
   ) {
     self.store = store
@@ -68,6 +70,7 @@ final class DecompositionPipeline {
     self.symbolExtractor = symbolExtractor
     self.manifestParser = manifestParser
     self.fingerprintBuilder = fingerprintBuilder
+    self.embeddingIndex = embeddingIndex
     self.progress = progress
   }
 
@@ -152,7 +155,7 @@ final class DecompositionPipeline {
     let persisted = try persist(evaluations: persistableEvaluations, source: source)
     report(.persist, 0.92, modulesFound: persisted.count)
 
-    let gunks = try extractAcceptedGunks(persisted)
+    let gunks = try await extractAcceptedGunks(persisted)
     report(.extract, 1, modulesFound: gunks.count)
 
     return gunks
@@ -239,7 +242,7 @@ final class DecompositionPipeline {
     return persisted
   }
 
-  private func extractAcceptedGunks(_ persisted: [PersistedModule]) throws -> [Gunk] {
+  private func extractAcceptedGunks(_ persisted: [PersistedModule]) async throws -> [Gunk] {
     let extractor = Extractor(
       store: store,
       gunkHome: gunkHome,
@@ -253,7 +256,11 @@ final class DecompositionPipeline {
 
       if persistedModule.evaluation.decision == .accepted {
         _ = try extractor.extract(gunk: gunk)
-        gunks.append(try store.gunk(id: gunk.id) ?? gunk)
+        let extracted = try store.gunk(id: gunk.id) ?? gunk
+        if let embeddingIndex {
+          _ = try? await embeddingIndex.index(gunk: extracted)
+        }
+        gunks.append(extracted)
       } else {
         gunks.append(gunk)
       }

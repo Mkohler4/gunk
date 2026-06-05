@@ -62,9 +62,35 @@ function parseGunks(result: unknown): unknown[] {
 
 describe("search_gunks handler", () => {
   test("returns auth module for auth", async () => {
-    const handleSearchGunks = createSearchGunksHandler(createMemoryStore);
+    const handleSearchGunks = createSearchGunksHandler(
+      createMemoryStore,
+      async () => null,
+    );
 
     expect(parseGunks(await handleSearchGunks("auth"))).toEqual([
+      {
+        id: 1,
+        name: "auth-module",
+        tags: ["auth", "api"],
+        language: "TypeScript",
+        confidence: 0.91,
+        sourceId: 1,
+      },
+    ]);
+  });
+
+  test("semantic match for paraphrase", async () => {
+    const handleSearchGunks = createSearchGunksHandler(
+      () => {
+        const db = createMemoryStore();
+        insertEmbedding(db, 1, [1, 0]);
+        insertEmbedding(db, 2, [0, 1]);
+        return db;
+      },
+      async () => [1, 0],
+    );
+
+    expect(parseGunks(await handleSearchGunks("sign in with google"))).toEqual([
       {
         id: 1,
         name: "auth-module",
@@ -180,4 +206,15 @@ function tagGunk(
   db.query(
     "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
   ).run(gunkId, tag.id, confidence);
+}
+
+function insertEmbedding(db: Database, gunkId: number, vector: number[]): void {
+  const buffer = Buffer.alloc(vector.length * Float32Array.BYTES_PER_ELEMENT);
+  vector.forEach((value, index) => {
+    buffer.writeFloatLE(value, index * Float32Array.BYTES_PER_ELEMENT);
+  });
+
+  db.query(
+    "INSERT INTO gunk_embeddings (gunk_id, vector, dim, model) VALUES (?, ?, ?, ?)",
+  ).run(gunkId, buffer, vector.length, "test-embedding");
 }

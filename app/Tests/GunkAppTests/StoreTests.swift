@@ -65,7 +65,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(try store.listSources().map(\.name), ["active"])
   }
 
-  func testMigrationsAreIdempotentThroughV2() throws {
+  func testMigrationsAreIdempotentThroughV3() throws {
     let queue = try DatabaseQueue()
 
     _ = try Store(databaseQueue: queue, now: { 100 })
@@ -75,10 +75,10 @@ final class StoreTests: XCTestCase {
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2])
+    XCTAssertEqual(versions, [0, 1, 2, 3])
   }
 
-  func testV0ToV2UpgradePreservesSources() throws {
+  func testV0ToV3UpgradePreservesSources() throws {
     let queue = try DatabaseQueue()
 
     try queue.write { db in
@@ -116,7 +116,7 @@ final class StoreTests: XCTestCase {
       try Row.fetchOne(db, sql: "SELECT source_id, relpath, size FROM files")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2])
+    XCTAssertEqual(versions, [0, 1, 2, 3])
     XCTAssertEqual(
       source,
       Source(
@@ -132,7 +132,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(file?["size"] as Int64?, 42)
   }
 
-  func testExistingV1StoreUpgradesToV2PreservingSources() throws {
+  func testExistingV1StoreUpgradesToV3PreservingSources() throws {
     let queue = try DatabaseQueue()
 
     try queue.write { db in
@@ -280,6 +280,46 @@ final class StoreTests: XCTestCase {
     )
   }
 
+  func testUpsertGunkEmbeddingPersistsVector() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "auth-module")
+
+    try store.upsertGunkEmbedding(
+      gunkId: gunk.id,
+      vector: [0.25, 0.5, 1],
+      model: "test-embedding"
+    )
+
+    XCTAssertEqual(
+      try store.gunkEmbedding(gunkId: gunk.id),
+      GunkEmbedding(
+        gunkId: gunk.id,
+        vector: [0.25, 0.5, 1],
+        dim: 3,
+        model: "test-embedding"
+      )
+    )
+
+    try store.upsertGunkEmbedding(
+      gunkId: gunk.id,
+      vector: [1, 0],
+      model: "replacement"
+    )
+
+    XCTAssertEqual(
+      try store.listGunkEmbeddings(),
+      [
+        GunkEmbedding(
+          gunkId: gunk.id,
+          vector: [1, 0],
+          dim: 2,
+          model: "replacement"
+        )
+      ]
+    )
+  }
+
   func testApproveGunkSetsApprovedAt() throws {
     let (store, queue) = try makeStore(now: 500)
     let source = try store.insertSource(name: "source", path: "/code/source")
@@ -356,6 +396,10 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(
       Data(Schema.v2.utf8),
       try Data(contentsOf: schemaDirectory.appendingPathComponent("v2.sql"))
+    )
+    XCTAssertEqual(
+      Data(Schema.v3.utf8),
+      try Data(contentsOf: schemaDirectory.appendingPathComponent("v3.sql"))
     )
   }
 

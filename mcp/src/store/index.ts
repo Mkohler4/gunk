@@ -2,6 +2,7 @@ import type { Database } from "bun:sqlite";
 
 import type {
   Gunk,
+  GunkEmbedding,
   GunkFile,
   GunkTag,
   GunkWithFiles,
@@ -38,6 +39,23 @@ const VISIBLE_GUNK_FILTER = `
 
 type GunkRow = Omit<Gunk, "tags">;
 
+interface GunkEmbeddingRow {
+  gunkId: number;
+  vector: Uint8Array;
+  dim: number;
+  model: string;
+}
+
+interface SemanticGunkRow extends GunkRow {
+  vector: Uint8Array;
+  dim: number;
+  model: string;
+}
+
+export interface SearchOptions {
+  queryVector?: number[] | null;
+}
+
 export function listSources(db: Database): Source[] {
   return db
     .query<Source, []>(
@@ -62,11 +80,23 @@ export function listGunks(db: Database): Gunk[] {
   return rows.map((row) => withTags(db, row));
 }
 
-export function searchGunks(db: Database, query: string): Gunk[] {
+export function searchGunks(
+  db: Database,
+  query: string,
+  options: SearchOptions = {},
+): Gunk[] {
   const normalizedQuery = query.trim().toLocaleLowerCase();
 
   if (normalizedQuery.length === 0) {
     return listGunks(db);
+  }
+
+  if (options.queryVector && options.queryVector.length > 0) {
+    const semanticResults = semanticSearchGunks(db, options.queryVector);
+
+    if (semanticResults.length > 0) {
+      return semanticResults;
+    }
   }
 
   return listGunks(db)
@@ -80,6 +110,24 @@ export function searchGunks(db: Database, query: string): Gunk[] {
 
       return left.name.localeCompare(right.name);
     });
+}
+
+export function listGunkEmbeddings(db: Database): GunkEmbedding[] {
+  return db
+    .query<GunkEmbeddingRow, []>(
+      `SELECT
+         gunk_id AS gunkId,
+         vector,
+         dim,
+         model
+       FROM gunk_embeddings
+       ORDER BY gunk_id ASC`,
+    )
+    .all()
+    .map((row) => ({
+      ...row,
+      vector: decodeVector(row.vector, row.dim),
+    }));
 }
 
 export function getGunk(db: Database, id: number): GunkWithFiles | null {
@@ -150,6 +198,41 @@ function withTags(db: Database, row: GunkRow): Gunk {
   };
 }
 
+function semanticSearchGunks(db: Database, queryVector: number[]): Gunk[] {
+  return db
+    .query<SemanticGunkRow, []>(
+      `SELECT
+         ${GUNK_COLUMNS},
+         gunk_embeddings.vector AS vector,
+         gunk_embeddings.dim AS dim,
+         gunk_embeddings.model AS model
+       FROM gunks
+       JOIN gunk_embeddings ON gunk_embeddings.gunk_id = gunks.id
+       WHERE ${VISIBLE_GUNK_FILTER}`,
+    )
+    .all()
+    .map((row) => ({
+      gunk: withTags(db, row),
+      score: cosineSimilarity(queryVector, decodeVector(row.vector, row.dim)),
+    }))
+    .filter(({ score }) => score > 0)
+    .sort((left, right) => {
+      if (left.score !== right.score) {
+        return right.score - left.score;
+      }
+
+      const confidenceDelta =
+        (right.gunk.confidence ?? 0) - (left.gunk.confidence ?? 0);
+
+      if (confidenceDelta !== 0) {
+        return confidenceDelta;
+      }
+
+      return left.gunk.name.localeCompare(right.gunk.name);
+    })
+    .map(({ gunk }) => gunk);
+}
+
 function matchesQuery(gunk: Gunk, query: string): boolean {
   return (
     gunk.name.toLocaleLowerCase().includes(query) ||
@@ -158,8 +241,42 @@ function matchesQuery(gunk: Gunk, query: string): boolean {
   );
 }
 
+function decodeVector(data: Uint8Array, dim: number): number[] {
+  if (dim <= 0 || data.byteLength < dim * Float32Array.BYTES_PER_ELEMENT) {
+    return [];
+  }
+
+  const view = new DataView(data.buffer, data.byteOffset, data.byteLength);
+  return Array.from({ length: dim }, (_, index) =>
+    view.getFloat32(index * Float32Array.BYTES_PER_ELEMENT, true),
+  );
+}
+
+function cosineSimilarity(left: number[], right: number[]): number {
+  if (left.length === 0 || left.length !== right.length) {
+    return 0;
+  }
+
+  let dotProduct = 0;
+  let leftMagnitude = 0;
+  let rightMagnitude = 0;
+
+  for (let index = 0; index < left.length; index += 1) {
+    dotProduct += left[index] * right[index];
+    leftMagnitude += left[index] * left[index];
+    rightMagnitude += right[index] * right[index];
+  }
+
+  if (leftMagnitude === 0 || rightMagnitude === 0) {
+    return 0;
+  }
+
+  return dotProduct / (Math.sqrt(leftMagnitude) * Math.sqrt(rightMagnitude));
+}
+
 export type {
   Gunk,
+  GunkEmbedding,
   GunkFile,
   GunkTag,
   GunkWithFiles,

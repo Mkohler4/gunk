@@ -62,7 +62,8 @@ final class SourceProcessingRunner {
         confidenceThreshold: confidenceThreshold()
       ),
       fileManager: fileManager,
-      gunkHome: gunkHome
+      gunkHome: gunkHome,
+      embeddingIndex: EmbeddingIndex(store: store)
     ) { [processingModel] progress in
       processingModel.update(
         sourceId: source.id,
