@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` code graph builder, import resolver, closure queries, and clustering metrics for Phase 4.
 - `gunk.app` tree-sitter symbol extraction for JS/TS, Python, Swift, Go, plus unknown-language fallback.
 - Decomposition eval harness with golden fixtures, negative traps, and a Phase 3 baseline scorecard.
 - ADR-0012 (capability-centric decomposition architecture and real-module rubric).
