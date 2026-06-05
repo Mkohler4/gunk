@@ -173,6 +173,9 @@ jobs:
       - name: Test (includes eval gate vs baseline scorecard)
         run: bun test
 
+      - name: Eval report (replayed LLM calls)
+        run: bun run eval
+
   engine-binary:
     name: Engine binary
     runs-on: macos-14

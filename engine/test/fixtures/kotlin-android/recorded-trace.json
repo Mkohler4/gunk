@@ -1,0 +1,162 @@
+{
+  "runId": "recorded-kotlin-android",
+  "sourceId": 1,
+  "sourceName": "kotlin-android",
+  "provider": "OpenAI",
+  "model": "phase-5-replay-fixture",
+  "startedAtMs": 100,
+  "finishedAtMs": 100,
+  "status": "succeeded",
+  "error": null,
+  "stages": [
+    {
+      "stage": "scan",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 15
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "symbols",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 15,
+        "parsedFiles": 0,
+        "fallbackFiles": 15,
+        "realSymbolFiles": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "graph",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "nodes": 27,
+        "edges": 15
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "fingerprints",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "fingerprints": 15
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "repoMap",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "chars": 4509
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "survey",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "hypotheses": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "expansion",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "expansions": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "refine",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "modules": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "qualityGates",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "accepted": 0,
+        "needsApproval": 0,
+        "rejected": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "persist",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "persisted": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "extract",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "extracted": 0
+      },
+      "status": "ok"
+    }
+  ],
+  "llmCalls": [
+    {
+      "stage": "survey",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+        },
+        {
+          "role": "user",
+          "content": "Source: kotlin-android\n\nKnown source files:\n- app/build.gradle.kts\n- app/src/main/AndroidManifest.xml\n- app/src/main/java/com/gunk/fixture/MainActivity.kt\n- app/src/main/java/com/gunk/fixture/features/location/LocationPermissionDelegate.kt\n- app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt\n- app/src/main/java/com/gunk/fixture/features/location/LocationTracker.kt\n- app/src/main/java/com/gunk/fixture/features/payments/CheckoutActivity.kt\n- app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt\n- app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt\n- app/src/main/java/com/gunk/fixture/generated/BuildConfig.kt\n- app/src/main/java/com/gunk/fixture/shared/Types.kt\n- app/src/main/java/com/gunk/fixture/util/DateFormatter.kt\n- build.gradle.kts\n- expected.json\n- settings.gradle.kts\n\nReturn capability hypotheses with anchors, seed files, expected collaborators, and granularity.\n\nStructural repo map:\nrepo_map_v1\ntree:\n- app/build.gradle.kts (353 bytes)\n- app/src/main/AndroidManifest.xml (315 bytes)\n- app/src/main/java/com/gunk/fixture/MainActivity.kt (45 bytes)\n- app/src/main/java/com/gunk/fixture/features/location/LocationPermissionDelegate.kt (181 bytes)\n- app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt (298 bytes)\n- app/src/main/java/com/gunk/fixture/features/location/LocationTracker.kt (179 bytes)\n- app/src/main/java/com/gunk/fixture/features/payments/CheckoutActivity.kt (205 bytes)\n- app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt (204 bytes)\n- app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt (297 bytes)\n- app/src/main/java/com/gunk/fixture/generated/BuildConfig.kt (78 bytes)\n- app/src/main/java/com/gunk/fixture/shared/Types.kt (65 bytes)\n- app/src/main/java/com/gunk/fixture/util/DateFormatter.kt (98 bytes)\n- build.gradle.kts (134 bytes)\n- expected.json (959 bytes)\n- settings.gradle.kts (282 bytes)\nclusters:\n- id: c1\n  files: app/build.gradle.kts\n  cohesion: 1.00\n- id: c10\n  files: app/src/main/java/com/gunk/fixture/generated/BuildConfig.kt\n  cohesion: 1.00\n- id: c11\n  files: app/src/main/java/com/gunk/fixture/shared/Types.kt\n  cohesion: 1.00\n- id: c12\n  files: app/src/main/java/com/gunk/fixture/util/DateFormatter.kt\n  cohesion: 1.00\n- id: c13\n  files: build.gradle.kts\n  cohesion: 1.00\n- id: c14\n  files: expected.json\n  cohesion: 0.00\n- id: c15\n  files: settings.gradle.kts\n  cohesion: 1.00\n- id: c2\n  files: app/src/main/AndroidManifest.xml\n  cohesion: 0.00\n- id: c3\n  files: app/src/main/java/com/gunk/fixture/MainActivity.kt\n  cohesion: 1.00\n- id: c4\n  files: app/src/main/java/com/gunk/fixture/features/location/LocationPermissionDelegate.kt\n  cohesion: 1.00\n- id: c5\n  files: app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt\n  cohesion: 1.00\n- id: c6\n  files: app/src/main/java/com/gunk/fixture/features/location/LocationTracker.kt\n  cohesion: 0.00\n- id: c7\n  files: app/src/main/java/com/gunk/fixture/features/payments/CheckoutActivity.kt\n  cohesion: 0.00\n- id: c8\n  files: app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt\n  cohesion: 0.00\n- id: c9\n  files: app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt\n  cohesion: 1.00\nfiles:\n- path: app/build.gradle.kts\n  size: 353\n  cluster: c1\n- path: app/src/main/java/com/gunk/fixture/generated/BuildConfig.kt\n  size: 78\n  cluster: c10\n  symbols: BuildConfig:class@2\n- path: app/src/main/java/com/gunk/fixture/shared/Types.kt\n  size: 65\n  cluster: c11\n  symbols: ApiResult:class@2\n- path: app/src/main/java/com/gunk/fixture/util/DateFormatter.kt\n  size: 98\n  cluster: c12\n  symbols: DateFormatter:class@2\n- path: build.gradle.kts\n  size: 134\n  cluster: c13\n- path: expected.json\n  size: 959\n  cluster: c14\n- path: settings.gradle.kts\n  size: 282\n  cluster: c15\n- path: app/src/main/AndroidManifest.xml\n  size: 315\n  cluster: c2\n- path: app/src/main/java/com/gunk/fixture/MainActivity.kt\n  size: 45\n  cluster: c3\n  symbols: MainActivity:class@3\n- path: app/src/main/java/com/gunk/fixture/features/location/LocationPermissionDelegate.kt\n  size: 181\n  cluster: c4\n  symbols: LocationPermissionDelegate:class@3\n- path: app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt\n  size: 298\n  cluster: c5\n  symbols: LocationRepository:class@5, LocationSubscription:class@6\n  imports: com->external, com.google.android.gms.location.FusedLocationProviderClient->external\n- path: app/src/main/java/com/gunk/fixture/features/location/LocationTracker.kt\n  size: 179\n  cluster: c6\n  symbols: LocationTracker:class@3\n- path: app/src/main/java/com/gunk/fixture/features/payments/CheckoutActivity.kt\n  size: 205\n  cluster: c7\n  symbols: CheckoutActivity:class@3\n- path: app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt\n  size: 204\n  cluster: c8\n  symbols: CheckoutViewModel:class@3\n- path: app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt\n  size: 297\n  cluster: c9\n  symbols: PaymentsRepository:class@5, CheckoutSession:class@6\n  imports: com->external, com.android.billingclient.api.BillingClient->external\nexternal_deps:\n- file: app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt\n  deps: com, com.google.android.gms.location.FusedLocationProviderClient\n- file: app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt\n  deps: com, com.android.billingclient.api.BillingClient\n"
+        }
+      ],
+      "responseJson": {
+        "hypotheses": []
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    }
+  ],
+  "hypotheses": [],
+  "expansions": [],
+  "refinements": [],
+  "gateEvaluations": [],
+  "summary": {
+    "gunkIds": [],
+    "accepted": 0,
+    "needsApproval": 0,
+    "rejected": 0
+  }
+}
