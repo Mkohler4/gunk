@@ -37,7 +37,7 @@ const VISIBLE_GUNK_FILTER = `
   AND (extracted_at IS NOT NULL OR approved_at IS NOT NULL)
 `;
 
-type GunkRow = Omit<Gunk, "tags">;
+type GunkRow = Omit<Gunk, "tags" | "canonicalGunkId" | "variantCount">;
 
 interface GunkEmbeddingRow {
   gunkId: number;
@@ -50,6 +50,11 @@ interface SemanticGunkRow extends GunkRow {
   vector: Uint8Array;
   dim: number;
   model: string;
+}
+
+interface ClusterMetadata {
+  canonicalGunkId: number;
+  variantCount: number;
 }
 
 export interface SearchOptions {
@@ -195,6 +200,31 @@ function withTags(db: Database, row: GunkRow): Gunk {
   return {
     ...row,
     tags: listGunkTags(db, row.id).map(({ tag }) => tag),
+    ...clusterMetadata(db, row.id),
+  };
+}
+
+function clusterMetadata(db: Database, gunkId: number): ClusterMetadata {
+  const membership = db
+    .query<{ canonicalGunkId: number }, [number]>(
+      `SELECT canonical_gunk_id AS canonicalGunkId
+       FROM gunk_clusters
+       WHERE member_gunk_id = ?`,
+    )
+    .get(gunkId);
+  const canonicalGunkId = membership?.canonicalGunkId ?? gunkId;
+  const variantCount =
+    db
+      .query<{ count: number }, [number]>(
+        `SELECT COUNT(*) AS count
+         FROM gunk_clusters
+         WHERE canonical_gunk_id = ?`,
+      )
+      .get(canonicalGunkId)?.count ?? 0;
+
+  return {
+    canonicalGunkId,
+    variantCount: Math.max(1, variantCount),
   };
 }
 

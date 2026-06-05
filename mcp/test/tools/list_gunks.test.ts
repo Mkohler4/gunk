@@ -125,6 +125,8 @@ describe("list_gunks handler", () => {
         language: null,
         confidence: 0.7,
         sourceId: 1,
+        canonicalGunkId: 3,
+        variantCount: 1,
       },
       {
         id: 2,
@@ -133,6 +135,8 @@ describe("list_gunks handler", () => {
         language: null,
         confidence: 0.9,
         sourceId: 1,
+        canonicalGunkId: 2,
+        variantCount: 1,
       },
       {
         id: 1,
@@ -141,6 +145,8 @@ describe("list_gunks handler", () => {
         language: null,
         confidence: 0.6,
         sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
       },
     ]);
   });
@@ -165,6 +171,39 @@ describe("list_gunks handler", () => {
         language: null,
         confidence: null,
         sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
+      },
+    ]);
+  });
+
+  test("returns canonical id and variant count", async () => {
+    const handleListGunks = createListGunksHandler(() => {
+      const db = createMemoryStore([
+        { id: 1, name: "canonical-auth", confidence: 0.92 },
+        { id: 2, name: "variant-auth", confidence: 0.88 },
+      ]);
+
+      db.query(
+        "INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity) VALUES (?, ?, ?)",
+      ).run(1, 1, 1);
+      db.query(
+        "INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity) VALUES (?, ?, ?)",
+      ).run(2, 1, 0.94);
+
+      return db;
+    });
+
+    expect(parseGunks(await handleListGunks())).toMatchObject([
+      {
+        id: 2,
+        canonicalGunkId: 1,
+        variantCount: 2,
+      },
+      {
+        id: 1,
+        canonicalGunkId: 1,
+        variantCount: 2,
       },
     ]);
   });

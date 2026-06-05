@@ -75,6 +75,8 @@ describe("search_gunks handler", () => {
         language: "TypeScript",
         confidence: 0.91,
         sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
       },
     ]);
   });
@@ -98,6 +100,8 @@ describe("search_gunks handler", () => {
         language: "TypeScript",
         confidence: 0.91,
         sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
       },
     ]);
   });
