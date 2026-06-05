@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- Decomposition eval harness with golden fixtures, negative traps, and a Phase 3 baseline scorecard.
 - ADR-0012 (capability-centric decomposition architecture and real-module rubric).
 - `gunk.app` drop-to-decompose demo path with visible drop target, Settings paste support, and live processing errors.
 - MCP tools v1: module-level `list_gunks`, `list_sources`, `search_gunks`, bundle-returning `get_gunk`.

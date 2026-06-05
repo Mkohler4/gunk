@@ -1,0 +1,28 @@
+{
+  "modules": [
+    {
+      "name": "Google OAuth login",
+      "tags": ["auth", "api"],
+      "files": [
+        "src/routes/auth.ts",
+        "src/services/googleOAuth.ts",
+        "src/config/auth.ts",
+        "src/types/auth.ts"
+      ]
+    },
+    {
+      "name": "Stripe subscription billing",
+      "tags": ["payments", "api"],
+      "files": [
+        "src/routes/billing.ts",
+        "src/services/stripeBilling.ts",
+        "src/config/stripe.ts",
+        "src/types/billing.ts"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "src/types.ts",
+    "src/utils/"
+  ]
+}
