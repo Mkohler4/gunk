@@ -8,6 +8,16 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- OpenAI embedding support for app indexing and MCP semantic query search, with Ollama still available as the local fallback.
+- Cross-source module dedup with canonical cluster links, variant counts, and MCP exposure for list/get/search.
+- Local semantic search for extracted gunks with schema v3 `gunk_embeddings`, app-side embedding indexing, and MCP cosine ranking with substring fallback.
+- `gunk.app` eval gate proving the capability-centric pipeline beats the Phase 3 baseline and emits zero trivial-module false positives.
+- `gunk.app` capability-centric decomposition pipeline orchestrating static analysis, survey, expansion, refinement, quality gates, persistence, approval routing, extraction, and progress updates.
+- `gunk.app` real-module quality gates for trivial files, surfaces, cohesion, confidence, and duplicate overlap.
+- `gunk.app` per-capability refinement pass with closure-bounded membership validation and per-candidate `llm_runs`.
+- `gunk.app` deterministic capability closure expansion with shared dependency detection.
+- `gunk.app` capability survey pass with rubric-grounded structured hypotheses and `llm_runs` recording.
+- `gunk.app` structural repo-map context builder with symbols, edges, clusters, fingerprints, and budgeted snippets.
 - `gunk.app` capability fingerprinting for dependency anchors, route surfaces, env/config reads, naming tokens, and lexicon hints.
 - `gunk.app` code graph builder, import resolver, closure queries, and clustering metrics for Phase 4.
 - `gunk.app` tree-sitter symbol extraction for JS/TS, Python, Swift, Go, plus unknown-language fallback.

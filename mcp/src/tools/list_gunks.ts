@@ -48,6 +48,8 @@ export function summary(gunk: Gunk): {
   language: string | null;
   confidence: number | null;
   sourceId: number;
+  canonicalGunkId: number;
+  variantCount: number;
 } {
   return {
     id: gunk.id,
@@ -56,5 +58,7 @@ export function summary(gunk: Gunk): {
     language: gunk.language,
     confidence: gunk.confidence,
     sourceId: gunk.sourceId,
+    canonicalGunkId: gunk.canonicalGunkId,
+    variantCount: gunk.variantCount,
   };
 }

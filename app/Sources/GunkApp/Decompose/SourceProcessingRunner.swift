@@ -52,55 +52,32 @@ final class SourceProcessingRunner {
     let provider = selectedProvider()
     let model = selectedModel(for: provider)
     let client = try clientFactory(provider, model, secretStore)
-    let sourceURL = URL(fileURLWithPath: source.path)
 
-    let files = try SourceScanner(
-      fileManager: fileManager,
-      store: store,
-      sourceId: source.id
-    ).scan(folder: sourceURL)
-    processingModel.update(sourceId: source.id, progress: 0.2)
-
-    let context = try ContextBuilder(fileManager: fileManager)
-      .build(files: files, budgetTokens: contextBudgetTokens)
-    processingModel.update(sourceId: source.id, progress: 0.35)
-
-    let modules = try await DecompositionEngine(
+    let gunks = try await DecompositionPipeline(
       store: store,
       provider: provider,
-      model: model
-    ).decompose(source: source, context: context, using: client)
-    processingModel.update(
-      sourceId: source.id,
-      progress: 0.8,
-      modulesFound: modules.count
-    )
+      model: model,
+      options: DecompositionPipelineOptions(
+        contextBudgetTokens: contextBudgetTokens,
+        confidenceThreshold: confidenceThreshold()
+      ),
+      fileManager: fileManager,
+      gunkHome: gunkHome,
+      embeddingIndex: EmbeddingIndex(store: store, embedder: try embeddingProvider(for: provider))
+    ) { [processingModel] progress in
+      processingModel.update(
+        sourceId: source.id,
+        progress: progress.fraction,
+        modulesFound: progress.modulesFound
+      )
+    }
+    .run(source: source, using: client)
 
-    try extractHighConfidenceGunks(sourceId: source.id)
     processingModel.update(
       sourceId: source.id,
       progress: 1,
-      modulesFound: modules.count
+      modulesFound: gunks.count
     )
-  }
-
-  private func extractHighConfidenceGunks(sourceId: Int64) throws {
-    let threshold = confidenceThreshold()
-    let extractor = Extractor(
-      store: store,
-      gunkHome: gunkHome,
-      confidenceThreshold: threshold,
-      fileManager: fileManager
-    )
-
-    for gunk in try store.gunksForSource(sourceId: sourceId) {
-      guard (gunk.confidence ?? 0) >= threshold,
-            gunk.extractedAt == nil else {
-        continue
-      }
-
-      _ = try extractor.extract(gunk: gunk)
-    }
   }
 
   private func selectedProvider() -> LLMProvider {
@@ -123,6 +100,17 @@ final class SourceProcessingRunner {
     }
 
     return userDefaults.double(forKey: "llm.confidenceThreshold")
+  }
+
+  private func embeddingProvider(for provider: LLMProvider) throws -> EmbeddingProvider {
+    switch provider {
+    case .openAI:
+      return OpenAIEmbeddingProvider(
+        apiKey: try secretStore.secret(for: provider.secretAccount) ?? ""
+      )
+    case .anthropic, .ollama:
+      return OllamaEmbeddingProvider()
+    }
   }
 
   nonisolated private static func liveClient(

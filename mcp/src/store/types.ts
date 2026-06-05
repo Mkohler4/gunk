@@ -19,6 +19,8 @@ export interface Gunk {
   extractedAt: number | null;
   approvedAt: number | null;
   removedAt: number | null;
+  canonicalGunkId: number;
+  variantCount: number;
 }
 
 export interface GunkWithFiles extends Gunk {
@@ -42,4 +44,11 @@ export interface GunkTag {
   tagId: number;
   tag: string;
   confidence: number | null;
+}
+
+export interface GunkEmbedding {
+  gunkId: number;
+  vector: number[];
+  dim: number;
+  model: string;
 }

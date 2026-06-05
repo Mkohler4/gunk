@@ -572,6 +572,123 @@ final class Store {
     }
   }
 
+  @discardableResult
+  func upsertGunkEmbedding(gunkId: Int64, vector: [Double], model: String) throws -> GunkEmbedding {
+    let dim = vector.count
+    let data = Store.encodeEmbeddingVector(vector)
+
+    return try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO gunk_embeddings (gunk_id, vector, dim, model)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(gunk_id) DO UPDATE
+          SET vector = excluded.vector,
+              dim = excluded.dim,
+              model = excluded.model
+          """,
+        arguments: [gunkId, data, dim, model]
+      )
+
+      return GunkEmbedding(
+        gunkId: gunkId,
+        vector: vector,
+        dim: dim,
+        model: model
+      )
+    }
+  }
+
+  func gunkEmbedding(gunkId: Int64) throws -> GunkEmbedding? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          SELECT gunk_id, vector, dim, model
+          FROM gunk_embeddings
+          WHERE gunk_id = ?
+          """,
+        arguments: [gunkId]
+      )
+      .map(Store.gunkEmbedding(from:))
+    }
+  }
+
+  func listGunkEmbeddings() throws -> [GunkEmbedding] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT gunk_id, vector, dim, model
+          FROM gunk_embeddings
+          ORDER BY gunk_id ASC
+          """
+      )
+
+      return rows.map(Store.gunkEmbedding(from:))
+    }
+  }
+
+  @discardableResult
+  func upsertGunkClusterMembership(
+    memberGunkId: Int64,
+    canonicalGunkId: Int64,
+    similarity: Double
+  ) throws -> GunkClusterMembership {
+    let clampedSimilarity = min(max(similarity, 0), 1)
+
+    return try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity)
+          VALUES (?, ?, ?)
+          ON CONFLICT(member_gunk_id) DO UPDATE
+          SET canonical_gunk_id = excluded.canonical_gunk_id,
+              similarity = excluded.similarity
+          """,
+        arguments: [memberGunkId, canonicalGunkId, clampedSimilarity]
+      )
+
+      return GunkClusterMembership(
+        memberGunkId: memberGunkId,
+        canonicalGunkId: canonicalGunkId,
+        similarity: clampedSimilarity
+      )
+    }
+  }
+
+  func gunkClusterMembership(memberGunkId: Int64) throws -> GunkClusterMembership? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          SELECT member_gunk_id, canonical_gunk_id, similarity
+          FROM gunk_clusters
+          WHERE member_gunk_id = ?
+          """,
+        arguments: [memberGunkId]
+      )
+      .map(Store.gunkClusterMembership(from:))
+    }
+  }
+
+  func gunkClusterMembers(canonicalGunkId: Int64) throws -> [GunkClusterMembership] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT member_gunk_id, canonical_gunk_id, similarity
+          FROM gunk_clusters
+          WHERE canonical_gunk_id = ?
+          ORDER BY similarity DESC, member_gunk_id ASC
+          """,
+        arguments: [canonicalGunkId]
+      )
+
+      return rows.map(Store.gunkClusterMembership(from:))
+    }
+  }
+
   private func prepareDatabase() throws {
     try databaseQueue.writeWithoutTransaction { db in
       try db.execute(sql: "PRAGMA journal_mode = WAL")
@@ -674,6 +791,58 @@ final class Store {
       startedAt: row["started_at"],
       finishedAt: row["finished_at"]
     )
+  }
+
+  private static func gunkEmbedding(from row: Row) -> GunkEmbedding {
+    let dim: Int = row["dim"]
+    let data: Data = row["vector"]
+
+    return GunkEmbedding(
+      gunkId: row["gunk_id"],
+      vector: decodeEmbeddingVector(data, dim: dim),
+      dim: dim,
+      model: row["model"]
+    )
+  }
+
+  private static func gunkClusterMembership(from row: Row) -> GunkClusterMembership {
+    GunkClusterMembership(
+      memberGunkId: row["member_gunk_id"],
+      canonicalGunkId: row["canonical_gunk_id"],
+      similarity: row["similarity"]
+    )
+  }
+
+  private static func encodeEmbeddingVector(_ vector: [Double]) -> Data {
+    var data = Data()
+    data.reserveCapacity(vector.count * MemoryLayout<UInt32>.size)
+
+    for component in vector {
+      let value = component.isFinite ? Float32(component) : 0
+      var bits = value.bitPattern.littleEndian
+      withUnsafeBytes(of: &bits) { bytes in
+        data.append(contentsOf: bytes)
+      }
+    }
+
+    return data
+  }
+
+  private static func decodeEmbeddingVector(_ data: Data, dim: Int) -> [Double] {
+    let bytes = [UInt8](data)
+    guard dim > 0, bytes.count >= dim * MemoryLayout<UInt32>.size else {
+      return []
+    }
+
+    return (0..<dim).map { index in
+      let offset = index * MemoryLayout<UInt32>.size
+      let bits = UInt32(bytes[offset])
+        | UInt32(bytes[offset + 1]) << 8
+        | UInt32(bytes[offset + 2]) << 16
+        | UInt32(bytes[offset + 3]) << 24
+
+      return Double(Float32(bitPattern: bits))
+    }
   }
 
   private static func databaseConfiguration() -> Configuration {

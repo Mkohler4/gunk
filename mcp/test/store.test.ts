@@ -37,6 +37,8 @@ describe("store reader", () => {
         extractedAt: 450,
         approvedAt: null,
         removedAt: null,
+        canonicalGunkId: 2,
+        variantCount: 1,
       },
       {
         id: 1,
@@ -51,6 +53,8 @@ describe("store reader", () => {
         extractedAt: 400,
         approvedAt: null,
         removedAt: null,
+        canonicalGunkId: 1,
+        variantCount: 1,
       },
     ]);
   });
@@ -75,6 +79,8 @@ describe("store reader", () => {
       extractedAt: 400,
       approvedAt: null,
       removedAt: null,
+      canonicalGunkId: 1,
+      variantCount: 1,
       files: [
         {
           id: 1,
@@ -101,6 +107,26 @@ describe("store reader", () => {
     expect(searchGunks(db, "payments")).toEqual([]);
     expect(getGunk(db, 3)).toBeNull();
     expect(getGunk(db, 4)).toBeNull();
+  });
+
+  test("surfaces canonical cluster metadata", () => {
+    db.query(
+      "INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity) VALUES (?, ?, ?)",
+    ).run(1, 1, 1);
+    db.query(
+      "INSERT INTO gunk_clusters (member_gunk_id, canonical_gunk_id, similarity) VALUES (?, ?, ?)",
+    ).run(2, 1, 0.92);
+
+    expect(
+      listGunks(db).map(({ id, canonicalGunkId, variantCount }) => ({
+        id,
+        canonicalGunkId,
+        variantCount,
+      })),
+    ).toEqual([
+      { id: 2, canonicalGunkId: 1, variantCount: 2 },
+      { id: 1, canonicalGunkId: 1, variantCount: 2 },
+    ]);
   });
 });
 

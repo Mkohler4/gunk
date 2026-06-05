@@ -138,17 +138,13 @@ a git repository, only the short local commit hash is included. Top-level source
 licenses are detected where possible; restrictive licenses such as GPL are
 flagged in the manifest but do not block extraction.
 
-## Processing and Cost UI
+## Processing UI
 
 `ProcessingModel` tracks active source decompositions, exposes
 `isProcessing`, per-source progress fractions, and the number of modules found
 so far, then drives `DockIconController` to show the processing bin state and a
 live badge count. When all active work completes, it reflects the current gunk
 count as the idle Dock badge.
-
-`CostMeterView` appears in Settings and summarizes token and USD spend from
-`llm_runs` for today and all time. The aggregation treats missing token or cost
-fields as zero so partial provider responses still render cleanly.
 
 ## Browse and Approval
 

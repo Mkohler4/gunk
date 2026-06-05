@@ -12,6 +12,7 @@ import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
 import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
 import {
   createSearchGunksHandler,
+  openAIEmbedQuery,
   SEARCH_GUNKS_TOOL,
 } from "../../src/tools/search_gunks.js";
 
@@ -62,7 +63,10 @@ function parseGunks(result: unknown): unknown[] {
 
 describe("search_gunks handler", () => {
   test("returns auth module for auth", async () => {
-    const handleSearchGunks = createSearchGunksHandler(createMemoryStore);
+    const handleSearchGunks = createSearchGunksHandler(
+      createMemoryStore,
+      async () => null,
+    );
 
     expect(parseGunks(await handleSearchGunks("auth"))).toEqual([
       {
@@ -72,8 +76,68 @@ describe("search_gunks handler", () => {
         language: "TypeScript",
         confidence: 0.91,
         sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
       },
     ]);
+  });
+
+  test("semantic match for paraphrase", async () => {
+    const handleSearchGunks = createSearchGunksHandler(
+      () => {
+        const db = createMemoryStore();
+        insertEmbedding(db, 1, [1, 0]);
+        insertEmbedding(db, 2, [0, 1]);
+        return db;
+      },
+      async () => [1, 0],
+    );
+
+    expect(parseGunks(await handleSearchGunks("sign in with google"))).toEqual([
+      {
+        id: 1,
+        name: "auth-module",
+        tags: ["auth", "api"],
+        language: "TypeScript",
+        confidence: 0.91,
+        sourceId: 1,
+        canonicalGunkId: 1,
+        variantCount: 1,
+      },
+    ]);
+  });
+});
+
+describe("OpenAI query embeddings", () => {
+  test("posts query to the embeddings API", async () => {
+    const requests: Request[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return new Response(
+        JSON.stringify({
+          data: [{ embedding: [0.25, 0.5, 0.75] }],
+        }),
+        { status: 200 },
+      );
+    };
+
+    await expect(
+      openAIEmbedQuery("sign in with google", {
+        apiKey: "sk-test",
+        model: "text-embedding-3-small",
+        fetcher,
+      }),
+    ).resolves.toEqual([0.25, 0.5, 0.75]);
+
+    const request = requests[0];
+    expect(request.url).toBe("https://api.openai.com/v1/embeddings");
+    expect(request.headers.get("Authorization")).toBe("Bearer sk-test");
+
+    await expect(request.json()).resolves.toEqual({
+      model: "text-embedding-3-small",
+      input: "sign in with google",
+    });
   });
 });
 
@@ -180,4 +244,15 @@ function tagGunk(
   db.query(
     "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
   ).run(gunkId, tag.id, confidence);
+}
+
+function insertEmbedding(db: Database, gunkId: number, vector: number[]): void {
+  const buffer = Buffer.alloc(vector.length * Float32Array.BYTES_PER_ELEMENT);
+  vector.forEach((value, index) => {
+    buffer.writeFloatLE(value, index * Float32Array.BYTES_PER_ELEMENT);
+  });
+
+  db.query(
+    "INSERT INTO gunk_embeddings (gunk_id, vector, dim, model) VALUES (?, ?, ?, ?)",
+  ).run(gunkId, buffer, vector.length, "test-embedding");
 }
