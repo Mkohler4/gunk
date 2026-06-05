@@ -47,6 +47,13 @@ export class ImportResolver {
       }
     }
 
+    if (this.isJvmSource(sourcePath)) {
+      const jvmResolved = this.resolveJvmPackageImport(specifier);
+      if (jvmResolved !== null) {
+        return jvmResolved;
+      }
+    }
+
     const aliased = this.resolveAlias(specifier);
     if (aliased !== null) {
       return aliased;
@@ -92,6 +99,29 @@ export class ImportResolver {
     }
 
     return this.resolveCandidate(`lib/${body.slice(slashIndex + 1)}`);
+  }
+
+  private resolveJvmPackageImport(specifier: string): string | null {
+    const packagePath = specifier.replace(/\.\*$/, "").replace(/\./g, "/");
+    const resolved = this.resolveCandidate(packagePath);
+    if (resolved !== null) {
+      return resolved;
+    }
+
+    for (const suffix of this.extensions) {
+      const path = packagePath + suffix;
+      const matched = [...this.sourceFiles].find((sourceFile) => sourceFile.endsWith(`/${path}`));
+      if (matched !== undefined) {
+        return matched;
+      }
+    }
+
+    return null;
+  }
+
+  private isJvmSource(sourcePath: string): boolean {
+    const lowercased = sourcePath.toLowerCase();
+    return lowercased.endsWith(".kt") || lowercased.endsWith(".kts") || lowercased.endsWith(".java");
   }
 
   private resolveRelative(specifier: string, sourcePath: string): string | null {
