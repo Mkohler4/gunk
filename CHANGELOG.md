@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` capability survey pass with rubric-grounded structured hypotheses and `llm_runs` recording.
 - `gunk.app` structural repo-map context builder with symbols, edges, clusters, fingerprints, and budgeted snippets.
 - `gunk.app` capability fingerprinting for dependency anchors, route surfaces, env/config reads, naming tokens, and lexicon hints.
 - `gunk.app` code graph builder, import resolver, closure queries, and clustering metrics for Phase 4.
