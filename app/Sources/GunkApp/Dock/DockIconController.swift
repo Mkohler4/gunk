@@ -132,7 +132,7 @@ final class DockIconController {
 
     if let url = bundle.url(
       forResource: state.assetFilename,
-      withExtension: "svg",
+      withExtension: "png",
       subdirectory: "Assets.xcassets/\(state.assetName).imageset"
     ), let image = NSImage(contentsOf: url) {
       return image
