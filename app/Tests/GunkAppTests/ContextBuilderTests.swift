@@ -17,31 +17,97 @@ final class ContextBuilderTests: XCTestCase {
     try FileManager.default.removeItem(at: temporaryDirectory)
   }
 
-  func testRespectsTokenBudget() throws {
+  func testRepoMapIncludesClustersAndFingerprints() throws {
     let files = [
-      try scannedFile("README.md", String(repeating: "readme ", count: 80)),
-      try scannedFile("Sources/App.swift", String(repeating: "source ", count: 120))
-    ]
-    let context = try ContextBuilder().build(files: files, budgetTokens: 80)
+      try scannedFile("package.json", #"{"dependencies":{"passport-google-oauth20":"latest"}}"#),
+      try scannedFile(
+        "src/auth/routes.ts",
+        """
+        import passport from "passport-google-oauth20";
+        import { createSession } from "./service";
 
-    XCTAssertLessThanOrEqual(ContextBuilder.estimatedTokens(for: context), 80)
-    XCTAssertTrue(context.contains(ContextBuilder.truncationMarker))
+        export function googleCallback() {
+          return createSession(process.env.GOOGLE_CLIENT_ID);
+        }
+
+        router.get("/auth/google", googleCallback);
+        """
+      ),
+      try scannedFile(
+        "src/auth/service.ts",
+        """
+        export function createSession(clientId: string) {
+          return clientId;
+        }
+        """
+      )
+    ]
+
+    let context = try ContextBuilder().build(files: files, budgetTokens: 1_200)
+
+    XCTAssertTrue(context.contains("repo_map_v1"))
+    XCTAssertTrue(context.contains("tree:"))
+    XCTAssertTrue(context.contains("clusters:"))
+    XCTAssertTrue(context.contains("files:"))
+    XCTAssertTrue(context.contains("cluster: c"))
+    XCTAssertTrue(context.contains("passport-google-oauth20[auth/google/oauth]"))
+    XCTAssertTrue(context.contains("express:GET /auth/google"))
+    XCTAssertTrue(context.contains("env: GOOGLE_CLIENT_ID"))
+    XCTAssertTrue(context.contains("imports: ./service->src/auth/service.ts"))
+    XCTAssertFalse(context.contains("--- README.md ---"))
   }
 
-  func testPrioritizesReadmeAndManifests() throws {
+  func testRepoMapRespectsTokenBudget() throws {
     let files = [
-      try scannedFile("Sources/ZFeature.swift", "feature"),
-      try scannedFile("package.json", "{\"scripts\":{}}"),
-      try scannedFile("README.md", "# Important")
+      try scannedFile(
+        "src/auth/routes.ts",
+        """
+        import { createSession } from "./service";
+        router.get("/auth/google", googleCallback);
+        export function googleCallback() { return createSession(); }
+        """
+      ),
+      try scannedFile("src/auth/service.ts", "export function createSession() { return true; }"),
+      try scannedFile(
+        "src/billing/routes.ts",
+        """
+        import { createCheckout } from "./service";
+        router.post("/billing/checkout", checkout);
+        export function checkout() { return createCheckout(); }
+        """
+      ),
+      try scannedFile("src/billing/service.ts", "export function createCheckout() { return true; }")
     ]
-    let context = try ContextBuilder().build(files: files, budgetTokens: 300)
 
-    let readmeIndex = try XCTUnwrap(context.range(of: "--- README.md ---"))
-    let manifestIndex = try XCTUnwrap(context.range(of: "--- package.json ---"))
-    let sourceIndex = try XCTUnwrap(context.range(of: "--- Sources/ZFeature.swift ---"))
+    let context = try ContextBuilder().build(files: files, budgetTokens: 105)
 
-    XCTAssertLessThan(readmeIndex.lowerBound, manifestIndex.lowerBound)
-    XCTAssertLessThan(manifestIndex.lowerBound, sourceIndex.lowerBound)
+    XCTAssertLessThanOrEqual(ContextBuilder.estimatedTokens(for: context), 105)
+    XCTAssertTrue(context.contains(ContextBuilder.truncationMarker))
+    XCTAssertFalse(context.contains("src/billing/routes.ts") && !context.contains("src/billing/service.ts"))
+  }
+
+  func testRepoMapIsDeterministic() throws {
+    let package = try scannedFile("package.json", #"{"dependencies":{"stripe":"latest"}}"#)
+    let billing = try scannedFile(
+      "src/billing/routes.ts",
+      """
+      import Stripe from "stripe";
+      router.post("/checkout", checkout);
+      export function checkout() { return new Stripe(process.env.STRIPE_KEY); }
+      """
+    )
+    let auth = try scannedFile(
+      "src/auth/routes.ts",
+      """
+      router.get("/auth/google", googleCallback);
+      export function googleCallback() { return true; }
+      """
+    )
+
+    let first = try ContextBuilder().build(files: [billing, auth, package], budgetTokens: 1_200)
+    let second = try ContextBuilder().build(files: [package, auth, billing], budgetTokens: 1_200)
+
+    XCTAssertEqual(first, second)
   }
 
   private func scannedFile(_ relpath: String, _ contents: String) throws -> ScannedFile {
