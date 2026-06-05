@@ -6,12 +6,20 @@ final class MenubarController {
   private let statusItem: NSStatusItem
   private let popover: NSPopover
 
-  init(store: Store) {
+  init(
+    store: Store,
+    processingModel: ProcessingModel,
+    sourceProcessingRunner: SourceProcessingRunner
+  ) {
     self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
     self.popover = NSPopover()
 
     configureStatusItem()
-    configurePopover(store: store)
+    configurePopover(
+      store: store,
+      processingModel: processingModel,
+      sourceProcessingRunner: sourceProcessingRunner
+    )
   }
 
   private func configureStatusItem() {
@@ -25,13 +33,19 @@ final class MenubarController {
     button.action = #selector(togglePopover)
   }
 
-  private func configurePopover(store: Store) {
+  private func configurePopover(
+    store: Store,
+    processingModel: ProcessingModel,
+    sourceProcessingRunner: SourceProcessingRunner
+  ) {
     popover.behavior = .transient
     popover.contentSize = NSSize(width: 520, height: 560)
     popover.contentViewController = NSHostingController(
       rootView: PopoverView(
         browseModel: BrowseModel(store: store),
-        store: store
+        store: store,
+        processingModel: processingModel,
+        sourceProcessingRunner: sourceProcessingRunner
       )
     )
   }

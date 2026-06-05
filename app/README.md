@@ -25,9 +25,14 @@ the root README and ADR-0002. It runs as a menu bar accessory with an
 
 After `make app`, open `build/gunk.app`. The app runs as a menu bar accessory
 and shows a `G` status item. Open the popover and drag a folder onto the
-drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs are rejected.
-Successful drops post a `gunkInserted` notification so the list view can
-refresh immediately.
+Browse tab's drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs
+are rejected. Successful drops post a `gunkInserted` notification so the list
+view can refresh immediately.
+
+If an LLM provider and key are configured in Settings, the drop also starts the
+Phase 3 processing path: scan the source, build a token-budgeted context, call
+the selected LLM with temperature `0`, persist module gunks, and extract
+high-confidence modules into `~/.gunk/modules/`.
 
 The popover lists active dropped sources below the drop zone in newest-first
 order. Each row shows the folder name, middle-truncated path, relative drop
@@ -95,6 +100,13 @@ using the ADR-0011 structured module schema. It validates module files against
 the scanned source file index, filters tags to the seeded taxonomy, clamps
 confidence to `0...1`, records token usage in `llm_runs`, and persists module,
 tag, and file membership rows.
+
+`SourceProcessingRunner` wires the app drop path to the decomposition pipeline.
+It reads the selected provider/model/confidence threshold from Settings, reads
+provider API keys from Keychain, scans the dropped source, calls
+`DecompositionEngine`, extracts high-confidence modules, and reports processing
+state back to the Dock/progress UI. Tests inject a fake `LLMClient` and temp
+gunk home so the runner never touches the network or real `~/.gunk`.
 
 ## Extraction
 

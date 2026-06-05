@@ -8,6 +8,7 @@ enum GunkAppMain {
     let delegate = AppDelegate()
 
     application.delegate = delegate
+    application.mainMenu = MainMenuFactory.makeMainMenu()
     application.setActivationPolicy(.regular)
     application.run()
   }

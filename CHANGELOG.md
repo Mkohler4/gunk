@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` drop-to-decompose demo path with visible drop target, Settings paste support, and live processing errors.
 - MCP tools v1: module-level `list_gunks`, `list_sources`, `search_gunks`, bundle-returning `get_gunk`.
 - `gunk-mcp` store reader v1 (sources, modules, tags, search).
 - `gunk.app` Browse view, re-classify, and approval queue.

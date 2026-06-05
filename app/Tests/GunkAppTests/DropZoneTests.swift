@@ -3,6 +3,7 @@ import GRDB
 import XCTest
 @testable import GunkApp
 
+@MainActor
 final class DropZoneTests: XCTestCase {
   private var temporaryDirectory: URL!
 
@@ -76,6 +77,18 @@ final class DropZoneTests: XCTestCase {
     try handler.handleDrop(urls: [temporaryDirectory])
 
     XCTAssertEqual(insertedSource?.path, temporaryDirectory.path)
+  }
+
+  func testDropHandlerStartsProcessingInsertedSource() throws {
+    let store = try Store(databaseQueue: DatabaseQueue(), now: { 123 })
+    var processedSource: Source?
+    let handler = DropZoneHandler(store: store) { source in
+      processedSource = source
+    }
+
+    try handler.handleDrop(urls: [temporaryDirectory])
+
+    XCTAssertEqual(processedSource?.path, temporaryDirectory.path)
   }
 
   private func makeHandler() throws -> DropZoneHandler {
