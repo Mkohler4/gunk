@@ -5,6 +5,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
   private var dockIconController: DockIconController?
   private var processingModel: ProcessingModel?
   private var menubarController: MenubarController?
+  private var sourceProcessingRunner: SourceProcessingRunner?
   private var store: Store?
   private let fileManager: FileManager
   private let notificationCenter: NotificationCenter
@@ -35,7 +36,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
       self.store = store
       self.dockIconController = dockIconController
       self.processingModel = processingModel
-      menubarController = MenubarController(store: store)
+      let sourceProcessingRunner = SourceProcessingRunner(
+        store: store,
+        processingModel: processingModel
+      )
+      self.sourceProcessingRunner = sourceProcessingRunner
+      menubarController = MenubarController(
+        store: store,
+        processingModel: processingModel,
+        sourceProcessingRunner: sourceProcessingRunner
+      )
     } catch {
       NSApp.presentError(error)
     }
@@ -53,6 +63,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     do {
       let store = try activeStore()
       let processingModel = try activeProcessingModel(store: store)
+      let sourceProcessingRunner = activeSourceProcessingRunner(
+        store: store,
+        processingModel: processingModel
+      )
 
       for directory in directories {
         for sourceURL in try sourceDetector.detect(folder: directory) {
@@ -62,8 +76,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
           )
 
           notificationCenter.post(name: .gunkInserted, object: source)
-          processingModel.begin(sourceId: source.id)
-          enqueueDecomposition(for: source, processingModel: processingModel)
+          Task {
+            await sourceProcessingRunner.process(source: source)
+          }
         }
       }
     } catch {
@@ -97,17 +112,26 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     return processingModel
   }
 
+  private func activeSourceProcessingRunner(
+    store: Store,
+    processingModel: ProcessingModel
+  ) -> SourceProcessingRunner {
+    if let sourceProcessingRunner {
+      return sourceProcessingRunner
+    }
+
+    let sourceProcessingRunner = SourceProcessingRunner(
+      store: store,
+      processingModel: processingModel
+    )
+    self.sourceProcessingRunner = sourceProcessingRunner
+    return sourceProcessingRunner
+  }
+
   private func isDirectoryURL(_ url: URL) -> Bool {
     var isDirectory = ObjCBool(false)
     return fileManager.fileExists(atPath: url.path, isDirectory: &isDirectory)
       && isDirectory.boolValue
   }
 
-  private func enqueueDecomposition(for source: Source, processingModel: ProcessingModel) {
-    // The decomposition runner is still configured separately; T-3.11 wires the
-    // user-visible progress surface so the eventual runner can report into it.
-    processingModel.update(sourceId: source.id, progress: 1)
-    processingModel.complete(sourceId: source.id)
-    _ = source
-  }
 }

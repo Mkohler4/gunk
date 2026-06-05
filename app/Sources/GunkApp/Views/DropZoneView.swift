@@ -6,19 +6,23 @@ extension Notification.Name {
   static let gunkInserted = Notification.Name("gunkInserted")
 }
 
+@MainActor
 final class DropZoneHandler {
   private let store: Store
   private let fileManager: FileManager
   private let notificationCenter: NotificationCenter
+  private let processSource: (Source) -> Void
 
   init(
     store: Store,
     fileManager: FileManager = .default,
-    notificationCenter: NotificationCenter = .default
+    notificationCenter: NotificationCenter = .default,
+    processSource: @escaping (Source) -> Void = { _ in }
   ) {
     self.store = store
     self.fileManager = fileManager
     self.notificationCenter = notificationCenter
+    self.processSource = processSource
   }
 
   func filterDirectoryURLs(_ urls: [URL]) -> [URL] {
@@ -37,6 +41,7 @@ final class DropZoneHandler {
       )
 
       notificationCenter.post(name: .gunkInserted, object: source)
+      processSource(source)
     }
 
     return !directories.isEmpty

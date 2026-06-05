@@ -4,6 +4,8 @@ import SwiftUI
 struct PopoverView: View {
   let browseModel: BrowseModel
   let store: Store
+  let processingModel: ProcessingModel
+  let sourceProcessingRunner: SourceProcessingRunner
 
   var body: some View {
     TabView {
@@ -29,8 +31,27 @@ struct PopoverView: View {
           .foregroundStyle(.red)
       }
 
+      if processingModel.isProcessing {
+        ProgressView("Processing")
+      }
+
+      if let errorMessage = processingModel.errorMessage {
+        Text(errorMessage)
+          .font(.caption)
+          .foregroundStyle(.red)
+      }
+
+      DropZoneView(
+        handler: DropZoneHandler(store: store) { source in
+          Task {
+            await sourceProcessingRunner.process(source: source)
+          }
+        }
+      )
+        .frame(height: 120)
+
       BrowseView(model: browseModel)
-        .frame(minHeight: 260)
+        .frame(minHeight: 180)
 
       Divider()
 

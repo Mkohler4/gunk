@@ -87,6 +87,21 @@ enum LLMClientError: Error, Equatable {
   case invalidStructuredOutput
 }
 
+extension LLMClientError: LocalizedError {
+  var errorDescription: String? {
+    switch self {
+    case .missingAPIKey:
+      return "Add an API key in Settings before dropping a folder."
+    case .invalidHTTPStatus(let statusCode):
+      return "LLM request failed with HTTP \(statusCode)."
+    case .missingStructuredOutput:
+      return "The LLM response did not include structured output."
+    case .invalidStructuredOutput:
+      return "The LLM response was not valid structured output."
+    }
+  }
+}
+
 typealias HTTPSender = (URLRequest) async throws -> (Data, HTTPURLResponse)
 
 enum LiveHTTPSender {
