@@ -1,0 +1,28 @@
+{
+  "modules": [
+    {
+      "name": "S3 image upload",
+      "tags": ["api"],
+      "files": [
+        "app/api/upload/route.ts",
+        "src/services/s3Upload.ts",
+        "src/config/storage.ts",
+        "src/types/upload.ts"
+      ]
+    },
+    {
+      "name": "Email invite sending",
+      "tags": ["email", "api"],
+      "files": [
+        "app/api/invites/route.ts",
+        "src/services/emailInvite.ts",
+        "src/config/mail.ts",
+        "src/types/invite.ts"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "src/types.ts",
+    "src/utils/"
+  ]
+}
