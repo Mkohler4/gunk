@@ -76,6 +76,8 @@ const MANIFEST_BASENAMES = [
   "go.mod",
   "cargo.toml",
   "pubspec.yaml",
+  "build.gradle",
+  "build.gradle.kts",
 ];
 
 export class DecompositionPipeline {
