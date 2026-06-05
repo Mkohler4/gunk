@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- ADR-0012 (capability-centric decomposition architecture and real-module rubric).
 - MCP tools v1: module-level `list_gunks`, `list_sources`, `search_gunks`, bundle-returning `get_gunk`.
 - `gunk-mcp` store reader v1 (sources, modules, tags, search).
 - `gunk.app` Browse view, re-classify, and approval queue.
