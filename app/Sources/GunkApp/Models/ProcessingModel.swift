@@ -1,50 +1,6 @@
 import Foundation
 import Observation
 
-struct CostMeterTotals: Equatable, Sendable {
-  let inputTokens: Int64
-  let outputTokens: Int64
-  let costUsd: Double
-
-  var totalTokens: Int64 {
-    inputTokens + outputTokens
-  }
-}
-
-struct CostMeterSnapshot: Equatable, Sendable {
-  let today: CostMeterTotals
-  let allTime: CostMeterTotals
-
-  static let empty = CostMeterSnapshot(
-    today: CostMeterTotals(inputTokens: 0, outputTokens: 0, costUsd: 0),
-    allTime: CostMeterTotals(inputTokens: 0, outputTokens: 0, costUsd: 0)
-  )
-}
-
-enum CostMeterAggregator {
-  static func snapshot(
-    runs: [LLMRun],
-    now: Date = Date(),
-    calendar: Calendar = .current
-  ) -> CostMeterSnapshot {
-    let todayStart = calendar.startOfDay(for: now)
-    let todayStartMilliseconds = Int64(todayStart.timeIntervalSince1970 * 1_000)
-
-    return CostMeterSnapshot(
-      today: totals(for: runs.filter { $0.startedAt >= todayStartMilliseconds }),
-      allTime: totals(for: runs)
-    )
-  }
-
-  private static func totals(for runs: [LLMRun]) -> CostMeterTotals {
-    CostMeterTotals(
-      inputTokens: runs.reduce(0) { $0 + ($1.inputTokens ?? 0) },
-      outputTokens: runs.reduce(0) { $0 + ($1.outputTokens ?? 0) },
-      costUsd: runs.reduce(0) { $0 + ($1.costUsd ?? 0) }
-    )
-  }
-}
-
 @MainActor
 @Observable
 final class ProcessingModel {
