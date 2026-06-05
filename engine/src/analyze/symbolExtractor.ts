@@ -12,6 +12,8 @@ import pythonWasm from "tree-sitter-wasms/out/tree-sitter-python.wasm" with { ty
 import swiftWasm from "tree-sitter-wasms/out/tree-sitter-swift.wasm" with { type: "file" };
 import goWasm from "tree-sitter-wasms/out/tree-sitter-go.wasm" with { type: "file" };
 import dartWasm from "tree-sitter-wasms/out/tree-sitter-dart.wasm" with { type: "file" };
+import kotlinWasm from "tree-sitter-wasms/out/tree-sitter-kotlin.wasm" with { type: "file" };
+import javaWasm from "tree-sitter-wasms/out/tree-sitter-java.wasm" with { type: "file" };
 
 import {
   type ExportRef,
@@ -35,7 +37,9 @@ export interface SymbolExtractor {
 
 type GrammarName =
   | "dart"
+  | "java"
   | "javascript"
+  | "kotlin"
   | "typescript"
   | "tsx"
   | "python"
@@ -44,7 +48,9 @@ type GrammarName =
 
 const GRAMMAR_WASM: Record<GrammarName, string> = {
   dart: dartWasm,
+  java: javaWasm,
   javascript: javascriptWasm,
+  kotlin: kotlinWasm,
   typescript: typescriptWasm,
   tsx: tsxWasm,
   python: pythonWasm,
@@ -54,7 +60,9 @@ const GRAMMAR_WASM: Record<GrammarName, string> = {
 
 const GRAMMARS: GrammarName[] = [
   "dart",
+  "java",
   "javascript",
+  "kotlin",
   "typescript",
   "tsx",
   "python",
@@ -354,7 +362,8 @@ function dartDeclarationName(node: Node): string | null {
   const name =
     fieldName?.text ??
     firstDirectNamedChildText(node, new Set(["identifier"])) ??
-    firstDirectNamedChildText(node, new Set(["type_identifier"]));
+    firstDirectNamedChildText(node, new Set(["type_identifier"])) ??
+    firstDirectNamedChildText(node, new Set(["simple_identifier"]));
 
   return name && name.length > 0 ? name : null;
 }
@@ -391,6 +400,28 @@ function dartIsTopLevelDeclaration(node: Node): boolean {
     (node.type === "static_final_declaration" || node.type === "initialized_identifier") &&
     node.parent?.parent?.type === "program"
   );
+}
+
+function declarationIsPrivate(node: Node): boolean {
+  return node.namedChildren.some((child) => child?.type === "modifiers" && /\bprivate\b/.test(child.text));
+}
+
+function appendJvmSymbol(
+  node: Node,
+  kind: SymbolKind,
+  line: number,
+  symbols: Symbol[],
+  exports: ExportRef[],
+): void {
+  const name = dartDeclarationName(node);
+  if (!name) {
+    return;
+  }
+
+  symbols.push({ name, kind, line });
+  if (!declarationIsPrivate(node)) {
+    exports.push({ name, kind, line });
+  }
 }
 
 function appendSwiftDeclaration(
@@ -621,6 +652,77 @@ function collectDart(
   }
 }
 
+function collectKotlin(
+  node: Node,
+  type: string,
+  text: string,
+  line: number,
+  symbols: Symbol[],
+  imports: ImportRef[],
+  exports: ExportRef[],
+): void {
+  switch (type) {
+    case "import_header": {
+      const specifier = text.replace(/^import\s+/, "").trim().replace(/\s+as\s+.+$/, "");
+      if (specifier.length > 0) {
+        imports.push({ moduleSpecifier: specifier, resolvedTarget: null, line });
+      }
+      break;
+    }
+    case "class_declaration":
+    case "object_declaration":
+      appendJvmSymbol(node, "class", line, symbols, exports);
+      break;
+    case "function_declaration":
+      appendJvmSymbol(node, "function", line, symbols, exports);
+      break;
+    default:
+      break;
+  }
+}
+
+function collectJava(
+  node: Node,
+  type: string,
+  text: string,
+  line: number,
+  symbols: Symbol[],
+  imports: ImportRef[],
+  exports: ExportRef[],
+): void {
+  switch (type) {
+    case "import_declaration": {
+      const specifier = text
+        .replace(/^import\s+static\s+/, "")
+        .replace(/^import\s+/, "")
+        .replace(/;$/, "")
+        .trim();
+      if (specifier.length > 0) {
+        imports.push({ moduleSpecifier: specifier, resolvedTarget: null, line });
+      }
+      break;
+    }
+    case "class_declaration":
+      appendJvmSymbol(node, "class", line, symbols, exports);
+      break;
+    case "interface_declaration":
+      appendJvmSymbol(node, "interface", line, symbols, exports);
+      break;
+    case "enum_declaration":
+      appendJvmSymbol(node, "enum", line, symbols, exports);
+      break;
+    case "record_declaration":
+      appendJvmSymbol(node, "type", line, symbols, exports);
+      break;
+    case "constructor_declaration":
+    case "method_declaration":
+      appendJvmSymbol(node, "method", line, symbols, exports);
+      break;
+    default:
+      break;
+  }
+}
+
 function fallbackExtract(file: SymbolFile, language: LanguageKind): FileSymbols {
   return {
     path: file.path,
@@ -638,8 +740,12 @@ function grammarFor(language: LanguageKind, path: string): GrammarName | null {
       return "dart";
     case "go":
       return "go";
+    case "java":
+      return "java";
     case "javaScript":
       return "javascript";
+    case "kotlin":
+      return "kotlin";
     case "python":
       return "python";
     case "swift":
@@ -704,6 +810,12 @@ class TreeSitterSymbolExtractor implements SymbolExtractor {
           break;
         case "go":
           collectGo(node, type, text, line, symbols, imports, exports);
+          break;
+        case "java":
+          collectJava(node, type, text, line, symbols, imports, exports);
+          break;
+        case "kotlin":
+          collectKotlin(node, type, text, line, symbols, imports, exports);
           break;
       }
     });
