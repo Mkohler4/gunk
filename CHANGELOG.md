@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## [Unreleased]
 
 ### Added
+- `gunk.app` eval gate proving the capability-centric pipeline beats the Phase 3 baseline and emits zero trivial-module false positives.
 - `gunk.app` capability-centric decomposition pipeline orchestrating static analysis, survey, expansion, refinement, quality gates, persistence, approval routing, extraction, and progress updates.
 - `gunk.app` real-module quality gates for trivial files, surfaces, cohesion, confidence, and duplicate overlap.
 - `gunk.app` per-capability refinement pass with closure-bounded membership validation and per-candidate `llm_runs`.

@@ -62,3 +62,48 @@ trivial_module_false_positive_rate: 0.50
 The baseline finds the S3 upload capability, misses email invite sending, and
 still emits `src/types.ts` as a module. Its traps should remain zero false
 positives once deterministic quality gates land.
+
+## T-4.11 new-pipeline gate
+
+T-4.11 reruns the eval harness through the full capability-centric pipeline:
+scan, symbols, code graph, capability fingerprints, structural repo map, survey,
+expansion, refinement, quality gates, persistence, and extraction. The survey
+and refinement calls are mocked with realistic structured outputs so the gate is
+deterministic while still exercising the actual orchestration path.
+
+### Fixture: express-saas
+
+New-pipeline scorecard:
+
+```text
+file_precision: 1.00
+file_recall: 1.00
+tag_accuracy: 1.00
+expected_modules: 2
+actual_modules: 2
+module_count_delta: 0
+trivial_module_false_positives: 0
+trivial_module_false_positive_rate: 0.00
+```
+
+The new pipeline finds both Google OAuth login and Stripe subscription billing,
+keeps their route/service/config/type closures together, and emits neither the
+lone `src/types.ts` nor the shared `src/utils/` helper as modules.
+
+### Fixture: next-media
+
+New-pipeline scorecard:
+
+```text
+file_precision: 1.00
+file_recall: 1.00
+tag_accuracy: 1.00
+expected_modules: 2
+actual_modules: 2
+module_count_delta: 0
+trivial_module_false_positives: 0
+trivial_module_false_positive_rate: 0.00
+```
+
+The new pipeline finds both S3 image upload and email invite sending, and the
+quality gates keep the `src/types.ts` trap out of persisted modules.
