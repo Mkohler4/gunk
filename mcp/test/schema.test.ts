@@ -24,13 +24,14 @@ describe("runMigrations", () => {
 
     const tables = db
       .query<{ name: string }, []>(
-        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_version', 'sources', 'files', 'gunks', 'tags', 'gunk_tags', 'gunk_files', 'gunk_embeddings', 'llm_runs') ORDER BY name",
+        "SELECT name FROM sqlite_master WHERE type = 'table' AND name IN ('schema_version', 'sources', 'files', 'gunks', 'tags', 'gunk_tags', 'gunk_files', 'gunk_embeddings', 'gunk_clusters', 'llm_runs') ORDER BY name",
       )
       .all()
       .map(({ name }) => name);
 
     expect(tables).toEqual([
       "files",
+      "gunk_clusters",
       "gunk_embeddings",
       "gunk_files",
       "gunk_tags",

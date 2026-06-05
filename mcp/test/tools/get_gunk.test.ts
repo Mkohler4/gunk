@@ -157,6 +157,8 @@ describe("get_gunk handler", () => {
       language: "TypeScript",
       confidence: 0.9,
       sourceId: 1,
+      canonicalGunkId: 7,
+      variantCount: 1,
       manifest: "name: fixture\n",
       readme: "# Fixture\n",
       files: [

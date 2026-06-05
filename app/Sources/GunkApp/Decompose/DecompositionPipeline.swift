@@ -258,7 +258,9 @@ final class DecompositionPipeline {
         _ = try extractor.extract(gunk: gunk)
         let extracted = try store.gunk(id: gunk.id) ?? gunk
         if let embeddingIndex {
-          _ = try? await embeddingIndex.index(gunk: extracted)
+          if (try? await embeddingIndex.index(gunk: extracted)) != nil {
+            _ = try? ModuleDeduper(store: store).dedupe(gunk: extracted)
+          }
         }
         gunks.append(extracted)
       } else {

@@ -66,3 +66,11 @@ struct GunkEmbedding: Equatable, Identifiable, Sendable {
   let dim: Int
   let model: String
 }
+
+struct GunkClusterMembership: Equatable, Identifiable, Sendable {
+  var id: Int64 { memberGunkId }
+
+  let memberGunkId: Int64
+  let canonicalGunkId: Int64
+  let similarity: Double
+}

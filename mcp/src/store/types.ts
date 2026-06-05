@@ -19,6 +19,8 @@ export interface Gunk {
   extractedAt: number | null;
   approvedAt: number | null;
   removedAt: number | null;
+  canonicalGunkId: number;
+  variantCount: number;
 }
 
 export interface GunkWithFiles extends Gunk {
