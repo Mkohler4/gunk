@@ -38,6 +38,31 @@ final class EmbeddingIndexTests: XCTestCase {
     XCTAssertEqual(results.map(\.gunk.id), [auth.id])
     XCTAssertEqual(try XCTUnwrap(results.first).score, 1, accuracy: 0.0001)
   }
+
+  func testOpenAIEmbeddingProviderBuildsRequestAndParsesVector() async throws {
+    let sender = RecordingEmbeddingSender(
+      data: """
+      {
+        "data": [
+          { "embedding": [0.25, 0.5, 0.75] }
+        ],
+        "model": "text-embedding-3-small"
+      }
+      """
+    )
+    let provider = OpenAIEmbeddingProvider(apiKey: "sk-test", sender: sender.send)
+
+    let vector = try await provider.embed(text: "Google OAuth login")
+
+    XCTAssertEqual(vector, [0.25, 0.5, 0.75])
+    let request = try XCTUnwrap(sender.requests.first)
+    XCTAssertEqual(request.url?.absoluteString, "https://api.openai.com/v1/embeddings")
+    XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer sk-test")
+
+    let body = try XCTUnwrap(request.httpBody).jsonObject
+    XCTAssertEqual(body["model"]?.stringValue, "text-embedding-3-small")
+    XCTAssertEqual(body["input"]?.stringValue, "Google OAuth login")
+  }
 }
 
 private struct KeywordEmbeddingProvider: EmbeddingProvider {
@@ -60,5 +85,33 @@ private struct KeywordEmbeddingProvider: EmbeddingProvider {
     }
 
     return [0, 0]
+  }
+}
+
+private final class RecordingEmbeddingSender {
+  private let data: Data
+  private(set) var requests: [URLRequest] = []
+
+  init(data: String) {
+    self.data = Data(data.utf8)
+  }
+
+  func send(_ request: URLRequest) async throws -> (Data, HTTPURLResponse) {
+    requests.append(request)
+    let response = HTTPURLResponse(
+      url: request.url!,
+      statusCode: 200,
+      httpVersion: nil,
+      headerFields: nil
+    )!
+    return (data, response)
+  }
+}
+
+private extension Data {
+  var jsonObject: [String: JSONValue] {
+    get throws {
+      try XCTUnwrap(try JSONValue.parse(self).objectValue)
+    }
   }
 }

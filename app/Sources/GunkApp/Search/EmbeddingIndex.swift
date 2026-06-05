@@ -163,6 +163,59 @@ final class OllamaEmbeddingProvider: EmbeddingProvider {
   }
 }
 
+final class OpenAIEmbeddingProvider: EmbeddingProvider {
+  let model: String
+
+  private let apiKey: String
+  private let baseURL: URL
+  private let sender: HTTPSender
+
+  init(
+    apiKey: String,
+    model: String = "text-embedding-3-small",
+    baseURL: URL = URL(string: "https://api.openai.com/v1")!,
+    sender: @escaping HTTPSender = LiveHTTPSender.send
+  ) {
+    self.apiKey = apiKey
+    self.model = model
+    self.baseURL = baseURL
+    self.sender = sender
+  }
+
+  func embed(text: String) async throws -> [Double] {
+    guard !apiKey.isEmpty else {
+      throw LLMClientError.missingAPIKey
+    }
+
+    var request = URLRequest(url: baseURL.appendingPathComponent("embeddings"))
+    request.httpMethod = "POST"
+    request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+    try request.setJSONBody(
+      .object([
+        "model": .string(model),
+        "input": .string(text)
+      ])
+    )
+
+    let (data, response) = try await sender(request)
+    guard (200..<300).contains(response.statusCode) else {
+      throw LLMClientError.invalidHTTPStatus(response.statusCode)
+    }
+
+    return try parseResponse(data)
+  }
+
+  private func parseResponse(_ data: Data) throws -> [Double] {
+    let root = try JSONValue.parse(data)
+    guard let embedding = root.objectValue?["data"]?.arrayValue?.first?
+      .objectValue?["embedding"]?.arrayValue else {
+      throw LLMClientError.invalidStructuredOutput
+    }
+
+    return embedding.compactMap(\.numberValue)
+  }
+}
+
 private extension JSONValue {
   var numberValue: Double? {
     if case .number(let value) = self {

@@ -12,6 +12,7 @@ import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
 import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
 import {
   createSearchGunksHandler,
+  openAIEmbedQuery,
   SEARCH_GUNKS_TOOL,
 } from "../../src/tools/search_gunks.js";
 
@@ -104,6 +105,39 @@ describe("search_gunks handler", () => {
         variantCount: 1,
       },
     ]);
+  });
+});
+
+describe("OpenAI query embeddings", () => {
+  test("posts query to the embeddings API", async () => {
+    const requests: Request[] = [];
+    const fetcher = async (input: RequestInfo | URL, init?: RequestInit) => {
+      const request = new Request(input, init);
+      requests.push(request);
+      return new Response(
+        JSON.stringify({
+          data: [{ embedding: [0.25, 0.5, 0.75] }],
+        }),
+        { status: 200 },
+      );
+    };
+
+    await expect(
+      openAIEmbedQuery("sign in with google", {
+        apiKey: "sk-test",
+        model: "text-embedding-3-small",
+        fetcher,
+      }),
+    ).resolves.toEqual([0.25, 0.5, 0.75]);
+
+    const request = requests[0];
+    expect(request.url).toBe("https://api.openai.com/v1/embeddings");
+    expect(request.headers.get("Authorization")).toBe("Bearer sk-test");
+
+    await expect(request.json()).resolves.toEqual({
+      model: "text-embedding-3-small",
+      input: "sign in with google",
+    });
   });
 });
 

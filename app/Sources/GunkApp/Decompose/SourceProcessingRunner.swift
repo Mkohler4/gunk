@@ -63,7 +63,7 @@ final class SourceProcessingRunner {
       ),
       fileManager: fileManager,
       gunkHome: gunkHome,
-      embeddingIndex: EmbeddingIndex(store: store)
+      embeddingIndex: EmbeddingIndex(store: store, embedder: try embeddingProvider(for: provider))
     ) { [processingModel] progress in
       processingModel.update(
         sourceId: source.id,
@@ -100,6 +100,17 @@ final class SourceProcessingRunner {
     }
 
     return userDefaults.double(forKey: "llm.confidenceThreshold")
+  }
+
+  private func embeddingProvider(for provider: LLMProvider) throws -> EmbeddingProvider {
+    switch provider {
+    case .openAI:
+      return OpenAIEmbeddingProvider(
+        apiKey: try secretStore.secret(for: provider.secretAccount) ?? ""
+      )
+    case .anthropic, .ollama:
+      return OllamaEmbeddingProvider()
+    }
   }
 
   nonisolated private static func liveClient(
