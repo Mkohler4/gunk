@@ -57,3 +57,12 @@ struct LLMRun: Equatable, Identifiable, Sendable {
   let startedAt: Int64
   let finishedAt: Int64?
 }
+
+struct GunkEmbedding: Equatable, Identifiable, Sendable {
+  var id: Int64 { gunkId }
+
+  let gunkId: Int64
+  let vector: [Double]
+  let dim: Int
+  let model: String
+}

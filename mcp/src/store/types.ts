@@ -43,3 +43,10 @@ export interface GunkTag {
   tag: string;
   confidence: number | null;
 }
+
+export interface GunkEmbedding {
+  gunkId: number;
+  vector: number[];
+  dim: number;
+  model: string;
+}
