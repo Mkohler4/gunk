@@ -107,7 +107,7 @@ struct CodeGraphBuilder: Sendable {
       nodes.formUnion(symbolNodesByPath[file.path] ?? [])
 
       for importRef in file.imports {
-        guard let targetPath = importRef.resolvedTarget ?? resolver.resolve(importRef.moduleSpecifier, from: file.path) else {
+        guard let targetPath = resolver.resolve(importRef.moduleSpecifier, from: file.path) ?? importRef.resolvedTarget else {
           externalDependencies[file.path, default: []].insert(importRef.moduleSpecifier)
           continue
         }
