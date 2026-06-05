@@ -1,4 +1,7 @@
 import { describe, expect, it } from "vitest";
+import { readFileSync } from "node:fs";
+import { dirname, join } from "node:path";
+import { fileURLToPath } from "node:url";
 
 import {
   type ExportRef,
@@ -16,7 +19,11 @@ import {
   transitiveClosure,
 } from "../src/analyze/codeGraph.js";
 import { GraphClustering } from "../src/analyze/graphClustering.js";
-import { ImportResolver } from "../src/analyze/importResolver.js";
+import { dartPackageNameFromPubspec, ImportResolver } from "../src/analyze/importResolver.js";
+import { scanFolder } from "../src/ingest/scanner.js";
+import { createTreeSitterSymbolExtractor } from "../src/analyze/symbolExtractor.js";
+
+const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
 
 function fileSymbols(
   filePath: string,
@@ -62,6 +69,47 @@ describe("ImportResolver", () => {
     expect(resolver.resolve("@/shared/oauth", "src/auth/login.ts")).toBe("src/shared/oauth.ts");
     expect(resolver.resolve("src/config/env", "src/auth/login.ts")).toBe("src/config/env.ts");
     expect(resolver.resolve("react", "src/auth/login.ts")).toBeNull();
+  });
+
+  it("resolves Dart relative and package-self imports", () => {
+    const resolver = new ImportResolver({
+      sourceFiles: new Set([
+        "lib/main.dart",
+        "lib/types.dart",
+        "lib/features/auth/auth_controller.dart",
+        "lib/features/auth/auth_repository.dart",
+      ]),
+      dartPackageName: "gunk_flutter_fixture",
+    });
+
+    expect(resolver.resolve("features/auth/auth_controller.dart", "lib/main.dart")).toBe(
+      "lib/features/auth/auth_controller.dart",
+    );
+    expect(resolver.resolve("auth_repository.dart", "lib/features/auth/auth_controller.dart")).toBe(
+      "lib/features/auth/auth_repository.dart",
+    );
+    expect(
+      resolver.resolve(
+        "package:gunk_flutter_fixture/types.dart",
+        "lib/features/auth/auth_controller.dart",
+      ),
+    ).toBe("lib/types.dart");
+    expect(resolver.resolve("lib/types.dart", "lib/main.dart")).toBe("lib/types.dart");
+  });
+
+  it("keeps third-party Dart package imports external", () => {
+    const resolver = new ImportResolver({
+      sourceFiles: new Set(["lib/features/auth/auth_repository.dart"]),
+      dartPackageName: "gunk_flutter_fixture",
+    });
+
+    expect(
+      resolver.resolve(
+        "package:firebase_auth/firebase_auth.dart",
+        "lib/features/auth/auth_repository.dart",
+      ),
+    ).toBeNull();
+    expect(resolver.resolve("dart:async", "lib/features/auth/auth_repository.dart")).toBeNull();
   });
 });
 
@@ -149,5 +197,56 @@ class LoginHandler extends BaseHandler {
 
     const closure = transitiveClosure(graph, controller, 1, new Set(["import"]));
     expect(closure.map((node) => node.id)).toEqual([fileNode("src/auth/service.ts").id]);
+  });
+
+  it("flutter-app main.dart links to its controllers/services", async () => {
+    const fixturePath = join(fixturesDir, "flutter-app");
+    const scannedFiles = scanFolder(fixturePath);
+    const contentsByPath: Record<string, string> = {};
+    for (const file of scannedFiles) {
+      contentsByPath[file.relpath] = readFileSync(file.absPath, "utf8");
+    }
+
+    const extractor = await createTreeSitterSymbolExtractor();
+    const files = scannedFiles.map((file) =>
+      extractor.extract({ path: file.relpath, contents: contentsByPath[file.relpath] ?? "" }),
+    );
+    const resolver = new ImportResolver({
+      sourceFiles: new Set(scannedFiles.map((file) => file.relpath)),
+      dartPackageName: dartPackageNameFromPubspec(contentsByPath["pubspec.yaml"] ?? ""),
+    });
+    const graph = new CodeGraphBuilder(resolver).build(files, contentsByPath);
+    const main = fileNode("lib/main.dart");
+
+    expect(
+      hasEdge(
+        graph,
+        main.id,
+        fileNode("lib/features/auth/auth_controller.dart").id,
+        "import",
+      ),
+    ).toBe(true);
+    expect(
+      hasEdge(
+        graph,
+        main.id,
+        fileNode("lib/features/profile/profile_controller.dart").id,
+        "import",
+      ),
+    ).toBe(true);
+    expect(graph.externalDependencies["lib/main.dart"]).toBeUndefined();
+
+    expect(
+      transitiveClosure(graph, main, 2, new Set(["import"]))
+        .map((node) => node.filePath)
+        .sort(),
+    ).toEqual([
+      "lib/features/auth/auth_controller.dart",
+      "lib/features/auth/auth_repository.dart",
+      "lib/features/auth/auth_state.dart",
+      "lib/features/profile/profile_controller.dart",
+      "lib/features/profile/profile_model.dart",
+      "lib/features/profile/user_api.dart",
+    ]);
   });
 });

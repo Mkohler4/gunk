@@ -10,7 +10,7 @@ import { type CapabilityHint } from "../analyze/capabilityLexicon.js";
 import { CodeGraphBuilder } from "../analyze/codeGraph.js";
 import { type DependencyManifest, DependencyManifestParser } from "../analyze/dependencyManifest.js";
 import { type GraphCluster, GraphClustering } from "../analyze/graphClustering.js";
-import { ImportResolver } from "../analyze/importResolver.js";
+import { dartPackageNameFromManifests, ImportResolver } from "../analyze/importResolver.js";
 import { type RouteSurface } from "../analyze/routeDetector.js";
 import { type SymbolExtractor } from "../analyze/symbolExtractor.js";
 import {
@@ -29,6 +29,7 @@ const MANIFEST_BASENAMES = [
   "requirements.txt",
   "go.mod",
   "cargo.toml",
+  "pubspec.yaml",
 ];
 
 function splitLines(contents: string): string[] {
@@ -113,9 +114,11 @@ export class ContextBuilder {
     const fileSymbols = sortedFiles.map((file) =>
       this.symbols(file, contentsByPath[file.relpath] ?? ""),
     );
-    const manifests = this.manifestParser.parse(this.manifestContents(contentsByPath));
+    const manifestContents = this.manifestContents(contentsByPath);
+    const manifests = this.manifestParser.parse(manifestContents);
     const resolver = new ImportResolver({
       sourceFiles: new Set(sortedFiles.map((file) => file.relpath)),
+      dartPackageName: dartPackageNameFromManifests(manifestContents),
     });
     const graph = new CodeGraphBuilder(resolver).build(fileSymbols, contentsByPath);
     const clustering = new GraphClustering(graph);

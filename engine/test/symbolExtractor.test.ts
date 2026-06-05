@@ -184,6 +184,45 @@ String compactDate(DateTime value) {
     expect(symbols.symbols).toContainEqual({ name: "compactDate", kind: "function", line: 10 });
   });
 
+  it("captures Dart import specifiers", () => {
+    const symbols = extractor.extract({
+      path: "lib/main.dart",
+      contents: `import 'dart:async';
+import 'package:gunk_flutter_fixture/types.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import './features/auth/auth_controller.dart';
+import 'features/profile/profile_controller.dart';
+
+void main() {}`,
+    });
+
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "dart:async",
+      resolvedTarget: null,
+      line: 1,
+    });
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "package:gunk_flutter_fixture/types.dart",
+      resolvedTarget: null,
+      line: 2,
+    });
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "package:firebase_auth/firebase_auth.dart",
+      resolvedTarget: null,
+      line: 3,
+    });
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "./features/auth/auth_controller.dart",
+      resolvedTarget: "./features/auth/auth_controller.dart",
+      line: 4,
+    });
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "features/profile/profile_controller.dart",
+      resolvedTarget: null,
+      line: 5,
+    });
+  });
+
   it("treats public top-level decls as exports", () => {
     const symbols = extractor.extract({
       path: "lib/types.dart",
