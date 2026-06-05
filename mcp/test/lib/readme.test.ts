@@ -34,6 +34,13 @@ test("prefers README.md over readme.md", () => {
   expect(readReadme(folderPath)).toBe("higher priority");
 });
 
+test("prefers mini readme over source readme", () => {
+  writeFileSync(join(folderPath, "README.md"), "source readme");
+  writeFileSync(join(folderPath, "README.gunk.md"), "mini readme");
+
+  expect(readReadme(folderPath)).toBe("mini readme");
+});
+
 test("returns null when none present", () => {
   mkdirSync(join(folderPath, "src"));
   writeFileSync(join(folderPath, "package.json"), "{}");

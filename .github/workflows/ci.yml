@@ -174,16 +174,40 @@ jobs:
             exit 1
           fi
           fifo="$(mktemp -u)"
+          output="$(mktemp)"
           mkfifo "$fifo"
           exec 3<>"$fifo"
-          PATH=/usr/bin:/bin ./dist/gunk-mcp <&3 &
+          cleanup() {
+            kill "$pid" 2>/dev/null || true
+            wait "$pid" 2>/dev/null || true
+            exec 3>&- || true
+            rm -f "$fifo" "$output"
+          }
+          trap cleanup EXIT
+
+          PATH=/usr/bin:/bin ./dist/gunk-mcp <&3 >"$output" &
           pid=$!
-          sleep 2
+
           kill -0 "$pid"
-          kill "$pid"
-          wait "$pid" || test "$?" -eq 143
-          exec 3>&-
-          rm "$fifo"
+
+          printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"ci","version":"0.0.0"}}}' >&3
+          for _ in 1 2 3 4 5; do
+            grep -q '"id":1' "$output" && break
+            sleep 1
+          done
+          grep -q '"id":1' "$output"
+
+          printf '%s\n' '{"jsonrpc":"2.0","method":"notifications/initialized","params":{}}' >&3
+          printf '%s\n' '{"jsonrpc":"2.0","id":2,"method":"tools/list","params":{}}' >&3
+          for _ in 1 2 3 4 5; do
+            grep -q '"id":2' "$output" && break
+            sleep 1
+          done
+          grep -q '"id":2' "$output"
+
+          for tool in list_gunks list_sources search_gunks get_gunk; do
+            grep -q "\"name\":\"$tool\"" "$output"
+          done
 
   app:
     name: App

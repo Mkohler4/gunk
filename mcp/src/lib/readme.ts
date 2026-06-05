@@ -1,7 +1,13 @@
 import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 
-const README_NAMES = ["README.md", "README", "Readme.md", "readme.md"];
+const README_NAMES = [
+  "README.gunk.md",
+  "README.md",
+  "README",
+  "Readme.md",
+  "readme.md",
+];
 const MAX_README_BYTES = 64 * 1024;
 const TRUNCATION_MARKER = "\n\n[...truncated]";
 

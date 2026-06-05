@@ -1,13 +1,15 @@
 import type { CallToolResult, Tool } from "@modelcontextprotocol/sdk/types.js";
 
+import { readBundleFiles, readManifest } from "../lib/bundle.js";
 import { readReadme } from "../lib/readme.js";
-import { shallowTree } from "../lib/tree.js";
 import { getGunk } from "../store/index.js";
+import { summary } from "./list_gunks.js";
 import { openDefaultStore, type StoreOpener } from "./list_gunks.js";
 
 export const GET_GUNK_TOOL = {
   name: "get_gunk",
-  description: "Get a module gunk's metadata, README, and shallow file tree.",
+  description:
+    "Get an extracted module bundle with manifest and file contents.",
   inputSchema: {
     type: "object",
     properties: {
@@ -29,7 +31,7 @@ export function createGetGunkHandler(
     try {
       const gunk = getGunk(db, id);
 
-      if (!gunk || gunk.removedAt !== null || !gunk.bundlePath) {
+      if (!gunk || !gunk.bundlePath) {
         return {
           isError: true,
           content: [
@@ -46,18 +48,10 @@ export function createGetGunkHandler(
           {
             type: "text",
             text: JSON.stringify({
-              id: gunk.id,
-              sourceId: gunk.sourceId,
-              name: gunk.name,
-              purpose: gunk.purpose,
-              language: gunk.language,
-              confidence: gunk.confidence,
-              bundlePath: gunk.bundlePath,
-              manifestPath: gunk.manifestPath,
-              extractedAt: gunk.extractedAt,
-              approvedAt: gunk.approvedAt,
+              ...summary(gunk),
+              manifest: readManifest(gunk.bundlePath),
               readme: readReadme(gunk.bundlePath),
-              tree: shallowTree(gunk.bundlePath),
+              files: readBundleFiles(gunk.bundlePath, gunk.files),
             }),
           },
         ],

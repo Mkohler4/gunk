@@ -12,6 +12,8 @@ import {
   createListGunksHandler,
   LIST_GUNKS_TOOL,
 } from "../../src/tools/list_gunks.js";
+import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
+import { SEARCH_GUNKS_TOOL } from "../../src/tools/search_gunks.js";
 
 interface SeedGunk {
   id: number;
@@ -25,6 +27,7 @@ interface SeedGunk {
   extractedAt?: number | null;
   approvedAt?: number | null;
   removedAt?: number | null;
+  tags?: string[];
 }
 
 function createMemoryStore(gunks: SeedGunk[] = []): Database {
@@ -53,6 +56,20 @@ function createMemoryStore(gunks: SeedGunk[] = []): Database {
       gunk.approvedAt ?? null,
       gunk.removedAt ?? null,
     );
+
+    for (const tagName of gunk.tags ?? []) {
+      const tag = db
+        .query<{ id: number }, [string]>("SELECT id FROM tags WHERE name = ?")
+        .get(tagName);
+
+      if (!tag) {
+        throw new Error(`Unknown test tag: ${tagName}`);
+      }
+
+      db.query(
+        "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
+      ).run(gunk.id, tag.id, gunk.confidence ?? null);
+    }
   }
 
   return db;
@@ -95,7 +112,7 @@ describe("list_gunks handler", () => {
     const handleListGunks = createListGunksHandler(() =>
       createMemoryStore([
         { id: 1, name: "oldest", confidence: 0.6 },
-        { id: 2, name: "newest", confidence: 0.9 },
+        { id: 2, name: "newest", confidence: 0.9, tags: ["auth", "api"] },
         { id: 3, name: "middle", confidence: 0.7 },
       ]),
     );
@@ -103,45 +120,27 @@ describe("list_gunks handler", () => {
     expect(parseGunks(await handleListGunks())).toEqual([
       {
         id: 3,
-        sourceId: 1,
         name: "middle",
-        purpose: null,
+        tags: [],
         language: null,
         confidence: 0.7,
-        bundlePath: "/tmp/modules/3",
-        manifestPath: "/tmp/modules/3/gunk.yml",
-        extractedAt: 103,
-        approvedAt: null,
-        removedAt: null,
-        tags: [],
+        sourceId: 1,
       },
       {
         id: 2,
-        sourceId: 1,
         name: "newest",
-        purpose: null,
+        tags: ["api", "auth"],
         language: null,
         confidence: 0.9,
-        bundlePath: "/tmp/modules/2",
-        manifestPath: "/tmp/modules/2/gunk.yml",
-        extractedAt: 102,
-        approvedAt: null,
-        removedAt: null,
-        tags: [],
+        sourceId: 1,
       },
       {
         id: 1,
-        sourceId: 1,
         name: "oldest",
-        purpose: null,
+        tags: [],
         language: null,
         confidence: 0.6,
-        bundlePath: "/tmp/modules/1",
-        manifestPath: "/tmp/modules/1/gunk.yml",
-        extractedAt: 101,
-        approvedAt: null,
-        removedAt: null,
-        tags: [],
+        sourceId: 1,
       },
     ]);
   });
@@ -161,17 +160,11 @@ describe("list_gunks handler", () => {
     expect(parseGunks(await handleListGunks())).toEqual([
       {
         id: 1,
-        sourceId: 1,
         name: "active",
-        purpose: null,
+        tags: [],
         language: null,
         confidence: null,
-        bundlePath: "/tmp/modules/1",
-        manifestPath: "/tmp/modules/1/gunk.yml",
-        extractedAt: 101,
-        approvedAt: null,
-        removedAt: null,
-        tags: [],
+        sourceId: 1,
       },
     ]);
   });
@@ -209,7 +202,12 @@ describe("list_gunks MCP registration", () => {
     await connect();
 
     await expect(client?.listTools()).resolves.toEqual({
-      tools: [LIST_GUNKS_TOOL, GET_GUNK_TOOL],
+      tools: [
+        LIST_GUNKS_TOOL,
+        LIST_SOURCES_TOOL,
+        SEARCH_GUNKS_TOOL,
+        GET_GUNK_TOOL,
+      ],
     });
   });
 

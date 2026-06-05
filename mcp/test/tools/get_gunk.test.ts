@@ -15,6 +15,8 @@ import {
   GET_GUNK_TOOL,
 } from "../../src/tools/get_gunk.js";
 import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
+import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
+import { SEARCH_GUNKS_TOOL } from "../../src/tools/search_gunks.js";
 
 function createMemoryStore(
   bundlePath?: string | null,
@@ -43,6 +45,25 @@ function createMemoryStore(
       null,
       removedAt,
     );
+
+    const authTag = db
+      .query<{ id: number }, [string]>("SELECT id FROM tags WHERE name = ?")
+      .get("auth");
+
+    if (!authTag) {
+      throw new Error("Expected seeded auth tag");
+    }
+
+    db.query(
+      "INSERT INTO gunk_tags (gunk_id, tag_id, confidence) VALUES (?, ?, ?)",
+    ).run(7, authTag.id, 0.9);
+
+    db.query(
+      "INSERT INTO gunk_files (gunk_id, relpath, size) VALUES (?, ?, ?)",
+    ).run(7, "package.json", 2);
+    db.query(
+      "INSERT INTO gunk_files (gunk_id, relpath, size) VALUES (?, ?, ?)",
+    ).run(7, "src/index.ts", 6);
   }
 
   return db;
@@ -80,7 +101,7 @@ describe("get_gunk handler", () => {
   beforeEach(() => {
     folderPath = mkdtempSync(join(tmpdir(), "gunk-tool-"));
     mkdirSync(join(folderPath, "src"));
-    writeFileSync(join(folderPath, "README.md"), "# Fixture\n");
+    writeFileSync(join(folderPath, "README.gunk.md"), "# Fixture\n");
     writeFileSync(join(folderPath, "package.json"), "{}");
     writeFileSync(join(folderPath, "src", "index.ts"), "nested");
     writeFileSync(join(folderPath, "gunk.yml"), "name: fixture\n");
@@ -131,21 +152,16 @@ describe("get_gunk handler", () => {
 
     expect(parseTextResult(await handleGetGunk(7))).toEqual({
       id: 7,
-      sourceId: 1,
       name: "fixture",
-      purpose: "Fixture module",
+      tags: ["auth"],
       language: "TypeScript",
       confidence: 0.9,
-      bundlePath: folderPath,
-      manifestPath: join(folderPath, "gunk.yml"),
-      extractedAt: 123,
-      approvedAt: null,
+      sourceId: 1,
+      manifest: "name: fixture\n",
       readme: "# Fixture\n",
-      tree: [
-        { name: "gunk.yml", type: "file", size: 14 },
-        { name: "package.json", type: "file", size: 2 },
-        { name: "README.md", type: "file", size: 10 },
-        { name: "src", type: "dir" },
+      files: [
+        { relpath: "package.json", content: "{}" },
+        { relpath: "src/index.ts", content: "nested" },
       ],
     });
   });
@@ -158,7 +174,10 @@ describe("get_gunk MCP registration", () => {
 
   beforeEach(() => {
     folderPath = mkdtempSync(join(tmpdir(), "gunk-tool-registration-"));
-    writeFileSync(join(folderPath, "README.md"), "# Registered\n");
+    mkdirSync(join(folderPath, "src"));
+    writeFileSync(join(folderPath, "README.gunk.md"), "# Registered\n");
+    writeFileSync(join(folderPath, "package.json"), "{}");
+    writeFileSync(join(folderPath, "src", "index.ts"), "nested");
     writeFileSync(join(folderPath, "gunk.yml"), "name: fixture\n");
   });
 
@@ -191,7 +210,12 @@ describe("get_gunk MCP registration", () => {
     await connect();
 
     await expect(client?.listTools()).resolves.toEqual({
-      tools: [LIST_GUNKS_TOOL, GET_GUNK_TOOL],
+      tools: [
+        LIST_GUNKS_TOOL,
+        LIST_SOURCES_TOOL,
+        SEARCH_GUNKS_TOOL,
+        GET_GUNK_TOOL,
+      ],
     });
   });
 
@@ -209,8 +233,12 @@ describe("get_gunk MCP registration", () => {
     expect(result && parseTextResult(result)).toMatchObject({
       id: 7,
       name: "fixture",
-      bundlePath: folderPath,
       readme: "# Registered\n",
+      manifest: "name: fixture\n",
+      files: [
+        { relpath: "package.json", content: "{}" },
+        { relpath: "src/index.ts", content: "nested" },
+      ],
     });
   });
 });
