@@ -4,7 +4,9 @@
 export type LanguageKind =
   | "dart"
   | "go"
+  | "java"
   | "javaScript"
+  | "kotlin"
   | "python"
   | "swift"
   | "typeScript"
@@ -14,7 +16,9 @@ export function languageKindForPath(path: string): LanguageKind {
   const p = path.toLowerCase();
   if (p.endsWith(".dart")) return "dart";
   if (p.endsWith(".go")) return "go";
+  if (p.endsWith(".java")) return "java";
   if (p.endsWith(".js") || p.endsWith(".jsx") || p.endsWith(".mjs")) return "javaScript";
+  if (p.endsWith(".kt") || p.endsWith(".kts")) return "kotlin";
   if (p.endsWith(".py")) return "python";
   if (p.endsWith(".swift")) return "swift";
   if (p.endsWith(".ts") || p.endsWith(".tsx") || p.endsWith(".mts")) return "typeScript";
