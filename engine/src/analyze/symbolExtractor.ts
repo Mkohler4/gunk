@@ -11,6 +11,7 @@ import tsxWasm from "tree-sitter-wasms/out/tree-sitter-tsx.wasm" with { type: "f
 import pythonWasm from "tree-sitter-wasms/out/tree-sitter-python.wasm" with { type: "file" };
 import swiftWasm from "tree-sitter-wasms/out/tree-sitter-swift.wasm" with { type: "file" };
 import goWasm from "tree-sitter-wasms/out/tree-sitter-go.wasm" with { type: "file" };
+import dartWasm from "tree-sitter-wasms/out/tree-sitter-dart.wasm" with { type: "file" };
 
 import {
   type ExportRef,
@@ -32,9 +33,17 @@ export interface SymbolExtractor {
   extract(file: SymbolFile): FileSymbols;
 }
 
-type GrammarName = "javascript" | "typescript" | "tsx" | "python" | "swift" | "go";
+type GrammarName =
+  | "dart"
+  | "javascript"
+  | "typescript"
+  | "tsx"
+  | "python"
+  | "swift"
+  | "go";
 
 const GRAMMAR_WASM: Record<GrammarName, string> = {
+  dart: dartWasm,
   javascript: javascriptWasm,
   typescript: typescriptWasm,
   tsx: tsxWasm,
@@ -43,7 +52,15 @@ const GRAMMAR_WASM: Record<GrammarName, string> = {
   go: goWasm,
 };
 
-const GRAMMARS: GrammarName[] = ["javascript", "typescript", "tsx", "python", "swift", "go"];
+const GRAMMARS: GrammarName[] = [
+  "dart",
+  "javascript",
+  "typescript",
+  "tsx",
+  "python",
+  "swift",
+  "go",
+];
 
 // --- structural dedupe (parity with Swift `Array.uniqued()` over Hashable) ---
 
@@ -301,6 +318,81 @@ function appendSymbol(
   symbols.push({ name, kind, line });
 }
 
+function findNameNode(node: Node): Node | null {
+  const fieldName = node.childForFieldName("name");
+  if (fieldName) {
+    return fieldName;
+  }
+
+  for (let index = 0; index < node.namedChildCount; index += 1) {
+    const child = node.namedChild(index);
+    if (!child) {
+      continue;
+    }
+    const found = findNameNode(child);
+    if (found) {
+      return found;
+    }
+  }
+
+  return null;
+}
+
+function firstDirectNamedChildText(node: Node, types: Set<string>): string | null {
+  for (let index = 0; index < node.namedChildCount; index += 1) {
+    const child = node.namedChild(index);
+    if (child && types.has(child.type)) {
+      return child.text;
+    }
+  }
+
+  return null;
+}
+
+function dartDeclarationName(node: Node): string | null {
+  const fieldName = findNameNode(node);
+  const name =
+    fieldName?.text ??
+    firstDirectNamedChildText(node, new Set(["identifier"])) ??
+    firstDirectNamedChildText(node, new Set(["type_identifier"]));
+
+  return name && name.length > 0 ? name : null;
+}
+
+function appendDartSymbol(
+  node: Node,
+  kind: SymbolKind,
+  line: number,
+  symbols: Symbol[],
+  exports: ExportRef[],
+): void {
+  const name = dartDeclarationName(node);
+  if (!name) {
+    return;
+  }
+
+  symbols.push({ name, kind, line });
+
+  if (dartIsTopLevelDeclaration(node) && !dartIsPrivate(name)) {
+    exports.push({ name, kind, line });
+  }
+}
+
+function dartIsPrivate(name: string): boolean {
+  return name.startsWith("_");
+}
+
+function dartIsTopLevelDeclaration(node: Node): boolean {
+  if (node.parent?.type === "program") {
+    return true;
+  }
+
+  return (
+    (node.type === "static_final_declaration" || node.type === "initialized_identifier") &&
+    node.parent?.parent?.type === "program"
+  );
+}
+
 function appendSwiftDeclaration(
   text: string,
   line: number,
@@ -481,6 +573,54 @@ function collectGo(
   }
 }
 
+function collectDart(
+  node: Node,
+  type: string,
+  text: string,
+  line: number,
+  symbols: Symbol[],
+  imports: ImportRef[],
+  exports: ExportRef[],
+): void {
+  switch (type) {
+    case "import_or_export":
+      for (const specifier of moduleSpecifiers(text)) {
+        imports.push({
+          moduleSpecifier: specifier,
+          resolvedTarget: relativeTarget(specifier),
+          line,
+        });
+      }
+      break;
+    case "class_definition":
+      appendDartSymbol(node, "class", line, symbols, exports);
+      break;
+    case "enum_declaration":
+      appendDartSymbol(node, "enum", line, symbols, exports);
+      break;
+    case "type_alias":
+      appendDartSymbol(node, "type", line, symbols, exports);
+      break;
+    case "constructor_signature":
+    case "method_signature":
+      appendDartSymbol(node, "method", line, symbols, exports);
+      break;
+    case "function_signature":
+      if (node.parent?.type !== "method_signature") {
+        appendDartSymbol(node, "function", line, symbols, exports);
+      }
+      break;
+    case "static_final_declaration":
+    case "initialized_identifier":
+      if (dartIsTopLevelDeclaration(node)) {
+        appendDartSymbol(node, "variable", line, symbols, exports);
+      }
+      break;
+    default:
+      break;
+  }
+}
+
 function fallbackExtract(file: SymbolFile, language: LanguageKind): FileSymbols {
   return {
     path: file.path,
@@ -494,6 +634,8 @@ function fallbackExtract(file: SymbolFile, language: LanguageKind): FileSymbols 
 
 function grammarFor(language: LanguageKind, path: string): GrammarName | null {
   switch (language) {
+    case "dart":
+      return "dart";
     case "go":
       return "go";
     case "javaScript":
@@ -550,6 +692,9 @@ class TreeSitterSymbolExtractor implements SymbolExtractor {
         case "javaScript":
         case "typeScript":
           collectJavaScriptLike(node, type, text, line, symbols, imports, exports);
+          break;
+        case "dart":
+          collectDart(node, type, text, line, symbols, imports, exports);
           break;
         case "python":
           collectPython(node, type, text, line, symbols, imports);

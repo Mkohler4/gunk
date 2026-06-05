@@ -312,7 +312,7 @@ describe("eval fixtures: multi-language labels and scanner smoke", () => {
   });
 });
 
-describe("eval signal metrics: current Flutter coverage failure", () => {
+describe("eval signal metrics: Flutter Dart coverage", () => {
   let db: Database;
   let gunkHome: string;
   let runsDir: string;
@@ -333,7 +333,7 @@ describe("eval signal metrics: current Flutter coverage failure", () => {
     rmSync(runsDir, { recursive: true, force: true });
   });
 
-  it("reports near-zero parse coverage for flutter-app and trips the floor", async () => {
+  it("reports real Dart parse coverage for flutter-app", async () => {
     const fixturePath = join(fixturesDir, "flutter-app");
     const source = insertSource(db, "flutter-app", fixturePath, 100);
     const observer = new RunTraceRecorder(
@@ -359,11 +359,10 @@ describe("eval signal metrics: current Flutter coverage failure", () => {
     await pipeline.run(source, new QueuedClient([surveyJSON([])]));
     const metrics = signalMetrics(observer.current);
 
-    expect(metrics.parseCoverage).toBe(0);
+    expect(metrics.parseCoverage).toBeGreaterThan(0.6);
+    expect(metrics.realSymbolFiles).toBeGreaterThanOrEqual(9);
     expect(metrics.fallbackFiles).toBeGreaterThan(0);
-    expect(() => assertSignalFloor(metrics, { minParseCoverage: 0.1 })).toThrow(
-      /parseCoverage/,
-    );
+    expect(() => assertSignalFloor(metrics, { minParseCoverage: 0.6 })).not.toThrow();
   });
 });
 
