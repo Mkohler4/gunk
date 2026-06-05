@@ -19,6 +19,8 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0010  | SQLite schema v2 modules                             | Accepted |
 | 0011  | AI decomposition pipeline and gunk.yml manifest      | Accepted |
 | 0012  | Capability-centric decomposition                     | Accepted |
+| 0013  | AI pipeline moves to a TS/Bun engine                 | Accepted |
+| 0014  | Multi-language coverage and verification             | Accepted |
 
 ## Format
 
