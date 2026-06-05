@@ -13,6 +13,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `engine/docs/ARCHITECTURE.md`: stage-by-stage walkthrough of the engine with the verbatim LLM prompts/schemas, survey/refine post-processing filters, quality-gate rules, the `trace.json` schema, and a symptom→fix debugging playbook for analyzing AI output.
 - `gunk.app` Runs debug panel that reads `~/.gunk/runs`, surfacing per-run stages, timings, counts, and accept/approve/reject summaries.
 - ADR-0013 (the AI pipeline moves to a TS/Bun engine; the SwiftUI app becomes a thin macOS shell).
+- ADR-0014 (multi-language coverage and verification feedback for Phase 5).
 - CI: `engine` (lint/typecheck/test + eval gate) and `engine-binary` (self-contained single-binary smoke test with embedded tree-sitter grammars) jobs; engine schema kept byte-for-byte in parity with MCP.
 - OpenAI embedding support for app indexing and MCP semantic query search, with Ollama still available as the local fallback.
 
