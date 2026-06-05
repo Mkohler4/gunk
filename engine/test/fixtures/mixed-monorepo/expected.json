@@ -1,0 +1,34 @@
+{
+  "modules": [
+    {
+      "name": "Web subscription checkout",
+      "tags": ["payments", "api"],
+      "files": [
+        "apps/web/src/billing/checkoutRoute.ts",
+        "apps/web/src/billing/stripeClient.ts",
+        "apps/web/src/billing/billingConfig.ts"
+      ]
+    },
+    {
+      "name": "Mobile token login",
+      "tags": ["auth", "mobile"],
+      "files": [
+        "apps/mobile/lib/auth/auth_controller.dart",
+        "apps/mobile/lib/auth/token_store.dart"
+      ]
+    },
+    {
+      "name": "CSV report export",
+      "tags": ["reports", "api"],
+      "files": [
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "packages/shared/src/types.ts",
+    "packages/shared/src/utils/",
+    "packages/shared/generated/"
+  ]
+}

@@ -1,0 +1,27 @@
+{
+  "modules": [
+    {
+      "name": "Session token login",
+      "tags": ["auth", "api"],
+      "files": [
+        "src/main/java/com/gunk/identity/LoginController.java",
+        "src/main/java/com/gunk/identity/LoginService.java",
+        "src/main/java/com/gunk/identity/SessionTokenStore.java"
+      ]
+    },
+    {
+      "name": "Invoice generation",
+      "tags": ["billing", "api"],
+      "files": [
+        "src/main/java/com/gunk/billing/InvoiceController.java",
+        "src/main/java/com/gunk/billing/InvoiceService.java",
+        "src/main/java/com/gunk/billing/TaxCalculator.java"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "src/main/java/com/gunk/shared/Types.java",
+    "src/main/java/com/gunk/utils/",
+    "src/main/java/com/gunk/generated/"
+  ]
+}

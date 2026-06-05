@@ -1,0 +1,14 @@
+{
+  "name": "mixed-monorepo-fixture",
+  "private": true,
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "dependencies": {
+    "stripe": "^16.0.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.0"
+  }
+}

@@ -12,6 +12,7 @@ import {
   listGunkTags,
   runMigrations,
 } from "../src/store/index.js";
+import { scanFolder } from "../src/ingest/scanner.js";
 import { DecompositionPipeline } from "../src/decompose/pipeline.js";
 import { createTreeSitterSymbolExtractor } from "../src/analyze/symbolExtractor.js";
 import { loadExpected, score } from "../src/eval/scorecard.js";
@@ -19,6 +20,13 @@ import type { Module } from "../src/models.js";
 import type { LLMClient, LLMResponse } from "../src/llm/client.js";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
+const multiLanguageFixtures = [
+  "flutter-app",
+  "kotlin-android",
+  "java-service",
+  "mixed-monorepo",
+  "large-repo",
+];
 
 class QueuedClient implements LLMClient {
   readonly provider = "OpenAI" as const;
@@ -209,5 +217,55 @@ describe("eval gate: capability-centric pipeline beats baseline", () => {
     expect(card.moduleCountDelta).toBe(0);
     expect(card.trivialModuleFalsePositiveCount).toBe(0);
     expect(card.trivialModuleFalsePositiveRate).toBeCloseTo(0, 5);
+  });
+});
+
+describe("eval fixtures: multi-language labels and scanner smoke", () => {
+  it("loads each new expected.json without error", () => {
+    for (const fixture of multiLanguageFixtures) {
+      const fixturePath = join(fixturesDir, fixture);
+      const expected = loadExpected(
+        JSON.parse(readFileSync(join(fixturePath, "expected.json"), "utf8")),
+      );
+
+      expect(expected.modules.length, fixture).toBeGreaterThanOrEqual(2);
+      expect(expected.mustNotBeModules.length, fixture).toBeGreaterThanOrEqual(
+        1,
+      );
+    }
+  });
+
+  it("scans each new fixture to a non-empty file list", () => {
+    for (const fixture of multiLanguageFixtures) {
+      const fixturePath = join(fixturesDir, fixture);
+      const files = scanFolder(fixturePath);
+      const relpaths = new Set(files.map((file) => file.relpath));
+      const expected = loadExpected(
+        JSON.parse(readFileSync(join(fixturePath, "expected.json"), "utf8")),
+      );
+
+      expect(files.length, fixture).toBeGreaterThan(0);
+      for (const module of expected.modules) {
+        for (const file of module.files) {
+          expect(relpaths.has(file), `${fixture}: ${file}`).toBe(true);
+        }
+      }
+    }
+  });
+
+  it("keeps the large fixture above the default repo-map budget", () => {
+    const files = scanFolder(join(fixturesDir, "large-repo"));
+    const totalBytes = files.reduce((sum, file) => sum + file.size, 0);
+
+    expect(totalBytes).toBeGreaterThan(80_000);
+  });
+
+  it("honors the Flutter fixture ignore rules", () => {
+    const files = scanFolder(join(fixturesDir, "flutter-app"));
+    const relpaths = files.map((file) => file.relpath);
+
+    expect(relpaths.some((file) => file.startsWith(".dart_tool/"))).toBe(false);
+    expect(relpaths.some((file) => file.startsWith(".gradle/"))).toBe(false);
+    expect(relpaths.some((file) => file.startsWith("build/"))).toBe(false);
   });
 });

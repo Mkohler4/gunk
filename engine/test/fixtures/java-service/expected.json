@@ -1,0 +1,29 @@
+{
+  "modules": [
+    {
+      "name": "Order intake API",
+      "tags": ["orders", "api"],
+      "files": [
+        "src/main/java/com/gunk/orders/OrderController.java",
+        "src/main/java/com/gunk/orders/OrderService.java",
+        "src/main/java/com/gunk/orders/OrderRepository.java",
+        "src/main/java/com/gunk/orders/OrderRequest.java"
+      ]
+    },
+    {
+      "name": "Transactional email sending",
+      "tags": ["email", "api"],
+      "files": [
+        "src/main/java/com/gunk/notifications/EmailController.java",
+        "src/main/java/com/gunk/notifications/EmailService.java",
+        "src/main/java/com/gunk/notifications/SendGridClient.java",
+        "src/main/java/com/gunk/notifications/EmailRequest.java"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "src/main/java/com/gunk/shared/Types.java",
+    "src/main/java/com/gunk/util/",
+    "src/main/java/com/gunk/generated/"
+  ]
+}
