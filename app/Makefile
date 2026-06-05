@@ -4,8 +4,10 @@ CONFIGURATION ?= debug
 BUILD_DIR := build
 APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 EXECUTABLE := .build/$(CONFIGURATION)/$(PRODUCT_NAME)
+ENGINE_DIR := ../engine
+ENGINE_BINARY := $(ENGINE_DIR)/dist/gunk-engine
 
-.PHONY: build test app rebuild clean
+.PHONY: build test app rebuild clean engine
 
 build:
 	swift build
@@ -13,10 +15,16 @@ build:
 test:
 	swift test
 
-app: build
+# Builds the cross-platform decomposition engine as a self-contained Bun binary.
+engine:
+	cd "$(ENGINE_DIR)" && bun install --frozen-lockfile && bun run build
+
+app: build engine
 	rm -rf "$(APP_BUNDLE)"
 	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources"
 	cp "$(EXECUTABLE)" "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
+	cp "$(ENGINE_BINARY)" "$(APP_BUNDLE)/Contents/Resources/gunk-engine"
+	cp "AppIcon.icns" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
 	printf '%s\n' \
 		'<?xml version="1.0" encoding="UTF-8"?>' \
 		'<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">' \
@@ -26,6 +34,8 @@ app: build
 		'  <string>en</string>' \
 		'  <key>CFBundleExecutable</key>' \
 		'  <string>$(APP_NAME)</string>' \
+		'  <key>CFBundleIconFile</key>' \
+		'  <string>AppIcon</string>' \
 		'  <key>CFBundleIdentifier</key>' \
 		'  <string>app.gunk.GunkApp</string>' \
 		'  <key>CFBundleInfoDictionaryVersion</key>' \

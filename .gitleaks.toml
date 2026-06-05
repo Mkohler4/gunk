@@ -4,9 +4,15 @@ title = "gunk gitleaks config"
 [extend]
 useDefault = true
 
-[[allowlists]]
+# NOTE: use the singular [allowlist] table (not [[allowlists]]). The pinned CI
+# version (gitleaks 8.24.3) ignores the [[allowlists]] array form when extending
+# the default config, so the singular form is required for these to take effect.
+[allowlist]
 description = "Intentionally-committed, secret-free test fixtures"
 paths = [
   # Real on-disk v0 SQLite fixture used by the schema migration tests (T-3.2).
   '''mcp/test/fixtures/.*\.db''',
+  # SecretRedactor unit test embeds fake secret-like strings on purpose to prove
+  # redaction works (ADR-0013 engine port).
+  '''engine/test/extract\.test\.ts''',
 ]

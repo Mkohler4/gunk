@@ -32,4 +32,19 @@ if ! diff -u "$mcp_schema_v3" "$tmp_dir/swift-v3.sql"; then
   exit 1
 fi
 
+# The TS engine writes the same SQLite store and carries its own copy of the
+# migrations; keep them byte-for-byte identical to the MCP source of truth.
+for version in v0 v1 v2 v3; do
+  mcp_file="$repo_root/mcp/src/schema/$version.sql"
+  engine_file="$repo_root/engine/src/store/schema/$version.sql"
+  if [ ! -f "$engine_file" ]; then
+    echo "Schema parity check failed: missing $engine_file." >&2
+    exit 1
+  fi
+  if ! diff -u "$mcp_file" "$engine_file"; then
+    echo "Schema parity check failed: engine/src/store/schema/$version.sql must match mcp/src/schema/$version.sql byte-for-byte." >&2
+    exit 1
+  fi
+done
+
 echo "Schema parity check passed."
