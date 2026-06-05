@@ -1,0 +1,14 @@
+name: gunk_flutter_fixture
+description: Fixture app for engine multi-language coverage.
+publish_to: none
+version: 1.0.0+1
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_auth: ^5.0.0
+  dio: ^5.4.0
+  flutter_secure_storage: ^9.2.0

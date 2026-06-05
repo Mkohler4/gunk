@@ -1,0 +1,27 @@
+{
+  "modules": [
+    {
+      "name": "In-app checkout",
+      "tags": ["payments", "mobile"],
+      "files": [
+        "app/src/main/java/com/gunk/fixture/features/payments/CheckoutActivity.kt",
+        "app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt",
+        "app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt"
+      ]
+    },
+    {
+      "name": "Background location tracking",
+      "tags": ["location", "mobile"],
+      "files": [
+        "app/src/main/java/com/gunk/fixture/features/location/LocationTracker.kt",
+        "app/src/main/java/com/gunk/fixture/features/location/LocationRepository.kt",
+        "app/src/main/java/com/gunk/fixture/features/location/LocationPermissionDelegate.kt"
+      ]
+    }
+  ],
+  "must_not_be_modules": [
+    "app/src/main/java/com/gunk/fixture/shared/Types.kt",
+    "app/src/main/java/com/gunk/fixture/util/",
+    "app/src/main/java/com/gunk/fixture/generated/"
+  ]
+}

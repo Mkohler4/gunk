@@ -1,0 +1,23 @@
+{
+  "modules": [
+    {
+      "name": "Email password authentication",
+      "tags": ["auth", "mobile"],
+      "files": [
+        "lib/features/auth/auth_controller.dart",
+        "lib/features/auth/auth_repository.dart",
+        "lib/features/auth/auth_state.dart"
+      ]
+    },
+    {
+      "name": "User profile API client",
+      "tags": ["api", "mobile"],
+      "files": [
+        "lib/features/profile/profile_controller.dart",
+        "lib/features/profile/user_api.dart",
+        "lib/features/profile/profile_model.dart"
+      ]
+    }
+  ],
+  "must_not_be_modules": ["lib/types.dart", "lib/utils/"]
+}
