@@ -1,5 +1,6 @@
 export interface ImportResolverConfig {
   sourceFiles: Set<string>;
+  dartPackageName?: string | null;
   tsconfigPaths?: Record<string, string[]>;
 }
 
@@ -9,13 +10,28 @@ function normalizePathComponents(path: string): string {
 
 export class ImportResolver {
   private readonly sourceFiles: Set<string>;
+  private readonly dartPackageName: string | null;
   private readonly tsconfigPaths: Record<string, string[]>;
-  private readonly extensions = ["", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".py", ".swift", ".go"];
+  private readonly extensions = [
+    "",
+    ".ts",
+    ".tsx",
+    ".js",
+    ".jsx",
+    ".mjs",
+    ".py",
+    ".swift",
+    ".go",
+    ".dart",
+    ".kt",
+    ".java",
+  ];
 
   constructor(config: ImportResolverConfig) {
     this.sourceFiles = new Set(
       [...config.sourceFiles].map((path) => normalizePathComponents(path)),
     );
+    this.dartPackageName = config.dartPackageName ?? null;
     this.tsconfigPaths = config.tsconfigPaths ?? {};
   }
 
@@ -24,12 +40,58 @@ export class ImportResolver {
       return this.resolveRelative(specifier, sourcePath);
     }
 
+    if (sourcePath.toLowerCase().endsWith(".dart")) {
+      const dartResolved = this.resolveDart(specifier, sourcePath);
+      if (dartResolved !== null || specifier.startsWith("dart:") || specifier.startsWith("package:")) {
+        return dartResolved;
+      }
+    }
+
     const aliased = this.resolveAlias(specifier);
     if (aliased !== null) {
       return aliased;
     }
 
     return this.resolveCandidate(specifier);
+  }
+
+  private resolveDart(specifier: string, sourcePath: string): string | null {
+    if (specifier.startsWith("dart:")) {
+      return null;
+    }
+
+    if (specifier.startsWith("package:")) {
+      return this.resolveDartPackage(specifier);
+    }
+
+    if (specifier.endsWith(".dart")) {
+      return (
+        this.resolveRelative(specifier, sourcePath) ??
+        this.resolveCandidate(specifier) ??
+        this.resolveCandidate(`lib/${specifier}`)
+      );
+    }
+
+    return null;
+  }
+
+  private resolveDartPackage(specifier: string): string | null {
+    if (!this.dartPackageName) {
+      return null;
+    }
+
+    const body = specifier.slice("package:".length);
+    const slashIndex = body.indexOf("/");
+    if (slashIndex < 0) {
+      return null;
+    }
+
+    const packageName = body.slice(0, slashIndex);
+    if (packageName !== this.dartPackageName) {
+      return null;
+    }
+
+    return this.resolveCandidate(`lib/${body.slice(slashIndex + 1)}`);
   }
 
   private resolveRelative(specifier: string, sourcePath: string): string | null {
@@ -115,4 +177,16 @@ export class ImportResolver {
 function deletingLastPathComponent(path: string): string {
   const index = path.lastIndexOf("/");
   return index >= 0 ? path.slice(0, index) : "";
+}
+
+export function dartPackageNameFromPubspec(contents: string): string | null {
+  const match = contents.match(/(?:^|\n)\s*name\s*:\s*([A-Za-z_][A-Za-z0-9_]*)\s*(?:\n|$)/);
+  return match?.[1] ?? null;
+}
+
+export function dartPackageNameFromManifests(manifests: Record<string, string>): string | null {
+  const pubspec = Object.entries(manifests)
+    .sort(([lhs], [rhs]) => (lhs < rhs ? -1 : lhs > rhs ? 1 : 0))
+    .find(([path]) => path.toLowerCase().endsWith("pubspec.yaml"));
+  return pubspec ? dartPackageNameFromPubspec(pubspec[1]) : null;
 }

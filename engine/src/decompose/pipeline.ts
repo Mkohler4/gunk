@@ -36,7 +36,7 @@ import { Extractor } from "../extract/extractor.js";
 
 import { scanFolder } from "../ingest/scanner.js";
 import { ContextBuilder } from "../ingest/contextBuilder.js";
-import { ImportResolver } from "../analyze/importResolver.js";
+import { dartPackageNameFromManifests, ImportResolver } from "../analyze/importResolver.js";
 import { CodeGraphBuilder } from "../analyze/codeGraph.js";
 import { DependencyManifestParser } from "../analyze/dependencyManifest.js";
 import { CapabilityFingerprintBuilder } from "../analyze/capabilityFingerprint.js";
@@ -75,6 +75,7 @@ const MANIFEST_BASENAMES = [
   "requirements.txt",
   "go.mod",
   "cargo.toml",
+  "pubspec.yaml",
 ];
 
 export class DecompositionPipeline {
@@ -141,7 +142,11 @@ export class DecompositionPipeline {
     });
 
     // 3. graph
-    const resolver = new ImportResolver({ sourceFiles: new Set(scannedFiles.map((f) => f.relpath)) });
+    const manifestContents = this.manifestContents(contentsByPath);
+    const resolver = new ImportResolver({
+      sourceFiles: new Set(scannedFiles.map((f) => f.relpath)),
+      dartPackageName: dartPackageNameFromManifests(manifestContents),
+    });
     const graph = await this.stage("graph", 0.3, () => {
       const built = new CodeGraphBuilder(resolver).build(fileSymbols, contentsByPath);
       return { value: built, counts: { nodes: built.nodes.length, edges: built.edges.length } };
@@ -151,7 +156,7 @@ export class DecompositionPipeline {
     const manifestParser = new DependencyManifestParser();
     const fingerprintBuilder = new CapabilityFingerprintBuilder();
     const fingerprints = await this.stage("fingerprints", 0.38, () => {
-      const manifests = manifestParser.parse(this.manifestContents(contentsByPath));
+      const manifests = manifestParser.parse(manifestContents);
       const fps = fingerprintBuilder.fingerprints(fileSymbols, manifests, contentsByPath);
       return { value: fps, counts: { fingerprints: fps.length } };
     });
