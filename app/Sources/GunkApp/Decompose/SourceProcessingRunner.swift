@@ -125,7 +125,7 @@ final class SourceProcessingRunner {
     return userDefaults.double(forKey: "llm.confidenceThreshold")
   }
 
-  private static func liveClient(
+  nonisolated private static func liveClient(
     provider: LLMProvider,
     model: String,
     secretStore: SecretStore
