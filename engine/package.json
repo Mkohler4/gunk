@@ -9,6 +9,7 @@
   },
   "scripts": {
     "start": "bun run src/index.ts",
+    "eval": "bun run src/index.ts eval",
     "test": "bun test",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

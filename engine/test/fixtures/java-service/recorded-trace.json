@@ -1,0 +1,162 @@
+{
+  "runId": "recorded-java-service",
+  "sourceId": 1,
+  "sourceName": "java-service",
+  "provider": "OpenAI",
+  "model": "phase-5-replay-fixture",
+  "startedAtMs": 100,
+  "finishedAtMs": 100,
+  "status": "succeeded",
+  "error": null,
+  "stages": [
+    {
+      "stage": "scan",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 13
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "symbols",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 13,
+        "parsedFiles": 0,
+        "fallbackFiles": 13,
+        "realSymbolFiles": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "graph",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "nodes": 22,
+        "edges": 12
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "fingerprints",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "fingerprints": 13
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "repoMap",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "chars": 3848
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "survey",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "hypotheses": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "expansion",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "expansions": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "refine",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "modules": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "qualityGates",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "accepted": 0,
+        "needsApproval": 0,
+        "rejected": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "persist",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "persisted": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "extract",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "extracted": 0
+      },
+      "status": "ok"
+    }
+  ],
+  "llmCalls": [
+    {
+      "stage": "survey",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+        },
+        {
+          "role": "user",
+          "content": "Source: java-service\n\nKnown source files:\n- expected.json\n- pom.xml\n- src/main/java/com/gunk/generated/OpenApiClient.java\n- src/main/java/com/gunk/notifications/EmailController.java\n- src/main/java/com/gunk/notifications/EmailRequest.java\n- src/main/java/com/gunk/notifications/EmailService.java\n- src/main/java/com/gunk/notifications/SendGridClient.java\n- src/main/java/com/gunk/orders/OrderController.java\n- src/main/java/com/gunk/orders/OrderRepository.java\n- src/main/java/com/gunk/orders/OrderRequest.java\n- src/main/java/com/gunk/orders/OrderService.java\n- src/main/java/com/gunk/shared/Types.java\n- src/main/java/com/gunk/util/Slug.java\n\nReturn capability hypotheses with anchors, seed files, expected collaborators, and granularity.\n\nStructural repo map:\nrepo_map_v1\ntree:\n- expected.json (907 bytes)\n- pom.xml (414 bytes)\n- src/main/java/com/gunk/generated/OpenApiClient.java (89 bytes)\n- src/main/java/com/gunk/notifications/EmailController.java (390 bytes)\n- src/main/java/com/gunk/notifications/EmailRequest.java (131 bytes)\n- src/main/java/com/gunk/notifications/EmailService.java (232 bytes)\n- src/main/java/com/gunk/notifications/SendGridClient.java (148 bytes)\n- src/main/java/com/gunk/orders/OrderController.java (375 bytes)\n- src/main/java/com/gunk/orders/OrderRepository.java (138 bytes)\n- src/main/java/com/gunk/orders/OrderRequest.java (123 bytes)\n- src/main/java/com/gunk/orders/OrderService.java (249 bytes)\n- src/main/java/com/gunk/shared/Types.java (52 bytes)\n- src/main/java/com/gunk/util/Slug.java (99 bytes)\nclusters:\n- id: c1\n  files: expected.json\n  cohesion: 0.00\n- id: c10\n  files: src/main/java/com/gunk/orders/OrderRequest.java\n  cohesion: 1.00\n- id: c11\n  files: src/main/java/com/gunk/orders/OrderService.java\n  cohesion: 0.00\n- id: c12\n  files: src/main/java/com/gunk/shared/Types.java\n  cohesion: 1.00\n- id: c13\n  files: src/main/java/com/gunk/util/Slug.java\n  cohesion: 1.00\n- id: c2\n  files: pom.xml\n  cohesion: 1.00\n- id: c3\n  files: src/main/java/com/gunk/generated/OpenApiClient.java\n  cohesion: 1.00\n- id: c4\n  files: src/main/java/com/gunk/notifications/EmailController.java\n  cohesion: 0.00\n- id: c5\n  files: src/main/java/com/gunk/notifications/EmailRequest.java\n  cohesion: 1.00\n- id: c6\n  files: src/main/java/com/gunk/notifications/EmailService.java\n  cohesion: 0.00\n- id: c7\n  files: src/main/java/com/gunk/notifications/SendGridClient.java\n  cohesion: 1.00\n- id: c8\n  files: src/main/java/com/gunk/orders/OrderController.java\n  cohesion: 0.00\n- id: c9\n  files: src/main/java/com/gunk/orders/OrderRepository.java\n  cohesion: 1.00\nfiles:\n- path: expected.json\n  size: 907\n  cluster: c1\n- path: src/main/java/com/gunk/orders/OrderRequest.java\n  size: 123\n  cluster: c10\n- path: src/main/java/com/gunk/orders/OrderService.java\n  size: 249\n  cluster: c11\n  symbols: OrderService:class@2\n- path: src/main/java/com/gunk/shared/Types.java\n  size: 52\n  cluster: c12\n  symbols: Page:class@2\n- path: src/main/java/com/gunk/util/Slug.java\n  size: 99\n  cluster: c13\n  symbols: Slug:class@2\n- path: pom.xml\n  size: 414\n  cluster: c2\n- path: src/main/java/com/gunk/generated/OpenApiClient.java\n  size: 89\n  cluster: c3\n  symbols: OpenApiClient:class@2\n- path: src/main/java/com/gunk/notifications/EmailController.java\n  size: 390\n  cluster: c4\n  symbols: EmailController:class@5\n  imports: org->external, org->external, org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/notifications/EmailRequest.java\n  size: 131\n  cluster: c5\n- path: src/main/java/com/gunk/notifications/EmailService.java\n  size: 232\n  cluster: c6\n  symbols: EmailService:class@2\n- path: src/main/java/com/gunk/notifications/SendGridClient.java\n  size: 148\n  cluster: c7\n  symbols: SendGridClient:class@2\n- path: src/main/java/com/gunk/orders/OrderController.java\n  size: 375\n  cluster: c8\n  symbols: OrderController:class@5\n  imports: org->external, org->external, org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/orders/OrderRepository.java\n  size: 138\n  cluster: c9\n  symbols: OrderRepository:class@2\nexternal_deps:\n- file: src/main/java/com/gunk/notifications/EmailController.java\n  deps: org, org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n- file: src/main/java/com/gunk/orders/OrderController.java\n  deps: org, org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n"
+        }
+      ],
+      "responseJson": {
+        "hypotheses": []
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    }
+  ],
+  "hypotheses": [],
+  "expansions": [],
+  "refinements": [],
+  "gateEvaluations": [],
+  "summary": {
+    "gunkIds": [],
+    "accepted": 0,
+    "needsApproval": 0,
+    "rejected": 0
+  }
+}

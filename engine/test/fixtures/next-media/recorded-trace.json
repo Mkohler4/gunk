@@ -1,0 +1,666 @@
+{
+  "runId": "recorded-next-media",
+  "sourceId": 1,
+  "sourceName": "next-media",
+  "provider": "OpenAI",
+  "model": "phase-5-replay-fixture",
+  "startedAtMs": 100,
+  "finishedAtMs": 100,
+  "status": "succeeded",
+  "error": null,
+  "stages": [
+    {
+      "stage": "scan",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 12
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "symbols",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "files": 12,
+        "parsedFiles": 10,
+        "fallbackFiles": 2,
+        "realSymbolFiles": 10
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "graph",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "nodes": 27,
+        "edges": 19
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "fingerprints",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "fingerprints": 12
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "repoMap",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "chars": 3323
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "survey",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "hypotheses": 2
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "expansion",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "expansions": 2
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "refine",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "modules": 2
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "qualityGates",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "accepted": 2,
+        "needsApproval": 0,
+        "rejected": 0
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "persist",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "persisted": 2
+      },
+      "status": "ok"
+    },
+    {
+      "stage": "extract",
+      "startedAtMs": 100,
+      "finishedAtMs": 100,
+      "durationMs": 0,
+      "counts": {
+        "extracted": 2
+      },
+      "status": "ok"
+    }
+  ],
+  "llmCalls": [
+    {
+      "stage": "survey",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+        },
+        {
+          "role": "user",
+          "content": "Source: next-media\n\nKnown source files:\n- app/api/invites/route.ts\n- app/api/upload/route.ts\n- expected.json\n- package.json\n- src/config/mail.ts\n- src/config/storage.ts\n- src/services/emailInvite.ts\n- src/services/s3Upload.ts\n- src/types.ts\n- src/types/invite.ts\n- src/types/upload.ts\n- src/utils/slug.ts\n\nReturn capability hypotheses with anchors, seed files, expected collaborators, and granularity.\n\nStructural repo map:\nrepo_map_v1\ntree:\n- app/api/invites/route.ts (205 bytes)\n- app/api/upload/route.ts (198 bytes)\n- expected.json (562 bytes)\n- package.json (93 bytes)\n- src/config/mail.ts (63 bytes)\n- src/config/storage.ts (100 bytes)\n- src/services/emailInvite.ts (390 bytes)\n- src/services/s3Upload.ts (505 bytes)\n- src/types.ts (31 bytes)\n- src/types/invite.ts (68 bytes)\n- src/types/upload.ts (79 bytes)\n- src/utils/slug.ts (102 bytes)\nclusters:\n- id: c1\n  files: app/api/invites/route.ts, src/config/mail.ts, src/services/emailInvite.ts, src/types/invite.ts\n  cohesion: 0.43\n  hints: nodemailer[email]\n  routes: next:POST /api/invites@3\n- id: c2\n  files: app/api/upload/route.ts, src/config/storage.ts, src/services/s3Upload.ts, src/types/upload.ts\n  cohesion: 0.27\n  hints: @aws-sdk/client-s3[aws/s3/storage]\n  routes: next:POST /api/upload@3\n- id: c3\n  files: expected.json\n  cohesion: 1.00\n- id: c4\n  files: package.json\n  cohesion: 0.00\n- id: c5\n  files: src/types.ts\n  cohesion: 1.00\n- id: c6\n  files: src/utils/slug.ts\n  cohesion: 1.00\nfiles:\n- path: app/api/invites/route.ts\n  size: 205\n  cluster: c1\n  symbols: POST:function@3, body:variable@4\n  imports: ../../../src/services/emailInvite->src/services/emailInvite.ts\n  routes: next:POST /api/invites@3\n  snippets:\n    - route@3: export async function POST(request: Request) {\n- path: src/config/mail.ts\n  size: 63\n  cluster: c1\n  exports: mailConfig:variable@1\n  symbols: mailConfig:variable@1\n  env: SMTP_URL\n- path: src/services/emailInvite.ts\n  size: 390\n  cluster: c1\n  symbols: sendInvite:function@5, transport:variable@6\n  imports: ../config/mail->src/config/mail.ts, ../types/invite->src/types/invite.ts, Invite->external, Join us->external, nodemailer->external\n  hints: nodemailer[email]\n- path: src/types/invite.ts\n  size: 68\n  cluster: c1\n  exports: InviteResult:interface@1\n  symbols: InviteResult:interface@1\n- path: app/api/upload/route.ts\n  size: 198\n  cluster: c2\n  symbols: POST:function@3, file:variable@4\n  imports: ../../../src/services/s3Upload->src/services/s3Upload.ts\n  routes: next:POST /api/upload@3\n  snippets:\n    - route@3: export async function POST(request: Request) {\n- path: src/config/storage.ts\n  size: 100\n  cluster: c2\n  exports: storageConfig:variable@1\n  symbols: storageConfig:variable@1\n  env: AWS_REGION, S3_BUCKET\n- path: src/services/s3Upload.ts\n  size: 505\n  cluster: c2\n  symbols: client:variable@5, uploadImage:function@7, key:variable@8\n  imports: ../config/storage->src/config/storage.ts, ../types/upload->src/types/upload.ts, @aws-sdk/client-s3->external\n  hints: @aws-sdk/client-s3[aws/s3/storage]\n- path: src/types/upload.ts\n  size: 79\n  cluster: c2\n  exports: UploadResult:interface@1\n  symbols: UploadResult:interface@1\n- path: expected.json\n  size: 562\n  cluster: c3\n- path: package.json\n  size: 93\n  cluster: c4\n  snippets:\n    - manifest@1: dependencies: @aws-sdk/client-s3, nodemailer\n- path: src/types.ts\n  size: 31\n  cluster: c5\n  exports: EntityId:type@1\n  symbols: EntityId:type@1\n- path: src/utils/slug.ts\n  size: 102\n  cluster: c6\n  exports: slugify:function@1\n  symbols: slugify:function@1\n  imports:  ->external, -->external\nexternal_deps:\n- file: src/services/emailInvite.ts\n  deps: Invite, Join us, nodemailer\n- file: src/services/s3Upload.ts\n  deps: @aws-sdk/client-s3\n- file: src/utils/slug.ts\n  deps:  , -\n"
+        }
+      ],
+      "responseJson": {
+        "hypotheses": [
+          {
+            "name": "S3 image upload",
+            "rationale": "S3 image upload is anchored by route, service, config, and type collaborators.",
+            "anchors": ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"],
+            "seedFiles": ["app/api/upload/route.ts"],
+            "expectedCollaborators": [
+              "src/services/s3Upload.ts",
+              "src/config/storage.ts",
+              "src/types/upload.ts"
+            ],
+            "granularity": "feature"
+          },
+          {
+            "name": "Email invite sending",
+            "rationale": "Email invite sending is anchored by route, service, config, and type collaborators.",
+            "anchors": ["nodemailer", "SMTP_URL"],
+            "seedFiles": ["app/api/invites/route.ts"],
+            "expectedCollaborators": [
+              "src/services/emailInvite.ts",
+              "src/config/mail.ts",
+              "src/types/invite.ts"
+            ],
+            "granularity": "feature"
+          }
+        ]
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Use only allowed tags and only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: next-media\nAllowed tags: api, auth, cli, dashboard, db-layer, email, payments, scraper, search, ui-kit\n\nCandidate:\nname: S3 image upload\nrationale: S3 image upload is anchored by route, service, config, and type collaborators.\nanchors: @aws-sdk/client-s3, S3_BUCKET, AWS_REGION\nexpected collaborators: src/services/s3Upload.ts, src/config/storage.ts, src/types/upload.ts\n\nClosure:\nowned candidates: \nshared dependency candidates: app/api/invites/route.ts, app/api/upload/route.ts, src/config/mail.ts, src/config/storage.ts, src/services/emailInvite.ts, src/services/s3Upload.ts, src/types/invite.ts, src/types/upload.ts\nexcluded files: \n\nEdge evidence:\n- app/api/invites/route.ts --call--> app/api/upload/route.ts depth=2\n- app/api/invites/route.ts --call--> src/services/emailInvite.ts depth=2\n- app/api/invites/route.ts --import--> src/services/emailInvite.ts depth=2\n- app/api/upload/route.ts --call--> app/api/invites/route.ts depth=1\n- app/api/upload/route.ts --call--> src/services/s3Upload.ts depth=1\n- app/api/upload/route.ts --import--> src/services/s3Upload.ts depth=1\n- src/services/emailInvite.ts --import--> src/config/mail.ts depth=3\n- src/services/emailInvite.ts --reference--> src/config/mail.ts depth=3\n- src/services/emailInvite.ts --import--> src/types/invite.ts depth=3\n- src/services/emailInvite.ts --reference--> src/types/invite.ts depth=3\n- src/services/s3Upload.ts --inherit--> app/api/upload/route.ts depth=2\n- src/services/s3Upload.ts --reference--> app/api/upload/route.ts depth=2\n- src/services/s3Upload.ts --import--> src/config/storage.ts depth=2\n- src/services/s3Upload.ts --inherit--> src/config/storage.ts depth=2\n- src/services/s3Upload.ts --reference--> src/config/storage.ts depth=2\n- src/services/s3Upload.ts --import--> src/types/upload.ts depth=2\n- src/services/s3Upload.ts --reference--> src/types/upload.ts depth=2\n- src/types/upload.ts --reference--> src/services/s3Upload.ts depth=3\n\nClosure file contents:\n### app/api/invites/route.ts\nimport { sendInvite } from \"../../../src/services/emailInvite\";\n\nexport async function POST(request: Request) {\n  const body = await request.json();\n  return Response.json(await sendInvite(body.email));\n}\n\n\n### app/api/upload/route.ts\nimport { uploadImage } from \"../../../src/services/s3Upload\";\n\nexport async function POST(request: Request) {\n  const file = await request.blob();\n  return Response.json(await uploadImage(file));\n}\n\n\n### src/config/mail.ts\nexport const mailConfig = {\n  smtpUrl: process.env.SMTP_URL\n};\n\n\n### src/config/storage.ts\nexport const storageConfig = {\n  bucket: process.env.S3_BUCKET,\n  region: process.env.AWS_REGION\n};\n\n\n### src/services/emailInvite.ts\nimport nodemailer from \"nodemailer\";\nimport { mailConfig } from \"../config/mail\";\nimport type { InviteResult } from \"../types/invite\";\n\nexport async function sendInvite(email: string): Promise<InviteResult> {\n  const transport = nodemailer.createTransport(mailConfig.smtpUrl);\n  await transport.sendMail({ to: email, subject: \"Invite\", text: \"Join us\" });\n  return { email, sent: true };\n}\n\n\n### src/services/s3Upload.ts\nimport { PutObjectCommand, S3Client } from \"@aws-sdk/client-s3\";\nimport { storageConfig } from \"../config/storage\";\nimport type { UploadResult } from \"../types/upload\";\n\nconst client = new S3Client({ region: storageConfig.region });\n\nexport async function uploadImage(file: Blob): Promise<UploadResult> {\n  const key = `images/${crypto.randomUUID()}.png`;\n  await client.send(new PutObjectCommand({ Bucket: storageConfig.bucket, Key: key, Body: file }));\n  return { key, bucket: storageConfig.bucket };\n}\n\n\n### src/types/invite.ts\nexport interface InviteResult {\n  email: string;\n  sent: boolean;\n}\n\n\n### src/types/upload.ts\nexport interface UploadResult {\n  key: string;\n  bucket: string | undefined;\n}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "S3 image upload",
+          "purpose": "Uploads image blobs to S3 and returns bucket/key metadata.",
+          "tags": ["api"],
+          "language": "TypeScript",
+          "ownedFiles": ["app/api/upload/route.ts", "src/services/s3Upload.ts"],
+          "sharedDependencies": [
+            "src/config/storage.ts",
+            "src/types/upload.ts"
+          ],
+          "entrypoints": [
+            {
+              "path": "app/api/upload/route.ts",
+              "symbol": "POST"
+            }
+          ],
+          "anchors": ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Use only allowed tags and only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: next-media\nAllowed tags: api, auth, cli, dashboard, db-layer, email, payments, scraper, search, ui-kit\n\nCandidate:\nname: Email invite sending\nrationale: Email invite sending is anchored by route, service, config, and type collaborators.\nanchors: nodemailer, SMTP_URL\nexpected collaborators: src/services/emailInvite.ts, src/config/mail.ts, src/types/invite.ts\n\nClosure:\nowned candidates: \nshared dependency candidates: app/api/invites/route.ts, app/api/upload/route.ts, src/config/mail.ts, src/config/storage.ts, src/services/emailInvite.ts, src/services/s3Upload.ts, src/types/invite.ts, src/types/upload.ts\nexcluded files: \n\nEdge evidence:\n- app/api/invites/route.ts --call--> app/api/upload/route.ts depth=1\n- app/api/invites/route.ts --call--> src/services/emailInvite.ts depth=1\n- app/api/invites/route.ts --import--> src/services/emailInvite.ts depth=1\n- app/api/upload/route.ts --call--> app/api/invites/route.ts depth=2\n- app/api/upload/route.ts --call--> src/services/s3Upload.ts depth=2\n- app/api/upload/route.ts --import--> src/services/s3Upload.ts depth=2\n- src/services/emailInvite.ts --import--> src/config/mail.ts depth=2\n- src/services/emailInvite.ts --reference--> src/config/mail.ts depth=2\n- src/services/emailInvite.ts --import--> src/types/invite.ts depth=2\n- src/services/emailInvite.ts --reference--> src/types/invite.ts depth=2\n- src/services/s3Upload.ts --inherit--> app/api/upload/route.ts depth=3\n- src/services/s3Upload.ts --reference--> app/api/upload/route.ts depth=3\n- src/services/s3Upload.ts --import--> src/config/storage.ts depth=3\n- src/services/s3Upload.ts --inherit--> src/config/storage.ts depth=3\n- src/services/s3Upload.ts --reference--> src/config/storage.ts depth=3\n- src/services/s3Upload.ts --import--> src/types/upload.ts depth=3\n- src/services/s3Upload.ts --reference--> src/types/upload.ts depth=3\n\nClosure file contents:\n### app/api/invites/route.ts\nimport { sendInvite } from \"../../../src/services/emailInvite\";\n\nexport async function POST(request: Request) {\n  const body = await request.json();\n  return Response.json(await sendInvite(body.email));\n}\n\n\n### app/api/upload/route.ts\nimport { uploadImage } from \"../../../src/services/s3Upload\";\n\nexport async function POST(request: Request) {\n  const file = await request.blob();\n  return Response.json(await uploadImage(file));\n}\n\n\n### src/config/mail.ts\nexport const mailConfig = {\n  smtpUrl: process.env.SMTP_URL\n};\n\n\n### src/config/storage.ts\nexport const storageConfig = {\n  bucket: process.env.S3_BUCKET,\n  region: process.env.AWS_REGION\n};\n\n\n### src/services/emailInvite.ts\nimport nodemailer from \"nodemailer\";\nimport { mailConfig } from \"../config/mail\";\nimport type { InviteResult } from \"../types/invite\";\n\nexport async function sendInvite(email: string): Promise<InviteResult> {\n  const transport = nodemailer.createTransport(mailConfig.smtpUrl);\n  await transport.sendMail({ to: email, subject: \"Invite\", text: \"Join us\" });\n  return { email, sent: true };\n}\n\n\n### src/services/s3Upload.ts\nimport { PutObjectCommand, S3Client } from \"@aws-sdk/client-s3\";\nimport { storageConfig } from \"../config/storage\";\nimport type { UploadResult } from \"../types/upload\";\n\nconst client = new S3Client({ region: storageConfig.region });\n\nexport async function uploadImage(file: Blob): Promise<UploadResult> {\n  const key = `images/${crypto.randomUUID()}.png`;\n  await client.send(new PutObjectCommand({ Bucket: storageConfig.bucket, Key: key, Body: file }));\n  return { key, bucket: storageConfig.bucket };\n}\n\n\n### src/types/invite.ts\nexport interface InviteResult {\n  email: string;\n  sent: boolean;\n}\n\n\n### src/types/upload.ts\nexport interface UploadResult {\n  key: string;\n  bucket: string | undefined;\n}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Email invite sending",
+          "purpose": "Sends invite emails through an SMTP transport.",
+          "tags": ["email", "api"],
+          "language": "TypeScript",
+          "ownedFiles": [
+            "app/api/invites/route.ts",
+            "src/services/emailInvite.ts"
+          ],
+          "sharedDependencies": ["src/config/mail.ts", "src/types/invite.ts"],
+          "entrypoints": [
+            {
+              "path": "app/api/invites/route.ts",
+              "symbol": "POST"
+            }
+          ],
+          "anchors": ["nodemailer", "SMTP_URL"],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    }
+  ],
+  "hypotheses": [
+    {
+      "name": "S3 image upload",
+      "rationale": "S3 image upload is anchored by route, service, config, and type collaborators.",
+      "anchors": ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"],
+      "seedFiles": ["app/api/upload/route.ts"],
+      "expectedCollaborators": [
+        "src/services/s3Upload.ts",
+        "src/config/storage.ts",
+        "src/types/upload.ts"
+      ],
+      "granularity": "feature",
+      "priority": "normal"
+    },
+    {
+      "name": "Email invite sending",
+      "rationale": "Email invite sending is anchored by route, service, config, and type collaborators.",
+      "anchors": ["nodemailer", "SMTP_URL"],
+      "seedFiles": ["app/api/invites/route.ts"],
+      "expectedCollaborators": [
+        "src/services/emailInvite.ts",
+        "src/config/mail.ts",
+        "src/types/invite.ts"
+      ],
+      "granularity": "feature",
+      "priority": "normal"
+    }
+  ],
+  "expansions": [
+    {
+      "hypothesis": {
+        "name": "S3 image upload",
+        "rationale": "S3 image upload is anchored by route, service, config, and type collaborators.",
+        "anchors": ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"],
+        "seedFiles": ["app/api/upload/route.ts"],
+        "expectedCollaborators": [
+          "src/services/s3Upload.ts",
+          "src/config/storage.ts",
+          "src/types/upload.ts"
+        ],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "app/api/invites/route.ts",
+        "app/api/upload/route.ts",
+        "src/config/mail.ts",
+        "src/config/storage.ts",
+        "src/services/emailInvite.ts",
+        "src/services/s3Upload.ts",
+        "src/types/invite.ts",
+        "src/types/upload.ts"
+      ],
+      "ownedFiles": [],
+      "sharedDependencyFiles": [
+        "app/api/invites/route.ts",
+        "app/api/upload/route.ts",
+        "src/config/mail.ts",
+        "src/config/storage.ts",
+        "src/services/emailInvite.ts",
+        "src/services/s3Upload.ts",
+        "src/types/invite.ts",
+        "src/types/upload.ts"
+      ],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "call",
+          "depth": 2
+        },
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "src/services/emailInvite.ts",
+          "kind": "call",
+          "depth": 2
+        },
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "src/services/emailInvite.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "app/api/invites/route.ts",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "src/services/s3Upload.ts",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "src/services/s3Upload.ts",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/config/mail.ts",
+          "kind": "import",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/config/mail.ts",
+          "kind": "reference",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/types/invite.ts",
+          "kind": "import",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/types/invite.ts",
+          "kind": "reference",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "inherit",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "inherit",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/types/upload.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/types/upload.ts",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/types/upload.ts",
+          "toPath": "src/services/s3Upload.ts",
+          "kind": "reference",
+          "depth": 3
+        }
+      ]
+    },
+    {
+      "hypothesis": {
+        "name": "Email invite sending",
+        "rationale": "Email invite sending is anchored by route, service, config, and type collaborators.",
+        "anchors": ["nodemailer", "SMTP_URL"],
+        "seedFiles": ["app/api/invites/route.ts"],
+        "expectedCollaborators": [
+          "src/services/emailInvite.ts",
+          "src/config/mail.ts",
+          "src/types/invite.ts"
+        ],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "app/api/invites/route.ts",
+        "app/api/upload/route.ts",
+        "src/config/mail.ts",
+        "src/config/storage.ts",
+        "src/services/emailInvite.ts",
+        "src/services/s3Upload.ts",
+        "src/types/invite.ts",
+        "src/types/upload.ts"
+      ],
+      "ownedFiles": [],
+      "sharedDependencyFiles": [
+        "app/api/invites/route.ts",
+        "app/api/upload/route.ts",
+        "src/config/mail.ts",
+        "src/config/storage.ts",
+        "src/services/emailInvite.ts",
+        "src/services/s3Upload.ts",
+        "src/types/invite.ts",
+        "src/types/upload.ts"
+      ],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "src/services/emailInvite.ts",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "app/api/invites/route.ts",
+          "toPath": "src/services/emailInvite.ts",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "app/api/invites/route.ts",
+          "kind": "call",
+          "depth": 2
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "src/services/s3Upload.ts",
+          "kind": "call",
+          "depth": 2
+        },
+        {
+          "fromPath": "app/api/upload/route.ts",
+          "toPath": "src/services/s3Upload.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/config/mail.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/config/mail.ts",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/types/invite.ts",
+          "kind": "import",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/emailInvite.ts",
+          "toPath": "src/types/invite.ts",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "inherit",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "app/api/upload/route.ts",
+          "kind": "reference",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "import",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "inherit",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/config/storage.ts",
+          "kind": "reference",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/types/upload.ts",
+          "kind": "import",
+          "depth": 3
+        },
+        {
+          "fromPath": "src/services/s3Upload.ts",
+          "toPath": "src/types/upload.ts",
+          "kind": "reference",
+          "depth": 3
+        }
+      ]
+    }
+  ],
+  "refinements": [
+    {
+      "capability": "S3 image upload",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "S3 image upload",
+        "purpose": "Uploads image blobs to S3 and returns bucket/key metadata.",
+        "tags": ["api"],
+        "files": [
+          "app/api/upload/route.ts",
+          "src/services/s3Upload.ts",
+          "src/config/storage.ts",
+          "src/types/upload.ts"
+        ],
+        "language": "TypeScript",
+        "confidence": 0.92,
+        "ownedFiles": ["app/api/upload/route.ts", "src/services/s3Upload.ts"],
+        "sharedDeps": ["src/config/storage.ts", "src/types/upload.ts"],
+        "surface": [
+          {
+            "path": "app/api/upload/route.ts",
+            "symbol": "POST"
+          }
+        ],
+        "anchors": ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"]
+      }
+    },
+    {
+      "capability": "Email invite sending",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Email invite sending",
+        "purpose": "Sends invite emails through an SMTP transport.",
+        "tags": ["email", "api"],
+        "files": [
+          "app/api/invites/route.ts",
+          "src/services/emailInvite.ts",
+          "src/config/mail.ts",
+          "src/types/invite.ts"
+        ],
+        "language": "TypeScript",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "app/api/invites/route.ts",
+          "src/services/emailInvite.ts"
+        ],
+        "sharedDeps": ["src/config/mail.ts", "src/types/invite.ts"],
+        "surface": [
+          {
+            "path": "app/api/invites/route.ts",
+            "symbol": "POST"
+          }
+        ],
+        "anchors": ["nodemailer", "SMTP_URL"]
+      }
+    }
+  ],
+  "gateEvaluations": [
+    {
+      "name": "S3 image upload",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.7692307692307693
+    },
+    {
+      "name": "Email invite sending",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.75
+    }
+  ],
+  "summary": {
+    "gunkIds": [1, 2],
+    "accepted": 2,
+    "needsApproval": 0,
+    "rejected": 0
+  }
+}

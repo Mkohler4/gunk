@@ -15,7 +15,14 @@ import {
 import { scanFolder } from "../src/ingest/scanner.js";
 import { DecompositionPipeline } from "../src/decompose/pipeline.js";
 import { createTreeSitterSymbolExtractor } from "../src/analyze/symbolExtractor.js";
-import { assertSignalFloor, loadExpected, score, signalMetrics } from "../src/eval/scorecard.js";
+import {
+  assertSignalFloor,
+  loadExpected,
+  score,
+  signalMetrics,
+} from "../src/eval/scorecard.js";
+import { ReplayClient } from "../src/eval/replayClient.js";
+import { runEval } from "../src/eval/runEval.js";
 import type { Module } from "../src/models.js";
 import type { LLMClient, LLMResponse } from "../src/llm/client.js";
 import { RunTraceRecorder } from "../src/trace/trace.js";
@@ -42,7 +49,12 @@ function surveyJSON(hypotheses: unknown[]) {
   return { hypotheses };
 }
 
-function hypothesisJSON(name: string, anchors: string[], seedFiles: string[], expectedCollaborators: string[]) {
+function hypothesisJSON(
+  name: string,
+  anchors: string[],
+  seedFiles: string[],
+  expectedCollaborators: string[],
+) {
   return {
     name,
     rationale: `${name} is anchored by route, service, config, and type collaborators.`,
@@ -88,16 +100,26 @@ function responsesFor(fixture: string): unknown[] {
   if (fixture === "express-saas") {
     return [
       surveyJSON([
-        hypothesisJSON("Google OAuth login", ["google-auth-library", "GOOGLE_CLIENT_ID"], ["src/routes/auth.ts"], [
-          "src/services/googleOAuth.ts",
-          "src/config/auth.ts",
-          "src/types/auth.ts",
-        ]),
-        hypothesisJSON("Stripe subscription billing", ["stripe", "STRIPE_SECRET_KEY"], ["src/routes/billing.ts"], [
-          "src/services/stripeBilling.ts",
-          "src/config/stripe.ts",
-          "src/types/billing.ts",
-        ]),
+        hypothesisJSON(
+          "Google OAuth login",
+          ["google-auth-library", "GOOGLE_CLIENT_ID"],
+          ["src/routes/auth.ts"],
+          [
+            "src/services/googleOAuth.ts",
+            "src/config/auth.ts",
+            "src/types/auth.ts",
+          ],
+        ),
+        hypothesisJSON(
+          "Stripe subscription billing",
+          ["stripe", "STRIPE_SECRET_KEY"],
+          ["src/routes/billing.ts"],
+          [
+            "src/services/stripeBilling.ts",
+            "src/config/stripe.ts",
+            "src/types/billing.ts",
+          ],
+        ),
       ]),
       refinementJSON({
         name: "Google OAuth login",
@@ -114,23 +136,35 @@ function responsesFor(fixture: string): unknown[] {
         tags: ["payments", "api"],
         ownedFiles: ["src/routes/billing.ts", "src/services/stripeBilling.ts"],
         sharedDependencies: ["src/config/stripe.ts", "src/types/billing.ts"],
-        entrypoints: [{ path: "src/routes/billing.ts", symbol: "billingCheckout" }],
+        entrypoints: [
+          { path: "src/routes/billing.ts", symbol: "billingCheckout" },
+        ],
         anchors: ["stripe", "STRIPE_SECRET_KEY"],
       }),
     ];
   }
   return [
     surveyJSON([
-      hypothesisJSON("S3 image upload", ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"], ["app/api/upload/route.ts"], [
-        "src/services/s3Upload.ts",
-        "src/config/storage.ts",
-        "src/types/upload.ts",
-      ]),
-      hypothesisJSON("Email invite sending", ["nodemailer", "SMTP_URL"], ["app/api/invites/route.ts"], [
-        "src/services/emailInvite.ts",
-        "src/config/mail.ts",
-        "src/types/invite.ts",
-      ]),
+      hypothesisJSON(
+        "S3 image upload",
+        ["@aws-sdk/client-s3", "S3_BUCKET", "AWS_REGION"],
+        ["app/api/upload/route.ts"],
+        [
+          "src/services/s3Upload.ts",
+          "src/config/storage.ts",
+          "src/types/upload.ts",
+        ],
+      ),
+      hypothesisJSON(
+        "Email invite sending",
+        ["nodemailer", "SMTP_URL"],
+        ["app/api/invites/route.ts"],
+        [
+          "src/services/emailInvite.ts",
+          "src/config/mail.ts",
+          "src/types/invite.ts",
+        ],
+      ),
     ]),
     refinementJSON({
       name: "S3 image upload",
@@ -174,14 +208,19 @@ describe("eval gate: capability-centric pipeline beats baseline", () => {
   async function runFixture(fixture: string) {
     const fixturePath = join(fixturesDir, fixture);
     const source = insertSource(db, fixture, fixturePath, 100);
-    const pipeline = new DecompositionPipeline(db, "OpenAI", "phase-4-eval-fixture", {
-      contextBudgetTokens: 4000,
-      confidenceThreshold: 0.7,
-      gunkHome,
-      symbolExtractor: extractor,
-      embeddingProvider: null,
-      now: () => 100,
-    });
+    const pipeline = new DecompositionPipeline(
+      db,
+      "OpenAI",
+      "phase-4-eval-fixture",
+      {
+        contextBudgetTokens: 4000,
+        confidenceThreshold: 0.7,
+        gunkHome,
+        symbolExtractor: extractor,
+        embeddingProvider: null,
+        now: () => 100,
+      },
+    );
     await pipeline.run(source, new QueuedClient(responsesFor(fixture)));
 
     const modules: Module[] = gunksForSource(db, source.id).map((gunk) => ({
@@ -196,7 +235,9 @@ describe("eval gate: capability-centric pipeline beats baseline", () => {
       surface: [],
       anchors: [],
     }));
-    const expected = loadExpected(JSON.parse(readFileSync(join(fixturePath, "expected.json"), "utf8")));
+    const expected = loadExpected(
+      JSON.parse(readFileSync(join(fixturePath, "expected.json"), "utf8")),
+    );
     return score(modules, expected);
   }
 
@@ -296,7 +337,13 @@ describe("eval signal metrics: current Flutter coverage failure", () => {
     const fixturePath = join(fixturesDir, "flutter-app");
     const source = insertSource(db, "flutter-app", fixturePath, 100);
     const observer = new RunTraceRecorder(
-      { runId: "flutter-signal", sourceId: source.id, sourceName: source.name, provider: "OpenAI", model: "phase-5-signal" },
+      {
+        runId: "flutter-signal",
+        sourceId: source.id,
+        sourceName: source.name,
+        provider: "OpenAI",
+        model: "phase-5-signal",
+      },
       { runsDir, now: () => 100 },
     );
     const pipeline = new DecompositionPipeline(db, "OpenAI", "phase-5-signal", {
@@ -314,6 +361,56 @@ describe("eval signal metrics: current Flutter coverage failure", () => {
 
     expect(metrics.parseCoverage).toBe(0);
     expect(metrics.fallbackFiles).toBeGreaterThan(0);
-    expect(() => assertSignalFloor(metrics, { minParseCoverage: 0.1 })).toThrow(/parseCoverage/);
+    expect(() => assertSignalFloor(metrics, { minParseCoverage: 0.1 })).toThrow(
+      /parseCoverage/,
+    );
+  });
+});
+
+describe("offline replay eval harness", () => {
+  it("replays recorded LLM calls deterministically", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["express-saas"],
+    });
+    const fixture = report.fixtures[0];
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.scorecard.filePrecision).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.fileRecall).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
+  });
+
+  it("stale replay tape fails loudly", async () => {
+    const replay = ReplayClient.fromFile(
+      join(fixturesDir, "express-saas", "recorded-trace.json"),
+    );
+
+    await expect(
+      replay.complete({
+        model: "phase-5-replay-fixture",
+        messages: [{ role: "user", content: "stale prompt" }],
+        jsonSchemaName: "survey",
+        jsonSchema: {},
+      }),
+    ).rejects.toThrow(/Replay tape stale/);
+  });
+
+  it("eval report holds express-saas and next-media at the Phase 4 baseline", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["express-saas", "next-media"],
+    });
+
+    expect(report.passed).toBe(true);
+    for (const fixture of report.fixtures) {
+      expect(fixture.scorecard.filePrecision, fixture.name).toBeCloseTo(1, 5);
+      expect(fixture.scorecard.fileRecall, fixture.name).toBeCloseTo(1, 5);
+      expect(fixture.scorecard.tagAccuracy, fixture.name).toBeCloseTo(1, 5);
+      expect(
+        fixture.scorecard.trivialModuleFalsePositiveCount,
+        fixture.name,
+      ).toBe(0);
+    }
   });
 });
