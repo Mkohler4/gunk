@@ -30,6 +30,8 @@ const MANIFEST_BASENAMES = [
   "go.mod",
   "cargo.toml",
   "pubspec.yaml",
+  "build.gradle",
+  "build.gradle.kts",
 ];
 
 function splitLines(contents: string): string[] {

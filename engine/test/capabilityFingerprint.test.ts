@@ -62,6 +62,59 @@ describe("DependencyManifestParser", () => {
       ]),
     );
   });
+
+  it("parses pubspec.yaml dependencies", () => {
+    const parser = new DependencyManifestParser();
+    const manifest = parser.parseOne(
+      "pubspec.yaml",
+      `name: fixture
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  firebase_auth: ^5.0.0
+  dio: ^5.4.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  build_runner: ^2.4.0`,
+    );
+
+    expect(manifest?.kind).toBe("pubspecYaml");
+    expect(manifest?.dependencies).toEqual([
+      "flutter",
+      "firebase_auth",
+      "dio",
+      "flutter_test",
+      "build_runner",
+    ]);
+  });
+
+  it("parses Gradle dependencies", () => {
+    const parser = new DependencyManifestParser();
+    const manifest = parser.parseOne(
+      "android/app/build.gradle.kts",
+      `dependencies {
+  implementation("com.squareup.retrofit2:retrofit:2.11.0")
+  implementation("com.android.billingclient:billing-ktx:7.0.0")
+  testImplementation("junit:junit:4.13.2")
+}`,
+    );
+
+    expect(manifest?.kind).toBe("gradle");
+    expect(manifest?.dependencies).toEqual([
+      "com.squareup.retrofit2:retrofit",
+      "retrofit",
+      "com.android.billingclient:billing-ktx",
+      "billing-ktx",
+      "junit:junit",
+      "junit",
+    ]);
+  });
 });
 
 describe("CapabilityFingerprintBuilder", () => {
@@ -162,5 +215,55 @@ export function googleOAuthCallback() {}`,
     expect(fingerprint?.namingTokens).toContain("google");
     expect(aggregate.hasPublicSurface).toBe(true);
     expect(aggregate.capabilityHints).toEqual(fingerprint?.capabilityHints);
+  });
+
+  it("maps firebase_auth and Stripe mobile dependencies to hints", () => {
+    const manifests = new DependencyManifestParser().parse({
+      "pubspec.yaml": `dependencies:
+  firebase_auth: ^5.0.0
+  dio: ^5.4.0
+  flutter_stripe: ^11.0.0`,
+      "android/app/build.gradle": `dependencies {
+  implementation 'com.android.billingclient:billing-ktx:7.0.0'
+}`,
+    });
+    const files = [
+      fileSymbols("lib/features/auth/auth_repository.dart", {
+        imports: [
+          {
+            moduleSpecifier: "package:firebase_auth/firebase_auth.dart",
+            resolvedTarget: null,
+            line: 1,
+          },
+          { moduleSpecifier: "package:dio/dio.dart", resolvedTarget: null, line: 2 },
+        ],
+      }),
+      fileSymbols("lib/features/payments/checkout.dart", {
+        imports: [{ moduleSpecifier: "package:flutter_stripe/flutter_stripe.dart", resolvedTarget: null, line: 1 }],
+      }),
+      fileSymbols("android/app/src/main/kotlin/Billing.kt", {
+        imports: [{ moduleSpecifier: "com.android.billingclient.api.BillingClient", resolvedTarget: null, line: 1 }],
+      }),
+    ];
+
+    const fingerprints = new CapabilityFingerprintBuilder().fingerprints(files, manifests, {});
+
+    expect(
+      fingerprintFor("lib/features/auth/auth_repository.dart", fingerprints)?.importedDependencies,
+    ).toEqual(["firebase_auth", "dio"]);
+    expect(
+      fingerprintFor("lib/features/auth/auth_repository.dart", fingerprints)?.capabilityHints,
+    ).toEqual([
+      { library: "firebase_auth", labels: ["auth", "firebase"] },
+      { library: "dio", labels: ["network"] },
+    ]);
+    expect(
+      fingerprintFor("lib/features/payments/checkout.dart", fingerprints)?.capabilityHints,
+    ).toEqual([{ library: "flutter_stripe", labels: ["payments", "billing"] }]);
+    expect(
+      fingerprintFor("android/app/src/main/kotlin/Billing.kt", fingerprints)?.capabilityHints,
+    ).toEqual([
+      { library: "com.android.billingclient:billing-ktx", labels: ["payments", "billing"] },
+    ]);
   });
 });
