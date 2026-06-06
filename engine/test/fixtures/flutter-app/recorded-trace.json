@@ -69,7 +69,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "hypotheses": 0
+        "hypotheses": 2
       },
       "status": "ok"
     },
@@ -79,7 +79,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "expansions": 0
+        "expansions": 2
       },
       "status": "ok"
     },
@@ -89,7 +89,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "modules": 0
+        "modules": 2
       },
       "status": "ok"
     },
@@ -99,7 +99,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "accepted": 0,
+        "accepted": 2,
         "needsApproval": 0,
         "rejected": 0
       },
@@ -111,7 +111,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "persisted": 0
+        "persisted": 2
       },
       "status": "ok"
     },
@@ -121,7 +121,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "extracted": 0
+        "extracted": 2
       },
       "status": "ok"
     }
@@ -142,20 +142,443 @@
         }
       ],
       "responseJson": {
-        "hypotheses": []
+        "hypotheses": [
+          {
+            "name": "Email password authentication",
+            "rationale": "Email password authentication is anchored by the AuthController/AuthRepository public APIs and Firebase auth dependencies.",
+            "anchors": [
+              "AuthController",
+              "AuthRepository",
+              "firebase_auth",
+              "flutter_secure_storage"
+            ],
+            "seedFiles": [
+              "lib/features/auth/auth_controller.dart",
+              "lib/features/auth/auth_repository.dart"
+            ],
+            "expectedCollaborators": [
+              "lib/features/auth/auth_state.dart"
+            ],
+            "granularity": "feature"
+          },
+          {
+            "name": "User profile API client",
+            "rationale": "User profile API client is anchored by the ProfileController/UserApi public APIs and Dio network dependency.",
+            "anchors": [
+              "ProfileController",
+              "UserApi",
+              "dio"
+            ],
+            "seedFiles": [
+              "lib/features/profile/profile_controller.dart",
+              "lib/features/profile/user_api.dart"
+            ],
+            "expectedCollaborators": [
+              "lib/features/profile/profile_model.dart"
+            ],
+            "granularity": "feature"
+          }
+        ]
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Use only allowed tags and only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: flutter-app\nAllowed tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Email password authentication\nrationale: Email password authentication is anchored by the AuthController/AuthRepository public APIs and Firebase auth dependencies.\nanchors: AuthController, AuthRepository, firebase_auth, flutter_secure_storage\nexpected collaborators: lib/features/auth/auth_state.dart\n\nClosure:\nowned candidates: lib/features/auth/auth_controller.dart, lib/features/auth/auth_repository.dart, lib/features/auth/auth_state.dart\nshared dependency candidates: \nexcluded files: \n\nEdge evidence:\n- lib/features/auth/auth_controller.dart --call--> lib/features/auth/auth_repository.dart depth=1\n- lib/features/auth/auth_controller.dart --import--> lib/features/auth/auth_repository.dart depth=1\n- lib/features/auth/auth_controller.dart --import--> lib/features/auth/auth_state.dart depth=1\n- lib/features/auth/auth_controller.dart --reference--> lib/features/auth/auth_state.dart depth=1\n- lib/features/auth/auth_repository.dart --call--> lib/features/auth/auth_state.dart depth=1\n- lib/features/auth/auth_repository.dart --import--> lib/features/auth/auth_state.dart depth=1\n- lib/features/auth/auth_repository.dart --inherit--> lib/features/auth/auth_state.dart depth=1\n\nClosure file contents:\n### lib/features/auth/auth_controller.dart\nimport 'auth_repository.dart';\nimport 'auth_state.dart';\n\nclass AuthController {\n  final AuthRepository repository = AuthRepository();\n  Future<AuthState> signInWithEmail(String email, String password) { return repository.signInWithEmail(email, password); }\n  Future<AuthState?> restoreSession() { return repository.restoreSession(); }\n}\n\n\n### lib/features/auth/auth_repository.dart\nimport 'package:firebase_auth/firebase_auth.dart';\nimport 'package:flutter_secure_storage/flutter_secure_storage.dart';\nimport 'auth_state.dart';\n\nclass AuthRepository {\n  final FirebaseAuth firebaseAuth = FirebaseAuth.instance;\n  final FlutterSecureStorage storage = const FlutterSecureStorage();\n  Future<AuthState> signInWithEmail(String email, String password) async {\n    final credential = await firebaseAuth.signInWithEmailAndPassword(email: email, password: password);\n    await storage.write(key: 'session_user', value: credential.user?.uid ?? '');\n    return AuthState(credential.user?.uid ?? '', email);\n  }\n  Future<AuthState?> restoreSession() async {\n    final userId = await storage.read(key: 'session_user');\n    return userId == null ? null : AuthState(userId, 'cached@example.test');\n  }\n}\n\n\n### lib/features/auth/auth_state.dart\nclass AuthState {\n  final String userId;\n  final String email;\n  const AuthState(this.userId, this.email);\n}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Email password authentication",
+          "purpose": "Signs users in with Firebase email credentials and restores persisted auth state.",
+          "tags": [
+            "auth",
+            "mobile"
+          ],
+          "language": "Dart",
+          "ownedFiles": [
+            "lib/features/auth/auth_controller.dart",
+            "lib/features/auth/auth_repository.dart",
+            "lib/features/auth/auth_state.dart"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "lib/features/auth/auth_controller.dart",
+              "symbol": "AuthController"
+            }
+          ],
+          "anchors": [
+            "AuthController",
+            "AuthRepository",
+            "firebase_auth",
+            "flutter_secure_storage"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Use only allowed tags and only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: flutter-app\nAllowed tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: User profile API client\nrationale: User profile API client is anchored by the ProfileController/UserApi public APIs and Dio network dependency.\nanchors: ProfileController, UserApi, dio\nexpected collaborators: lib/features/profile/profile_model.dart\n\nClosure:\nowned candidates: lib/features/profile/profile_controller.dart, lib/features/profile/profile_model.dart, lib/features/profile/user_api.dart\nshared dependency candidates: \nexcluded files: \n\nEdge evidence:\n- lib/features/profile/profile_controller.dart --import--> lib/features/profile/profile_model.dart depth=1\n- lib/features/profile/profile_controller.dart --reference--> lib/features/profile/profile_model.dart depth=1\n- lib/features/profile/profile_controller.dart --call--> lib/features/profile/user_api.dart depth=1\n- lib/features/profile/profile_controller.dart --import--> lib/features/profile/user_api.dart depth=1\n- lib/features/profile/user_api.dart --call--> lib/features/profile/profile_model.dart depth=1\n- lib/features/profile/user_api.dart --import--> lib/features/profile/profile_model.dart depth=1\n\nClosure file contents:\n### lib/features/profile/profile_controller.dart\nimport 'profile_model.dart';\nimport 'user_api.dart';\n\nclass ProfileController {\n  final UserApi api = UserApi();\n  Future<ProfileModel> loadCurrentUser() { return api.fetchProfile('me'); }\n}\n\n\n### lib/features/profile/profile_model.dart\nclass ProfileModel {\n  final String id;\n  final String displayName;\n  const ProfileModel(this.id, this.displayName);\n}\n\n\n### lib/features/profile/user_api.dart\nimport 'package:dio/dio.dart';\nimport 'profile_model.dart';\n\nclass UserApi {\n  final Dio dio = Dio(BaseOptions(baseUrl: 'https://api.example.test'));\n  Future<ProfileModel> fetchProfile(String userId) async {\n    final response = await dio.get('/users/$userId');\n    return ProfileModel(response.data['id'] as String, response.data['displayName'] as String);\n  }\n}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "User profile API client",
+          "purpose": "Loads the current user profile through a Dio-backed API client and exposes it to the profile controller.",
+          "tags": [
+            "api",
+            "mobile"
+          ],
+          "language": "Dart",
+          "ownedFiles": [
+            "lib/features/profile/profile_controller.dart",
+            "lib/features/profile/user_api.dart",
+            "lib/features/profile/profile_model.dart"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "lib/features/profile/profile_controller.dart",
+              "symbol": "ProfileController"
+            }
+          ],
+          "anchors": [
+            "ProfileController",
+            "UserApi",
+            "dio"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
       },
       "inputTokens": null,
       "outputTokens": null,
       "durationMs": 0
     }
   ],
-  "hypotheses": [],
-  "expansions": [],
-  "refinements": [],
-  "gateEvaluations": [],
+  "hypotheses": [
+    {
+      "name": "Email password authentication",
+      "rationale": "Email password authentication is anchored by the AuthController/AuthRepository public APIs and Firebase auth dependencies.",
+      "anchors": [
+        "AuthController",
+        "AuthRepository",
+        "firebase_auth",
+        "flutter_secure_storage"
+      ],
+      "seedFiles": [
+        "lib/features/auth/auth_controller.dart",
+        "lib/features/auth/auth_repository.dart"
+      ],
+      "expectedCollaborators": [
+        "lib/features/auth/auth_state.dart"
+      ],
+      "granularity": "feature",
+      "priority": "normal"
+    },
+    {
+      "name": "User profile API client",
+      "rationale": "User profile API client is anchored by the ProfileController/UserApi public APIs and Dio network dependency.",
+      "anchors": [
+        "ProfileController",
+        "UserApi",
+        "dio"
+      ],
+      "seedFiles": [
+        "lib/features/profile/profile_controller.dart",
+        "lib/features/profile/user_api.dart"
+      ],
+      "expectedCollaborators": [
+        "lib/features/profile/profile_model.dart"
+      ],
+      "granularity": "feature",
+      "priority": "normal"
+    }
+  ],
+  "expansions": [
+    {
+      "hypothesis": {
+        "name": "Email password authentication",
+        "rationale": "Email password authentication is anchored by the AuthController/AuthRepository public APIs and Firebase auth dependencies.",
+        "anchors": [
+          "AuthController",
+          "AuthRepository",
+          "firebase_auth",
+          "flutter_secure_storage"
+        ],
+        "seedFiles": [
+          "lib/features/auth/auth_controller.dart",
+          "lib/features/auth/auth_repository.dart"
+        ],
+        "expectedCollaborators": [
+          "lib/features/auth/auth_state.dart"
+        ],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "lib/features/auth/auth_controller.dart",
+        "lib/features/auth/auth_repository.dart",
+        "lib/features/auth/auth_state.dart"
+      ],
+      "ownedFiles": [
+        "lib/features/auth/auth_controller.dart",
+        "lib/features/auth/auth_repository.dart",
+        "lib/features/auth/auth_state.dart"
+      ],
+      "sharedDependencyFiles": [],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "lib/features/auth/auth_controller.dart",
+          "toPath": "lib/features/auth/auth_repository.dart",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_controller.dart",
+          "toPath": "lib/features/auth/auth_repository.dart",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_controller.dart",
+          "toPath": "lib/features/auth/auth_state.dart",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_controller.dart",
+          "toPath": "lib/features/auth/auth_state.dart",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_repository.dart",
+          "toPath": "lib/features/auth/auth_state.dart",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_repository.dart",
+          "toPath": "lib/features/auth/auth_state.dart",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/auth/auth_repository.dart",
+          "toPath": "lib/features/auth/auth_state.dart",
+          "kind": "inherit",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "hypothesis": {
+        "name": "User profile API client",
+        "rationale": "User profile API client is anchored by the ProfileController/UserApi public APIs and Dio network dependency.",
+        "anchors": [
+          "ProfileController",
+          "UserApi",
+          "dio"
+        ],
+        "seedFiles": [
+          "lib/features/profile/profile_controller.dart",
+          "lib/features/profile/user_api.dart"
+        ],
+        "expectedCollaborators": [
+          "lib/features/profile/profile_model.dart"
+        ],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "lib/features/profile/profile_controller.dart",
+        "lib/features/profile/profile_model.dart",
+        "lib/features/profile/user_api.dart"
+      ],
+      "ownedFiles": [
+        "lib/features/profile/profile_controller.dart",
+        "lib/features/profile/profile_model.dart",
+        "lib/features/profile/user_api.dart"
+      ],
+      "sharedDependencyFiles": [],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "lib/features/profile/profile_controller.dart",
+          "toPath": "lib/features/profile/profile_model.dart",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/profile/profile_controller.dart",
+          "toPath": "lib/features/profile/profile_model.dart",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/profile/profile_controller.dart",
+          "toPath": "lib/features/profile/user_api.dart",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/profile/profile_controller.dart",
+          "toPath": "lib/features/profile/user_api.dart",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/profile/user_api.dart",
+          "toPath": "lib/features/profile/profile_model.dart",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "lib/features/profile/user_api.dart",
+          "toPath": "lib/features/profile/profile_model.dart",
+          "kind": "import",
+          "depth": 1
+        }
+      ]
+    }
+  ],
+  "refinements": [
+    {
+      "capability": "Email password authentication",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Email password authentication",
+        "purpose": "Signs users in with Firebase email credentials and restores persisted auth state.",
+        "tags": [
+          "auth",
+          "mobile"
+        ],
+        "files": [
+          "lib/features/auth/auth_controller.dart",
+          "lib/features/auth/auth_repository.dart",
+          "lib/features/auth/auth_state.dart"
+        ],
+        "language": "Dart",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "lib/features/auth/auth_controller.dart",
+          "lib/features/auth/auth_repository.dart",
+          "lib/features/auth/auth_state.dart"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "lib/features/auth/auth_controller.dart",
+            "symbol": "AuthController"
+          }
+        ],
+        "anchors": [
+          "AuthController",
+          "AuthRepository",
+          "firebase_auth",
+          "flutter_secure_storage"
+        ]
+      }
+    },
+    {
+      "capability": "User profile API client",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "User profile API client",
+        "purpose": "Loads the current user profile through a Dio-backed API client and exposes it to the profile controller.",
+        "tags": [
+          "api",
+          "mobile"
+        ],
+        "files": [
+          "lib/features/profile/profile_controller.dart",
+          "lib/features/profile/user_api.dart",
+          "lib/features/profile/profile_model.dart"
+        ],
+        "language": "Dart",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "lib/features/profile/profile_controller.dart",
+          "lib/features/profile/user_api.dart",
+          "lib/features/profile/profile_model.dart"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "lib/features/profile/profile_controller.dart",
+            "symbol": "ProfileController"
+          }
+        ],
+        "anchors": [
+          "ProfileController",
+          "UserApi",
+          "dio"
+        ]
+      }
+    }
+  ],
+  "gateEvaluations": [
+    {
+      "name": "Email password authentication",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.7777777777777778
+    },
+    {
+      "name": "User profile API client",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.75
+    }
+  ],
   "summary": {
-    "gunkIds": [],
-    "accepted": 0,
+    "gunkIds": [
+      1,
+      2
+    ],
+    "accepted": 2,
     "needsApproval": 0,
     "rejected": 0
   }

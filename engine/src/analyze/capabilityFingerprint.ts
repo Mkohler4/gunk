@@ -149,7 +149,10 @@ export class CapabilityFingerprintBuilder {
       configKeys: dedupeStrings(included.flatMap((fingerprint) => fingerprint.configKeys)),
       namingTokens: dedupeStrings(included.flatMap((fingerprint) => fingerprint.namingTokens)),
       capabilityHints: dedupeHints(included.flatMap((fingerprint) => fingerprint.capabilityHints)),
-      hasPublicSurface: routes.length > 0 || publicExports.length > 0,
+      hasPublicSurface:
+        routes.length > 0 ||
+        publicExports.length > 0 ||
+        included.some((fingerprint) => fingerprint.capabilityHints.length > 0),
     };
   }
 

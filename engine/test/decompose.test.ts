@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 
 import type { CodeGraph, Module } from "../src/models.js";
 import { fileNode } from "../src/models.js";
+import type { CapabilityFingerprint } from "../src/analyze/capabilityFingerprint.js";
 import { ModuleQualityGate } from "../src/decompose/qualityGate.js";
 import { CapabilityExpander } from "../src/decompose/expander.js";
 import { survey } from "../src/decompose/survey.js";
@@ -57,6 +58,83 @@ describe("ModuleQualityGate", () => {
     );
     expect(evaluation.decision).toBe("rejected");
     expect(evaluation.reasons).toContain("typeOnly");
+  });
+
+  it("accepts a Dart capability with a public entrypoint and dep hint", () => {
+    const fingerprints: CapabilityFingerprint[] = [
+      {
+        filePath: "lib/features/auth/auth_repository.dart",
+        importedDependencies: ["firebase_auth"],
+        routes: [],
+        publicExports: [{ name: "AuthRepository", kind: "class", line: 5 }],
+        envVars: [],
+        configKeys: [],
+        namingTokens: ["auth", "repository"],
+        capabilityHints: [{ library: "firebase_auth", labels: ["auth", "firebase"] }],
+      },
+    ];
+    const evaluation = gate.evaluateModule(
+      module({
+        name: "Flutter auth",
+        files: ["lib/features/auth/auth_repository.dart"],
+        language: "Dart",
+        surface: [],
+        anchors: [],
+      }),
+      fingerprints,
+      null,
+      {
+        "lib/features/auth/auth_repository.dart":
+          "class AuthRepository { Future<AuthState> signInWithEmail(String email, String password) async => AuthState('', email); }",
+      },
+    );
+
+    expect(evaluation.decision).toBe("accepted");
+    expect(evaluation.reasons).toEqual([]);
+  });
+
+  it("still rejects lone types and utility traps with public-looking surface", () => {
+    const evaluations = gate.evaluate(
+      [
+        module({
+          name: "types",
+          files: ["src/types.ts"],
+          surface: [],
+          anchors: [],
+        }),
+        module({
+          name: "date util",
+          files: ["src/utils/date.ts"],
+          surface: [{ path: "src/utils/date.ts", symbol: "compactDate" }],
+          anchors: ["public-api:compactDate"],
+        }),
+      ],
+      [
+        {
+          filePath: "src/types.ts",
+          importedDependencies: [],
+          routes: [],
+          publicExports: [{ name: "SharedEnvelope", kind: "interface", line: 1 }],
+          envVars: [],
+          configKeys: [],
+          namingTokens: ["types", "shared", "envelope"],
+          capabilityHints: [],
+        },
+      ],
+      null,
+      {
+        "src/types.ts": "export interface SharedEnvelope { id: string }",
+        "src/utils/date.ts": "export function compactDate(value: Date) { return value.toISOString(); }",
+      },
+    );
+
+    const types = evaluations.find((evaluation) => evaluation.module.name === "types")!;
+    const utility = evaluations.find((evaluation) => evaluation.module.name === "date util")!;
+
+    expect(types.decision).toBe("rejected");
+    expect(types.reasons).toContain("typeOnly");
+    expect(utility.decision).toBe("rejected");
+    expect(utility.reasons).toContain("utilityOnly");
   });
 
   it("flags low confidence as needsApproval", () => {

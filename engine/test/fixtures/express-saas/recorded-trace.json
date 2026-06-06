@@ -146,8 +146,13 @@
           {
             "name": "Google OAuth login",
             "rationale": "Google OAuth login is anchored by route, service, config, and type collaborators.",
-            "anchors": ["google-auth-library", "GOOGLE_CLIENT_ID"],
-            "seedFiles": ["src/routes/auth.ts"],
+            "anchors": [
+              "google-auth-library",
+              "GOOGLE_CLIENT_ID"
+            ],
+            "seedFiles": [
+              "src/routes/auth.ts"
+            ],
             "expectedCollaborators": [
               "src/services/googleOAuth.ts",
               "src/config/auth.ts",
@@ -158,8 +163,13 @@
           {
             "name": "Stripe subscription billing",
             "rationale": "Stripe subscription billing is anchored by route, service, config, and type collaborators.",
-            "anchors": ["stripe", "STRIPE_SECRET_KEY"],
-            "seedFiles": ["src/routes/billing.ts"],
+            "anchors": [
+              "stripe",
+              "STRIPE_SECRET_KEY"
+            ],
+            "seedFiles": [
+              "src/routes/billing.ts"
+            ],
             "expectedCollaborators": [
               "src/services/stripeBilling.ts",
               "src/config/stripe.ts",
@@ -184,24 +194,36 @@
         },
         {
           "role": "user",
-          "content": "Source: express-saas\nAllowed tags: api, auth, cli, dashboard, db-layer, email, payments, scraper, search, ui-kit\n\nCandidate:\nname: Google OAuth login\nrationale: Google OAuth login is anchored by route, service, config, and type collaborators.\nanchors: google-auth-library, GOOGLE_CLIENT_ID\nexpected collaborators: src/services/googleOAuth.ts, src/config/auth.ts, src/types/auth.ts\n\nClosure:\nowned candidates: src/config/auth.ts, src/types/auth.ts\nshared dependency candidates: src/config/stripe.ts, src/routes/auth.ts, src/routes/billing.ts, src/services/googleOAuth.ts, src/services/stripeBilling.ts, src/types/billing.ts\nexcluded files: \n\nEdge evidence:\n- src/routes/auth.ts --call--> src/services/googleOAuth.ts depth=1\n- src/routes/auth.ts --import--> src/services/googleOAuth.ts depth=1\n- src/routes/auth.ts --reference--> src/services/stripeBilling.ts depth=1\n- src/routes/billing.ts --call--> src/services/stripeBilling.ts depth=3\n- src/routes/billing.ts --import--> src/services/stripeBilling.ts depth=3\n- src/services/googleOAuth.ts --import--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --inherit--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --reference--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --import--> src/types/auth.ts depth=2\n- src/services/googleOAuth.ts --reference--> src/types/auth.ts depth=2\n- src/services/stripeBilling.ts --import--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --inherit--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/billing.ts depth=2\n- src/services/stripeBilling.ts --import--> src/types/billing.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/types/billing.ts depth=2\n\nClosure file contents:\n### src/config/auth.ts\nexport const authConfig = {\n  clientId: process.env.GOOGLE_CLIENT_ID,\n  clientSecret: process.env.GOOGLE_CLIENT_SECRET\n};\n\n\n### src/config/stripe.ts\nexport const stripeConfig = {\n  secretKey: process.env.STRIPE_SECRET_KEY\n};\n\n\n### src/routes/auth.ts\nimport { googleOAuthCallback } from \"../services/googleOAuth\";\n\nexport async function authCallback(req, res) {\n  const session = await googleOAuthCallback(req.query.code);\n  res.json(session);\n}\n\n\n### src/routes/billing.ts\nimport { createSubscription } from \"../services/stripeBilling\";\n\nexport async function billingCheckout(req, res) {\n  const checkout = await createSubscription(req.body.customerId, req.body.priceId);\n  res.json(checkout);\n}\n\n\n### src/services/googleOAuth.ts\nimport { OAuth2Client } from \"google-auth-library\";\nimport { authConfig } from \"../config/auth\";\nimport type { AuthSession } from \"../types/auth\";\n\nconst client = new OAuth2Client(authConfig.clientId, authConfig.clientSecret);\n\nexport async function googleOAuthCallback(code: string): Promise<AuthSession> {\n  const ticket = await client.verifyIdToken({ idToken: code, audience: authConfig.clientId });\n  const payload = ticket.getPayload();\n  return { provider: \"google\", email: payload?.email ?? \"\" };\n}\n\n\n### src/services/stripeBilling.ts\nimport Stripe from \"stripe\";\nimport { stripeConfig } from \"../config/stripe\";\nimport type { BillingCheckout } from \"../types/billing\";\n\nconst stripe = new Stripe(stripeConfig.secretKey);\n\nexport async function createSubscription(customerId: string, priceId: string): Promise<BillingCheckout> {\n  const session = await stripe.checkout.sessions.create({\n    customer: customerId,\n    line_items: [{ price: priceId, quantity: 1 }],\n    mode: \"subscription\"\n  });\n  return { id: session.id, url: session.url ?? \"\" };\n}\n\n\n### src/types/auth.ts\nexport interface AuthSession {\n  provider: \"google\";\n  email: string;\n}\n\n\n### src/types/billing.ts\nexport interface BillingCheckout {\n  id: string;\n  url: string;\n}\n"
+          "content": "Source: express-saas\nAllowed tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Google OAuth login\nrationale: Google OAuth login is anchored by route, service, config, and type collaborators.\nanchors: google-auth-library, GOOGLE_CLIENT_ID\nexpected collaborators: src/services/googleOAuth.ts, src/config/auth.ts, src/types/auth.ts\n\nClosure:\nowned candidates: src/config/auth.ts, src/types/auth.ts\nshared dependency candidates: src/config/stripe.ts, src/routes/auth.ts, src/routes/billing.ts, src/services/googleOAuth.ts, src/services/stripeBilling.ts, src/types/billing.ts\nexcluded files: \n\nEdge evidence:\n- src/routes/auth.ts --call--> src/services/googleOAuth.ts depth=1\n- src/routes/auth.ts --import--> src/services/googleOAuth.ts depth=1\n- src/routes/auth.ts --reference--> src/services/stripeBilling.ts depth=1\n- src/routes/billing.ts --call--> src/services/stripeBilling.ts depth=3\n- src/routes/billing.ts --import--> src/services/stripeBilling.ts depth=3\n- src/services/googleOAuth.ts --import--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --inherit--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --reference--> src/config/auth.ts depth=2\n- src/services/googleOAuth.ts --import--> src/types/auth.ts depth=2\n- src/services/googleOAuth.ts --reference--> src/types/auth.ts depth=2\n- src/services/stripeBilling.ts --import--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --inherit--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/billing.ts depth=2\n- src/services/stripeBilling.ts --import--> src/types/billing.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/types/billing.ts depth=2\n\nClosure file contents:\n### src/config/auth.ts\nexport const authConfig = {\n  clientId: process.env.GOOGLE_CLIENT_ID,\n  clientSecret: process.env.GOOGLE_CLIENT_SECRET\n};\n\n\n### src/config/stripe.ts\nexport const stripeConfig = {\n  secretKey: process.env.STRIPE_SECRET_KEY\n};\n\n\n### src/routes/auth.ts\nimport { googleOAuthCallback } from \"../services/googleOAuth\";\n\nexport async function authCallback(req, res) {\n  const session = await googleOAuthCallback(req.query.code);\n  res.json(session);\n}\n\n\n### src/routes/billing.ts\nimport { createSubscription } from \"../services/stripeBilling\";\n\nexport async function billingCheckout(req, res) {\n  const checkout = await createSubscription(req.body.customerId, req.body.priceId);\n  res.json(checkout);\n}\n\n\n### src/services/googleOAuth.ts\nimport { OAuth2Client } from \"google-auth-library\";\nimport { authConfig } from \"../config/auth\";\nimport type { AuthSession } from \"../types/auth\";\n\nconst client = new OAuth2Client(authConfig.clientId, authConfig.clientSecret);\n\nexport async function googleOAuthCallback(code: string): Promise<AuthSession> {\n  const ticket = await client.verifyIdToken({ idToken: code, audience: authConfig.clientId });\n  const payload = ticket.getPayload();\n  return { provider: \"google\", email: payload?.email ?? \"\" };\n}\n\n\n### src/services/stripeBilling.ts\nimport Stripe from \"stripe\";\nimport { stripeConfig } from \"../config/stripe\";\nimport type { BillingCheckout } from \"../types/billing\";\n\nconst stripe = new Stripe(stripeConfig.secretKey);\n\nexport async function createSubscription(customerId: string, priceId: string): Promise<BillingCheckout> {\n  const session = await stripe.checkout.sessions.create({\n    customer: customerId,\n    line_items: [{ price: priceId, quantity: 1 }],\n    mode: \"subscription\"\n  });\n  return { id: session.id, url: session.url ?? \"\" };\n}\n\n\n### src/types/auth.ts\nexport interface AuthSession {\n  provider: \"google\";\n  email: string;\n}\n\n\n### src/types/billing.ts\nexport interface BillingCheckout {\n  id: string;\n  url: string;\n}\n"
         }
       ],
       "responseJson": {
         "module": {
           "name": "Google OAuth login",
           "purpose": "Authenticates users with Google OAuth and creates a session.",
-          "tags": ["auth", "api"],
+          "tags": [
+            "auth",
+            "api"
+          ],
           "language": "TypeScript",
-          "ownedFiles": ["src/routes/auth.ts", "src/services/googleOAuth.ts"],
-          "sharedDependencies": ["src/config/auth.ts", "src/types/auth.ts"],
+          "ownedFiles": [
+            "src/routes/auth.ts",
+            "src/services/googleOAuth.ts"
+          ],
+          "sharedDependencies": [
+            "src/config/auth.ts",
+            "src/types/auth.ts"
+          ],
           "entrypoints": [
             {
               "path": "src/routes/auth.ts",
               "symbol": "authCallback"
             }
           ],
-          "anchors": ["google-auth-library", "GOOGLE_CLIENT_ID"],
+          "anchors": [
+            "google-auth-library",
+            "GOOGLE_CLIENT_ID"
+          ],
           "confidence": 0.92
         },
         "qualityGateHints": {
@@ -227,14 +249,17 @@
         },
         {
           "role": "user",
-          "content": "Source: express-saas\nAllowed tags: api, auth, cli, dashboard, db-layer, email, payments, scraper, search, ui-kit\n\nCandidate:\nname: Stripe subscription billing\nrationale: Stripe subscription billing is anchored by route, service, config, and type collaborators.\nanchors: stripe, STRIPE_SECRET_KEY\nexpected collaborators: src/services/stripeBilling.ts, src/config/stripe.ts, src/types/billing.ts\n\nClosure:\nowned candidates: \nshared dependency candidates: src/config/stripe.ts, src/routes/auth.ts, src/routes/billing.ts, src/services/googleOAuth.ts, src/services/stripeBilling.ts, src/types/billing.ts\nexcluded files: \n\nEdge evidence:\n- src/routes/auth.ts --call--> src/services/googleOAuth.ts depth=3\n- src/routes/auth.ts --import--> src/services/googleOAuth.ts depth=3\n- src/routes/auth.ts --reference--> src/services/stripeBilling.ts depth=3\n- src/routes/billing.ts --call--> src/services/stripeBilling.ts depth=1\n- src/routes/billing.ts --import--> src/services/stripeBilling.ts depth=1\n- src/services/stripeBilling.ts --import--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --inherit--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/billing.ts depth=2\n- src/services/stripeBilling.ts --import--> src/types/billing.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/types/billing.ts depth=2\n\nClosure file contents:\n### src/config/stripe.ts\nexport const stripeConfig = {\n  secretKey: process.env.STRIPE_SECRET_KEY\n};\n\n\n### src/routes/auth.ts\nimport { googleOAuthCallback } from \"../services/googleOAuth\";\n\nexport async function authCallback(req, res) {\n  const session = await googleOAuthCallback(req.query.code);\n  res.json(session);\n}\n\n\n### src/routes/billing.ts\nimport { createSubscription } from \"../services/stripeBilling\";\n\nexport async function billingCheckout(req, res) {\n  const checkout = await createSubscription(req.body.customerId, req.body.priceId);\n  res.json(checkout);\n}\n\n\n### src/services/googleOAuth.ts\nimport { OAuth2Client } from \"google-auth-library\";\nimport { authConfig } from \"../config/auth\";\nimport type { AuthSession } from \"../types/auth\";\n\nconst client = new OAuth2Client(authConfig.clientId, authConfig.clientSecret);\n\nexport async function googleOAuthCallback(code: string): Promise<AuthSession> {\n  const ticket = await client.verifyIdToken({ idToken: code, audience: authConfig.clientId });\n  const payload = ticket.getPayload();\n  return { provider: \"google\", email: payload?.email ?? \"\" };\n}\n\n\n### src/services/stripeBilling.ts\nimport Stripe from \"stripe\";\nimport { stripeConfig } from \"../config/stripe\";\nimport type { BillingCheckout } from \"../types/billing\";\n\nconst stripe = new Stripe(stripeConfig.secretKey);\n\nexport async function createSubscription(customerId: string, priceId: string): Promise<BillingCheckout> {\n  const session = await stripe.checkout.sessions.create({\n    customer: customerId,\n    line_items: [{ price: priceId, quantity: 1 }],\n    mode: \"subscription\"\n  });\n  return { id: session.id, url: session.url ?? \"\" };\n}\n\n\n### src/types/billing.ts\nexport interface BillingCheckout {\n  id: string;\n  url: string;\n}\n"
+          "content": "Source: express-saas\nAllowed tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Stripe subscription billing\nrationale: Stripe subscription billing is anchored by route, service, config, and type collaborators.\nanchors: stripe, STRIPE_SECRET_KEY\nexpected collaborators: src/services/stripeBilling.ts, src/config/stripe.ts, src/types/billing.ts\n\nClosure:\nowned candidates: \nshared dependency candidates: src/config/stripe.ts, src/routes/auth.ts, src/routes/billing.ts, src/services/googleOAuth.ts, src/services/stripeBilling.ts, src/types/billing.ts\nexcluded files: \n\nEdge evidence:\n- src/routes/auth.ts --call--> src/services/googleOAuth.ts depth=3\n- src/routes/auth.ts --import--> src/services/googleOAuth.ts depth=3\n- src/routes/auth.ts --reference--> src/services/stripeBilling.ts depth=3\n- src/routes/billing.ts --call--> src/services/stripeBilling.ts depth=1\n- src/routes/billing.ts --import--> src/services/stripeBilling.ts depth=1\n- src/services/stripeBilling.ts --import--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/config/stripe.ts depth=2\n- src/services/stripeBilling.ts --inherit--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/auth.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/routes/billing.ts depth=2\n- src/services/stripeBilling.ts --import--> src/types/billing.ts depth=2\n- src/services/stripeBilling.ts --reference--> src/types/billing.ts depth=2\n\nClosure file contents:\n### src/config/stripe.ts\nexport const stripeConfig = {\n  secretKey: process.env.STRIPE_SECRET_KEY\n};\n\n\n### src/routes/auth.ts\nimport { googleOAuthCallback } from \"../services/googleOAuth\";\n\nexport async function authCallback(req, res) {\n  const session = await googleOAuthCallback(req.query.code);\n  res.json(session);\n}\n\n\n### src/routes/billing.ts\nimport { createSubscription } from \"../services/stripeBilling\";\n\nexport async function billingCheckout(req, res) {\n  const checkout = await createSubscription(req.body.customerId, req.body.priceId);\n  res.json(checkout);\n}\n\n\n### src/services/googleOAuth.ts\nimport { OAuth2Client } from \"google-auth-library\";\nimport { authConfig } from \"../config/auth\";\nimport type { AuthSession } from \"../types/auth\";\n\nconst client = new OAuth2Client(authConfig.clientId, authConfig.clientSecret);\n\nexport async function googleOAuthCallback(code: string): Promise<AuthSession> {\n  const ticket = await client.verifyIdToken({ idToken: code, audience: authConfig.clientId });\n  const payload = ticket.getPayload();\n  return { provider: \"google\", email: payload?.email ?? \"\" };\n}\n\n\n### src/services/stripeBilling.ts\nimport Stripe from \"stripe\";\nimport { stripeConfig } from \"../config/stripe\";\nimport type { BillingCheckout } from \"../types/billing\";\n\nconst stripe = new Stripe(stripeConfig.secretKey);\n\nexport async function createSubscription(customerId: string, priceId: string): Promise<BillingCheckout> {\n  const session = await stripe.checkout.sessions.create({\n    customer: customerId,\n    line_items: [{ price: priceId, quantity: 1 }],\n    mode: \"subscription\"\n  });\n  return { id: session.id, url: session.url ?? \"\" };\n}\n\n\n### src/types/billing.ts\nexport interface BillingCheckout {\n  id: string;\n  url: string;\n}\n"
         }
       ],
       "responseJson": {
         "module": {
           "name": "Stripe subscription billing",
           "purpose": "Creates Stripe subscription checkout sessions.",
-          "tags": ["payments", "api"],
+          "tags": [
+            "payments",
+            "api"
+          ],
           "language": "TypeScript",
           "ownedFiles": [
             "src/routes/billing.ts",
@@ -250,7 +275,10 @@
               "symbol": "billingCheckout"
             }
           ],
-          "anchors": ["stripe", "STRIPE_SECRET_KEY"],
+          "anchors": [
+            "stripe",
+            "STRIPE_SECRET_KEY"
+          ],
           "confidence": 0.92
         },
         "qualityGateHints": {
@@ -270,8 +298,13 @@
     {
       "name": "Google OAuth login",
       "rationale": "Google OAuth login is anchored by route, service, config, and type collaborators.",
-      "anchors": ["google-auth-library", "GOOGLE_CLIENT_ID"],
-      "seedFiles": ["src/routes/auth.ts"],
+      "anchors": [
+        "google-auth-library",
+        "GOOGLE_CLIENT_ID"
+      ],
+      "seedFiles": [
+        "src/routes/auth.ts"
+      ],
       "expectedCollaborators": [
         "src/services/googleOAuth.ts",
         "src/config/auth.ts",
@@ -283,8 +316,13 @@
     {
       "name": "Stripe subscription billing",
       "rationale": "Stripe subscription billing is anchored by route, service, config, and type collaborators.",
-      "anchors": ["stripe", "STRIPE_SECRET_KEY"],
-      "seedFiles": ["src/routes/billing.ts"],
+      "anchors": [
+        "stripe",
+        "STRIPE_SECRET_KEY"
+      ],
+      "seedFiles": [
+        "src/routes/billing.ts"
+      ],
       "expectedCollaborators": [
         "src/services/stripeBilling.ts",
         "src/config/stripe.ts",
@@ -299,8 +337,13 @@
       "hypothesis": {
         "name": "Google OAuth login",
         "rationale": "Google OAuth login is anchored by route, service, config, and type collaborators.",
-        "anchors": ["google-auth-library", "GOOGLE_CLIENT_ID"],
-        "seedFiles": ["src/routes/auth.ts"],
+        "anchors": [
+          "google-auth-library",
+          "GOOGLE_CLIENT_ID"
+        ],
+        "seedFiles": [
+          "src/routes/auth.ts"
+        ],
         "expectedCollaborators": [
           "src/services/googleOAuth.ts",
           "src/config/auth.ts",
@@ -319,7 +362,10 @@
         "src/types/auth.ts",
         "src/types/billing.ts"
       ],
-      "ownedFiles": ["src/config/auth.ts", "src/types/auth.ts"],
+      "ownedFiles": [
+        "src/config/auth.ts",
+        "src/types/auth.ts"
+      ],
       "sharedDependencyFiles": [
         "src/config/stripe.ts",
         "src/routes/auth.ts",
@@ -438,8 +484,13 @@
       "hypothesis": {
         "name": "Stripe subscription billing",
         "rationale": "Stripe subscription billing is anchored by route, service, config, and type collaborators.",
-        "anchors": ["stripe", "STRIPE_SECRET_KEY"],
-        "seedFiles": ["src/routes/billing.ts"],
+        "anchors": [
+          "stripe",
+          "STRIPE_SECRET_KEY"
+        ],
+        "seedFiles": [
+          "src/routes/billing.ts"
+        ],
         "expectedCollaborators": [
           "src/services/stripeBilling.ts",
           "src/config/stripe.ts",
@@ -550,7 +601,10 @@
       "module": {
         "name": "Google OAuth login",
         "purpose": "Authenticates users with Google OAuth and creates a session.",
-        "tags": ["auth", "api"],
+        "tags": [
+          "auth",
+          "api"
+        ],
         "files": [
           "src/routes/auth.ts",
           "src/services/googleOAuth.ts",
@@ -559,15 +613,24 @@
         ],
         "language": "TypeScript",
         "confidence": 0.92,
-        "ownedFiles": ["src/routes/auth.ts", "src/services/googleOAuth.ts"],
-        "sharedDeps": ["src/config/auth.ts", "src/types/auth.ts"],
+        "ownedFiles": [
+          "src/routes/auth.ts",
+          "src/services/googleOAuth.ts"
+        ],
+        "sharedDeps": [
+          "src/config/auth.ts",
+          "src/types/auth.ts"
+        ],
         "surface": [
           {
             "path": "src/routes/auth.ts",
             "symbol": "authCallback"
           }
         ],
-        "anchors": ["google-auth-library", "GOOGLE_CLIENT_ID"]
+        "anchors": [
+          "google-auth-library",
+          "GOOGLE_CLIENT_ID"
+        ]
       }
     },
     {
@@ -577,7 +640,10 @@
       "module": {
         "name": "Stripe subscription billing",
         "purpose": "Creates Stripe subscription checkout sessions.",
-        "tags": ["payments", "api"],
+        "tags": [
+          "payments",
+          "api"
+        ],
         "files": [
           "src/routes/billing.ts",
           "src/services/stripeBilling.ts",
@@ -590,14 +656,20 @@
           "src/routes/billing.ts",
           "src/services/stripeBilling.ts"
         ],
-        "sharedDeps": ["src/config/stripe.ts", "src/types/billing.ts"],
+        "sharedDeps": [
+          "src/config/stripe.ts",
+          "src/types/billing.ts"
+        ],
         "surface": [
           {
             "path": "src/routes/billing.ts",
             "symbol": "billingCheckout"
           }
         ],
-        "anchors": ["stripe", "STRIPE_SECRET_KEY"]
+        "anchors": [
+          "stripe",
+          "STRIPE_SECRET_KEY"
+        ]
       }
     }
   ],
@@ -616,7 +688,10 @@
     }
   ],
   "summary": {
-    "gunkIds": [1, 2],
+    "gunkIds": [
+      1,
+      2
+    ],
     "accepted": 2,
     "needsApproval": 0,
     "rejected": 0

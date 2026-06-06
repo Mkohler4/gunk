@@ -86,6 +86,7 @@ INSERT INTO tags (name) VALUES
   ('scraper'),
   ('dashboard'),
   ('cli'),
+  ('mobile'),
   ('api'),
   ('db-layer'),
   ('email'),
