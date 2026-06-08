@@ -4,12 +4,14 @@ import v0Sql from "./schema/v0.sql" with { type: "text" };
 import v1Sql from "./schema/v1.sql" with { type: "text" };
 import v2Sql from "./schema/v2.sql" with { type: "text" };
 import v3Sql from "./schema/v3.sql" with { type: "text" };
+import v4Sql from "./schema/v4.sql" with { type: "text" };
 
 const MIGRATIONS = [
   { sql: v0Sql, version: 0 },
   { sql: v1Sql, version: 1 },
   { sql: v2Sql, version: 2 },
   { sql: v3Sql, version: 3 },
+  { sql: v4Sql, version: 4 },
 ] as const;
 
 const LATEST_VERSION = MIGRATIONS.at(-1)?.version ?? -1;

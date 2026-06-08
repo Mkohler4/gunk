@@ -412,4 +412,18 @@ describe("offline replay eval harness", () => {
       ).toBe(0);
     }
   });
+
+  it("flutter-app replay accepts mobile capabilities without trap false positives", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["flutter-app"],
+    });
+    const fixture = report.fixtures[0];
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.scorecard.actualModuleCount).toBeGreaterThanOrEqual(2);
+    expect(fixture?.scorecard.fileRecall).toBeGreaterThanOrEqual(0.8);
+    expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
+    expect(fixture?.signalMetrics.surveyHypothesisCount).toBeGreaterThanOrEqual(2);
+  });
 });

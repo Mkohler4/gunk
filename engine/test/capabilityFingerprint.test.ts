@@ -246,7 +246,12 @@ export function googleOAuthCallback() {}`,
       }),
     ];
 
-    const fingerprints = new CapabilityFingerprintBuilder().fingerprints(files, manifests, {});
+    const builder = new CapabilityFingerprintBuilder();
+    const fingerprints = builder.fingerprints(files, manifests, {});
+    const aggregate = builder.aggregate(
+      fingerprints,
+      new Set(["lib/features/auth/auth_repository.dart"]),
+    );
 
     expect(
       fingerprintFor("lib/features/auth/auth_repository.dart", fingerprints)?.importedDependencies,
@@ -265,5 +270,6 @@ export function googleOAuthCallback() {}`,
     ).toEqual([
       { library: "com.android.billingclient:billing-ktx", labels: ["payments", "billing"] },
     ]);
+    expect(aggregate.hasPublicSurface).toBe(true);
   });
 });

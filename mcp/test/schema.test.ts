@@ -20,7 +20,7 @@ describe("runMigrations", () => {
   test("creates module-level schema tables", () => {
     const db = new Database(":memory:");
 
-    expect(runMigrations(db)).toEqual({ from: -1, to: 3 });
+    expect(runMigrations(db)).toEqual({ from: -1, to: 4 });
 
     const tables = db
       .query<{ name: string }, []>(
@@ -47,8 +47,8 @@ describe("runMigrations", () => {
   test("is idempotent", () => {
     const db = new Database(":memory:");
 
-    expect(runMigrations(db)).toEqual({ from: -1, to: 3 });
-    expect(runMigrations(db)).toEqual({ from: 3, to: 3 });
+    expect(runMigrations(db)).toEqual({ from: -1, to: 4 });
+    expect(runMigrations(db)).toEqual({ from: 4, to: 4 });
 
     const versionRows = db
       .query<
@@ -57,7 +57,7 @@ describe("runMigrations", () => {
       >("SELECT COUNT(*) AS count FROM schema_version")
       .get();
 
-    expect(versionRows?.count).toBe(4);
+    expect(versionRows?.count).toBe(5);
     db.close();
   });
 
@@ -73,9 +73,9 @@ describe("runMigrations", () => {
         { appliedAt: number; version: number },
         [number]
       >("SELECT version, applied_at AS appliedAt FROM schema_version WHERE version = ?")
-      .get(3);
+      .get(4);
 
-    expect(version?.version).toBe(3);
+    expect(version?.version).toBe(4);
     expect(version?.appliedAt).toBeGreaterThan(0);
     expect(version?.appliedAt).toBeGreaterThanOrEqual(before);
     expect(version?.appliedAt).toBeLessThanOrEqual(after);
@@ -114,7 +114,7 @@ describe("runMigrations", () => {
       VALUES (1, 1, 'README.md', 128);
     `);
 
-    expect(runMigrations(db)).toEqual({ from: 0, to: 3 });
+    expect(runMigrations(db)).toEqual({ from: 0, to: 4 });
 
     const version = db
       .query<
@@ -137,7 +137,7 @@ describe("runMigrations", () => {
       >("SELECT source_id AS sourceId, relpath, size FROM files")
       .get();
 
-    expect(version?.version).toBe(3);
+    expect(version?.version).toBe(4);
     expect(source).toEqual({
       id: 1,
       name: "older-source",
@@ -205,7 +205,7 @@ describe("runMigrations", () => {
       "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
     ).run(1, 150);
 
-    expect(runMigrations(db)).toEqual({ from: 1, to: 3 });
+    expect(runMigrations(db)).toEqual({ from: 1, to: 4 });
 
     const source = db
       .query<
@@ -242,6 +242,7 @@ describe("runMigrations", () => {
       "dashboard",
       "db-layer",
       "email",
+      "mobile",
       "payments",
       "scraper",
       "search",
