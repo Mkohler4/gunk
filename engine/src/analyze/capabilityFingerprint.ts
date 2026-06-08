@@ -149,7 +149,10 @@ export class CapabilityFingerprintBuilder {
       configKeys: dedupeStrings(included.flatMap((fingerprint) => fingerprint.configKeys)),
       namingTokens: dedupeStrings(included.flatMap((fingerprint) => fingerprint.namingTokens)),
       capabilityHints: dedupeHints(included.flatMap((fingerprint) => fingerprint.capabilityHints)),
-      hasPublicSurface: routes.length > 0 || publicExports.length > 0,
+      hasPublicSurface:
+        routes.length > 0 ||
+        publicExports.length > 0 ||
+        included.some((fingerprint) => fingerprint.capabilityHints.length > 0),
     };
   }
 
@@ -172,15 +175,25 @@ export class CapabilityFingerprintBuilder {
   private importMatchesDependency(specifier: string, dependency: string): boolean {
     const normalizedSpecifier = this.normalizePackageName(this.packageRoot(specifier));
     const normalizedDependency = this.normalizePackageName(dependency);
+    const normalizedGroup = this.normalizePackageName(dependency.split(":")[0] ?? "");
 
     return (
       normalizedSpecifier === normalizedDependency ||
       normalizedSpecifier.startsWith(`${normalizedDependency}/`) ||
-      normalizedDependency.startsWith(`${normalizedSpecifier}/`)
+      normalizedDependency.startsWith(`${normalizedSpecifier}/`) ||
+      (normalizedGroup.length > 0 &&
+        (normalizedSpecifier === normalizedGroup ||
+          normalizedSpecifier.startsWith(`${normalizedGroup}.`)))
     );
   }
 
   private packageRoot(specifier: string): string {
+    if (specifier.startsWith("package:")) {
+      const body = specifier.slice("package:".length);
+      const first = body.split("/")[0];
+      return first.length > 0 ? first : specifier;
+    }
+
     if (!specifier.startsWith("@")) {
       const first = specifier.split("/")[0];
       return first.length > 0 ? first : specifier;

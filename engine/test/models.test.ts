@@ -10,6 +10,8 @@ describe("models", () => {
     expect(languageKindForPath("a/b.dart")).toBe("dart");
     expect(languageKindForPath("a/b.py")).toBe("python");
     expect(languageKindForPath("a/b.go")).toBe("go");
+    expect(languageKindForPath("a/b.java")).toBe("java");
+    expect(languageKindForPath("a/b.kt")).toBe("kotlin");
     expect(languageKindForPath("a/b.swift")).toBe("swift");
     expect(languageKindForPath("a/b.md")).toBe("unknown");
   });

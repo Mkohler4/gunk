@@ -14,6 +14,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Offline replay eval harness and CLI report for deterministic, key-free engine evals in CI.
 - Dart tree-sitter symbol extraction in `gunk-engine`, covering classes, methods, functions, top-level declarations, imports, and public exports for Flutter fixtures.
 - Dart import resolution in `gunk-engine`, linking relative, lib-relative, and package-self imports to in-repo files while keeping SDK and third-party `package:` imports external.
+- Pubspec and Gradle manifest parsing plus mobile dependency lexicon hints for Flutter/Android capability fingerprints.
+- Kotlin and Java tree-sitter symbol extraction plus package-path import resolution for Android/JVM fixtures.
+- Generalized non-web module surface detection so public APIs and capability-hint anchors can pass quality gates without HTTP routes.
+- Flutter replay eval coverage now requires accepted mobile modules, with `mobile` seeded as an allowed module tag.
 - `engine/docs/ARCHITECTURE.md`: stage-by-stage walkthrough of the engine with the verbatim LLM prompts/schemas, survey/refine post-processing filters, quality-gate rules, the `trace.json` schema, and a symptom→fix debugging playbook for analyzing AI output.
 - `gunk.app` Runs debug panel that reads `~/.gunk/runs`, surfacing per-run stages, timings, counts, and accept/approve/reject summaries.
 - ADR-0013 (the AI pipeline moves to a TS/Bun engine; the SwiftUI app becomes a thin macOS shell).

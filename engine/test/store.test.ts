@@ -32,8 +32,9 @@ describe("engine store", () => {
     db.close();
   });
 
-  it("migrates to v3 and seeds tags", () => {
+  it("migrates to v4 and seeds tags", () => {
     expect(listTags(db).map((t) => t.name)).toContain("auth");
+    expect(listTags(db).map((t) => t.name)).toContain("mobile");
   });
 
   it("inserts sources, files, gunks, tags and reads them back", () => {

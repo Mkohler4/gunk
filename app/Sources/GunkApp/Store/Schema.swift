@@ -1,11 +1,12 @@
 enum Schema {
-  static let version = 3
+  static let version = 4
 
   static let migrations = [
     (version: 0, sql: v0),
     (version: 1, sql: v1),
     (version: 2, sql: v2),
-    (version: 3, sql: v3)
+    (version: 3, sql: v3),
+    (version: 4, sql: v4)
   ]
 
   // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
@@ -55,6 +56,7 @@ INSERT INTO tags (name, description) VALUES
   ('scraper', 'Crawlers, scrapers, and data collection jobs'),
   ('dashboard', 'Admin, analytics, and reporting dashboards'),
   ('cli', 'Command-line tools and developer utilities'),
+  ('mobile', 'Mobile app features, screens, and native integrations'),
   ('api', 'HTTP APIs, RPC services, and backend routes'),
   ('db-layer', 'Database models, migrations, and persistence code'),
   ('email', 'Email templates, delivery, and notification flows'),
@@ -152,6 +154,7 @@ INSERT INTO tags (name) VALUES
   ('scraper'),
   ('dashboard'),
   ('cli'),
+  ('mobile'),
   ('api'),
   ('db-layer'),
   ('email'),
@@ -179,4 +182,12 @@ CREATE INDEX gunk_clusters_canonical_idx
 ON gunk_clusters(canonical_gunk_id);
 """ + "\n"
   // schema:v3:end
+
+  // Keep byte-for-byte identical to mcp/src/schema/v4.sql.
+  // schema:v4:begin
+  static let v4 = """
+INSERT INTO tags (name) VALUES ('mobile')
+ON CONFLICT(name) DO NOTHING;
+""" + "\n"
+  // schema:v4:end
 }

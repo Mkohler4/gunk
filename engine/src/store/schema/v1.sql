@@ -19,6 +19,7 @@ INSERT INTO tags (name, description) VALUES
   ('scraper', 'Crawlers, scrapers, and data collection jobs'),
   ('dashboard', 'Admin, analytics, and reporting dashboards'),
   ('cli', 'Command-line tools and developer utilities'),
+  ('mobile', 'Mobile app features, screens, and native integrations'),
   ('api', 'HTTP APIs, RPC services, and backend routes'),
   ('db-layer', 'Database models, migrations, and persistence code'),
   ('email', 'Email templates, delivery, and notification flows'),

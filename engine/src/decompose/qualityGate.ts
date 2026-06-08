@@ -81,9 +81,6 @@ export class ModuleQualityGate {
       (fp) =>
         fp.routes.length > 0 ||
         fp.publicExports.length > 0 ||
-        fp.importedDependencies.length > 0 ||
-        fp.envVars.length > 0 ||
-        fp.configKeys.length > 0 ||
         fp.capabilityHints.length > 0,
     );
   }
@@ -91,10 +88,16 @@ export class ModuleQualityGate {
   private singleFileOwnsSurface(module: Module, fingerprints: CapabilityFingerprint[]): boolean {
     const file = module.files[0];
     if (file === undefined) return false;
+    if (module.anchors.length > 0) return true;
     if (module.surface.some((s) => s.path === file)) return true;
     return fingerprints
       .filter((fp) => fp.filePath === file)
-      .some((fp) => fp.routes.length > 0 || fp.publicExports.length > 0);
+      .some(
+        (fp) =>
+          fp.routes.length > 0 ||
+          fp.publicExports.length > 0 ||
+          fp.capabilityHints.length > 0,
+      );
   }
 
   private fingerprintsForModule(module: Module, fingerprints: CapabilityFingerprint[]): CapabilityFingerprint[] {

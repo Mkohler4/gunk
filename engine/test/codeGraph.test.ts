@@ -111,6 +111,33 @@ describe("ImportResolver", () => {
     ).toBeNull();
     expect(resolver.resolve("dart:async", "lib/features/auth/auth_repository.dart")).toBeNull();
   });
+
+  it("resolves Kotlin/Java package imports", () => {
+    const resolver = new ImportResolver({
+      sourceFiles: new Set([
+        "app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt",
+        "app/src/main/java/com/gunk/fixture/features/payments/CheckoutSession.kt",
+        "src/main/java/com/gunk/orders/OrderService.java",
+        "src/main/java/com/gunk/orders/OrderRepository.java",
+      ]),
+    });
+
+    expect(
+      resolver.resolve(
+        "com.gunk.fixture.features.payments.PaymentsRepository",
+        "app/src/main/java/com/gunk/fixture/features/payments/CheckoutViewModel.kt",
+      ),
+    ).toBe("app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt");
+    expect(
+      resolver.resolve("com.gunk.orders.OrderRepository", "src/main/java/com/gunk/orders/OrderService.java"),
+    ).toBe("src/main/java/com/gunk/orders/OrderRepository.java");
+    expect(
+      resolver.resolve(
+        "org.springframework.web.bind.annotation.RestController",
+        "src/main/java/com/gunk/orders/OrderController.java",
+      ),
+    ).toBeNull();
+  });
 });
 
 describe("GraphClustering", () => {

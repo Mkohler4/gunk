@@ -65,7 +65,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(try store.listSources().map(\.name), ["active"])
   }
 
-  func testMigrationsAreIdempotentThroughV3() throws {
+  func testMigrationsAreIdempotentThroughV4() throws {
     let queue = try DatabaseQueue()
 
     _ = try Store(databaseQueue: queue, now: { 100 })
@@ -75,10 +75,10 @@ final class StoreTests: XCTestCase {
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4])
   }
 
-  func testV0ToV3UpgradePreservesSources() throws {
+  func testV0ToV4UpgradePreservesSources() throws {
     let queue = try DatabaseQueue()
 
     try queue.write { db in
@@ -116,7 +116,7 @@ final class StoreTests: XCTestCase {
       try Row.fetchOne(db, sql: "SELECT source_id, relpath, size FROM files")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4])
     XCTAssertEqual(
       source,
       Source(
@@ -132,7 +132,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(file?["size"] as Int64?, 42)
   }
 
-  func testExistingV1StoreUpgradesToV3PreservingSources() throws {
+  func testExistingV1StoreUpgradesToV4PreservingSources() throws {
     let queue = try DatabaseQueue()
 
     try queue.write { db in
@@ -369,6 +369,7 @@ final class StoreTests: XCTestCase {
         "dashboard",
         "db-layer",
         "email",
+        "mobile",
         "payments",
         "scraper",
         "search",
@@ -400,6 +401,10 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(
       Data(Schema.v3.utf8),
       try Data(contentsOf: schemaDirectory.appendingPathComponent("v3.sql"))
+    )
+    XCTAssertEqual(
+      Data(Schema.v4.utf8),
+      try Data(contentsOf: schemaDirectory.appendingPathComponent("v4.sql"))
     )
   }
 

@@ -184,6 +184,80 @@ String compactDate(DateTime value) {
     expect(symbols.symbols).toContainEqual({ name: "compactDate", kind: "function", line: 10 });
   });
 
+  it("extracts Kotlin classes/functions", () => {
+    const symbols = extractor.extract({
+      path: "app/src/main/java/com/gunk/fixture/features/payments/PaymentsRepository.kt",
+      contents: `package com.gunk.fixture.features.payments
+
+import com.android.billingclient.api.BillingClient
+
+class PaymentsRepository {
+  fun createCheckout(planId: String): CheckoutSession {
+    return CheckoutSession(planId, "billing-client-token")
+  }
+}
+
+object PaymentsModule {
+  fun provide() = PaymentsRepository()
+}
+
+private class InternalOnly
+fun topLevelFactory() = PaymentsRepository()`,
+    });
+
+    expect(symbols.language).toBe("kotlin");
+    expect(symbols.viaFallback).toBe(false);
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "com.android.billingclient.api.BillingClient",
+      resolvedTarget: null,
+      line: 3,
+    });
+    expect(symbols.symbols).toContainEqual({ name: "PaymentsRepository", kind: "class", line: 5 });
+    expect(symbols.symbols).toContainEqual({ name: "createCheckout", kind: "function", line: 6 });
+    expect(symbols.symbols).toContainEqual({ name: "PaymentsModule", kind: "class", line: 11 });
+    expect(symbols.symbols).toContainEqual({ name: "provide", kind: "function", line: 12 });
+    expect(symbols.symbols).toContainEqual({ name: "InternalOnly", kind: "class", line: 15 });
+    expect(symbols.symbols).toContainEqual({ name: "topLevelFactory", kind: "function", line: 16 });
+    expect(symbols.exports).toContainEqual({ name: "PaymentsRepository", kind: "class", line: 5 });
+    expect(symbols.exports).toContainEqual({ name: "createCheckout", kind: "function", line: 6 });
+    expect(symbols.exports).toContainEqual({ name: "topLevelFactory", kind: "function", line: 16 });
+    expect(symbols.exports).not.toContainEqual({ name: "InternalOnly", kind: "class", line: 15 });
+  });
+
+  it("extracts Java classes/methods", () => {
+    const symbols = extractor.extract({
+      path: "src/main/java/com/gunk/orders/OrderService.java",
+      contents: `package com.gunk.orders;
+import com.gunk.shared.Page;
+
+class OrderService {
+  private final OrderRepository repository;
+  OrderService(OrderRepository repository) { this.repository = repository; }
+  OrderReceipt createOrder(OrderRequest request) { return repository.save(request); }
+  private void audit() {}
+}
+
+public record OrderRequest(String sku, int quantity) {}`,
+    });
+
+    expect(symbols.language).toBe("java");
+    expect(symbols.viaFallback).toBe(false);
+    expect(symbols.imports).toContainEqual({
+      moduleSpecifier: "com.gunk.shared.Page",
+      resolvedTarget: null,
+      line: 2,
+    });
+    expect(symbols.symbols).toContainEqual({ name: "OrderService", kind: "class", line: 4 });
+    expect(symbols.symbols).toContainEqual({ name: "OrderService", kind: "method", line: 6 });
+    expect(symbols.symbols).toContainEqual({ name: "createOrder", kind: "method", line: 7 });
+    expect(symbols.symbols).toContainEqual({ name: "audit", kind: "method", line: 8 });
+    expect(symbols.symbols).toContainEqual({ name: "OrderRequest", kind: "type", line: 11 });
+    expect(symbols.exports).toContainEqual({ name: "OrderService", kind: "class", line: 4 });
+    expect(symbols.exports).toContainEqual({ name: "createOrder", kind: "method", line: 7 });
+    expect(symbols.exports).toContainEqual({ name: "OrderRequest", kind: "type", line: 11 });
+    expect(symbols.exports).not.toContainEqual({ name: "audit", kind: "method", line: 8 });
+  });
+
   it("captures Dart import specifiers", () => {
     const symbols = extractor.extract({
       path: "lib/main.dart",

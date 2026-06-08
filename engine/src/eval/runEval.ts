@@ -34,6 +34,11 @@ import {
 export interface EvalFixtureConfig {
   name: string;
   enforcePhase4Baseline?: boolean;
+  scoreFloor?: {
+    minActualModules?: number;
+    minFileRecall?: number;
+    maxTrivialModuleFalsePositives?: number;
+  };
   signalFloor: SignalFloor;
 }
 
@@ -63,7 +68,12 @@ export const DEFAULT_EVAL_FIXTURES: EvalFixtureConfig[] = [
   },
   {
     name: "flutter-app",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 2,
+      minFileRecall: 0.8,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0.6, minSurveyHypotheses: 2 },
   },
   {
     name: "kotlin-android",
@@ -113,6 +123,35 @@ function phase4BaselineErrors(card: Scorecard): string[] {
   if (card.trivialModuleFalsePositiveCount !== 0) {
     errors.push(
       `trivial_module_false_positives ${card.trivialModuleFalsePositiveCount} != 0`,
+    );
+  }
+  return errors;
+}
+
+function scoreFloorErrors(card: Scorecard, floor: NonNullable<EvalFixtureConfig["scoreFloor"]>): string[] {
+  const errors: string[] = [];
+  if (
+    floor.minActualModules !== undefined &&
+    card.actualModuleCount < floor.minActualModules
+  ) {
+    errors.push(
+      `actual_modules ${card.actualModuleCount} < ${floor.minActualModules}`,
+    );
+  }
+  if (
+    floor.minFileRecall !== undefined &&
+    card.fileRecall < floor.minFileRecall
+  ) {
+    errors.push(
+      `file_recall ${card.fileRecall.toFixed(2)} < ${floor.minFileRecall.toFixed(2)}`,
+    );
+  }
+  if (
+    floor.maxTrivialModuleFalsePositives !== undefined &&
+    card.trivialModuleFalsePositiveCount > floor.maxTrivialModuleFalsePositives
+  ) {
+    errors.push(
+      `trivial_module_false_positives ${card.trivialModuleFalsePositiveCount} > ${floor.maxTrivialModuleFalsePositives}`,
     );
   }
   return errors;
@@ -201,6 +240,9 @@ async function runFixture(
 
     if (config.enforcePhase4Baseline) {
       errors.push(...phase4BaselineErrors(scorecard));
+    }
+    if (config.scoreFloor) {
+      errors.push(...scoreFloorErrors(scorecard, config.scoreFloor));
     }
 
     return {
