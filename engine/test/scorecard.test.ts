@@ -81,7 +81,7 @@ function trace(partial: Partial<RunTrace>): RunTrace {
     expansions: [],
     refinements: [],
     gateEvaluations: [],
-    verification: { selfContainment: [] },
+    verification: { build: [], selfContainment: [] },
     summary: { accepted: 0, needsApproval: 0, rejected: 0, gunkIds: [] },
     ...partial,
   };
@@ -169,6 +169,7 @@ describe("SignalMetrics", () => {
     const metrics = signalMetrics(
       trace({
         verification: {
+          build: [],
           selfContainment: [
             {
               moduleName: "auth",
@@ -198,6 +199,46 @@ describe("SignalMetrics", () => {
 
     expect(metrics.selfContainmentVerifiedCount).toBe(2);
     expect(metrics.selfContainmentPassRate).toBeCloseTo(0.5, 5);
+  });
+
+  it("computes build verification metrics", () => {
+    const metrics = signalMetrics(
+      trace({
+        verification: {
+          selfContainment: [],
+          build: [
+            {
+              bundlePath: "/tmp/a",
+              language: "typeScript",
+              built: true,
+              skipped: false,
+              command: "tsc --noEmit a.ts",
+              log: "ok",
+            },
+            {
+              bundlePath: "/tmp/b",
+              language: "typeScript",
+              built: false,
+              skipped: false,
+              command: "tsc --noEmit b.ts",
+              log: "missing import",
+            },
+            {
+              bundlePath: "/tmp/c",
+              language: "dart",
+              built: false,
+              skipped: true,
+              command: null,
+              log: "Build tool not available.",
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(metrics.buildVerifiedCount).toBe(3);
+    expect(metrics.buildPassRate).toBeCloseTo(0.5, 5);
+    expect(metrics.buildSkippedCount).toBe(1);
   });
 
   it("builds a gate-rejection histogram", () => {

@@ -178,7 +178,7 @@ function emptyTrace(
     expansions: [],
     refinements: [],
     gateEvaluations: [],
-    verification: { selfContainment: [] },
+    verification: { build: [], selfContainment: [] },
     summary: { accepted: 0, needsApproval: 0, rejected: 0, gunkIds: [] },
   };
 }
@@ -223,6 +223,7 @@ async function runFixture(
         gunkHome,
         symbolExtractor: extractor,
         embeddingProvider: null,
+        verifyBuild: true,
         observer,
         now: () => 100,
       },
@@ -322,6 +323,15 @@ export function formatEvalReport(report: EvalReport): string {
     );
     lines.push(
       `self_containment_pass_rate: ${fixture.signalMetrics.selfContainmentPassRate.toFixed(2)}`,
+    );
+    lines.push(
+      `build_verified: ${fixture.signalMetrics.buildVerifiedCount}`,
+    );
+    lines.push(
+      `build_pass_rate: ${fixture.signalMetrics.buildPassRate.toFixed(2)}`,
+    );
+    lines.push(
+      `build_skipped: ${fixture.signalMetrics.buildSkippedCount}`,
     );
     if (fixture.errors.length > 0) {
       lines.push("errors:");

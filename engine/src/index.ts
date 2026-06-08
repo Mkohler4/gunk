@@ -3,6 +3,7 @@
 //
 //   gunk-engine <folder> --provider <openai|anthropic|ollama> --model <m>
 //     [--source-id N] [--db <path>] [--gunk-home <path>] [--trace] [--json]
+//     [--verify-build]
 //
 // Durable state -> SQLite at ~/.gunk/store.db. Telemetry -> NDJSON on stdout
 // (with --json). Full trace -> ~/.gunk/runs/<runId>/trace.json (with --trace).
@@ -44,6 +45,7 @@ interface CliArgs {
   contextBudgetTokens: number | null;
   trace: boolean;
   json: boolean;
+  verifyBuild: boolean;
 }
 
 interface EvalCliArgs {
@@ -76,7 +78,7 @@ function parseArgs(argv: string[]): CliArgs {
     const arg = argv[i];
     if (arg.startsWith("--")) {
       const key = arg.slice(2);
-      if (key === "trace" || key === "json") {
+      if (key === "trace" || key === "json" || key === "verify-build") {
         booleans.add(key);
       } else {
         flags.set(key, argv[++i] ?? "");
@@ -110,6 +112,7 @@ function parseArgs(argv: string[]): CliArgs {
       : null,
     trace: booleans.has("trace"),
     json: booleans.has("json"),
+    verifyBuild: booleans.has("verify-build"),
   };
 }
 
@@ -219,6 +222,7 @@ async function main(): Promise<void> {
         embeddingProvider,
         observer,
         eventSink: events,
+        verifyBuild: args.verifyBuild,
         ...(args.confidenceThreshold !== null
           ? { confidenceThreshold: args.confidenceThreshold }
           : {}),
