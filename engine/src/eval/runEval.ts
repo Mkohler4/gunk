@@ -178,6 +178,7 @@ function emptyTrace(
     expansions: [],
     refinements: [],
     gateEvaluations: [],
+    verification: { selfContainment: [] },
     summary: { accepted: 0, needsApproval: 0, rejected: 0, gunkIds: [] },
   };
 }
@@ -315,6 +316,12 @@ export function formatEvalReport(report: EvalReport): string {
     );
     lines.push(
       `median_expansion_closure_size: ${fixture.signalMetrics.medianExpansionClosureSize.toFixed(2)}`,
+    );
+    lines.push(
+      `self_containment_verified: ${fixture.signalMetrics.selfContainmentVerifiedCount}`,
+    );
+    lines.push(
+      `self_containment_pass_rate: ${fixture.signalMetrics.selfContainmentPassRate.toFixed(2)}`,
     );
     if (fixture.errors.length > 0) {
       lines.push("errors:");

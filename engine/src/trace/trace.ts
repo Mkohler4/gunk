@@ -13,6 +13,7 @@ import type {
   Module,
   QualityGateEvaluation,
 } from "../models.js";
+import type { SelfContainmentResult } from "../decompose/selfContainment.js";
 
 export interface LlmCallRecord {
   stage: PipelineStage;
@@ -49,6 +50,10 @@ export interface GateRecord {
   cohesionScore: number | null;
 }
 
+export interface VerificationRecord {
+  selfContainment: SelfContainmentResult[];
+}
+
 export interface RunTrace {
   runId: string;
   sourceId: number | null;
@@ -65,6 +70,7 @@ export interface RunTrace {
   expansions: CapabilityExpansion[];
   refinements: RefinementRecord[];
   gateEvaluations: GateRecord[];
+  verification: VerificationRecord;
   summary: {
     accepted: number;
     needsApproval: number;
@@ -85,6 +91,7 @@ export interface DecompositionObserver {
   recordedExpansions(expansions: CapabilityExpansion[]): void;
   recordedRefinement(record: RefinementRecord): void;
   recordedGateEvaluations(evaluations: QualityGateEvaluation[]): void;
+  recordedSelfContainment(results: SelfContainmentResult[]): void;
   llmCall(record: LlmCallRecord): void;
   runFinished(summary: RunTrace["summary"]): void;
   runFailed(error: string): void;
@@ -99,6 +106,7 @@ export class NoopObserver implements DecompositionObserver {
   recordedExpansions(): void {}
   recordedRefinement(): void {}
   recordedGateEvaluations(): void {}
+  recordedSelfContainment(): void {}
   llmCall(): void {}
   runFinished(): void {}
   runFailed(): void {}
@@ -127,6 +135,7 @@ export class RunTraceRecorder implements DecompositionObserver {
       expansions: [],
       refinements: [],
       gateEvaluations: [],
+      verification: { selfContainment: [] },
       summary: { accepted: 0, needsApproval: 0, rejected: 0, gunkIds: [] },
     };
   }
@@ -164,6 +173,10 @@ export class RunTraceRecorder implements DecompositionObserver {
       reasons: evaluation.reasons,
       cohesionScore: evaluation.cohesionScore,
     }));
+  }
+
+  recordedSelfContainment(results: SelfContainmentResult[]): void {
+    this.trace.verification.selfContainment = results;
   }
 
   llmCall(record: LlmCallRecord): void {
@@ -234,6 +247,16 @@ export class LoggingObserver implements DecompositionObserver {
     });
   }
 
+  recordedSelfContainment(results: SelfContainmentResult[]): void {
+    this.line("verification.selfContainment", {
+      results: results.map((result) => ({
+        name: result.moduleName,
+        imports: result.imports,
+        entrypoint: result.entrypoint,
+      })),
+    });
+  }
+
   llmCall(record: LlmCallRecord): void {
     this.line("llm.call", { stage: record.stage, model: record.model, inputTokens: record.inputTokens, outputTokens: record.outputTokens, durationMs: record.durationMs });
   }
@@ -271,6 +294,9 @@ export class CompositeObserver implements DecompositionObserver {
   }
   recordedGateEvaluations(evaluations: QualityGateEvaluation[]): void {
     for (const o of this.observers) o.recordedGateEvaluations(evaluations);
+  }
+  recordedSelfContainment(results: SelfContainmentResult[]): void {
+    for (const o of this.observers) o.recordedSelfContainment(results);
   }
   llmCall(record: LlmCallRecord): void {
     for (const o of this.observers) o.llmCall(record);

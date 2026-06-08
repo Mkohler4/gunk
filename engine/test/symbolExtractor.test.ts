@@ -56,6 +56,26 @@ export function googleOAuthCallback(user: User): AuthSession {
     });
   });
 
+  it("does not treat exported function string literals as imports", () => {
+    const symbols = extractor.extract({
+      path: "src/auth.ts",
+      contents: `import { User } from "./types";
+
+export async function authCallback(user: User) {
+  return { provider: "google", email: user.email };
+}`,
+    });
+
+    expect(symbols.imports).toEqual([
+      { moduleSpecifier: "./types", resolvedTarget: "./types", line: 1 },
+    ]);
+    expect(symbols.exports).toContainEqual({
+      name: "authCallback",
+      kind: "function",
+      line: 3,
+    });
+  });
+
   it("extracts Python imports and declarations", () => {
     const symbols = extractor.extract({
       path: "worker/task.py",

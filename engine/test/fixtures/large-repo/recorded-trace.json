@@ -153,6 +153,9 @@
   "expansions": [],
   "refinements": [],
   "gateEvaluations": [],
+  "verification": {
+    "selfContainment": []
+  },
   "summary": {
     "gunkIds": [],
     "accepted": 0,

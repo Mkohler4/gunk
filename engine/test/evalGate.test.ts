@@ -410,6 +410,10 @@ describe("offline replay eval harness", () => {
         fixture.scorecard.trivialModuleFalsePositiveCount,
         fixture.name,
       ).toBe(0);
+      expect(fixture.signalMetrics.selfContainmentVerifiedCount, fixture.name).toBe(
+        fixture.scorecard.actualModuleCount,
+      );
+      expect(fixture.signalMetrics.selfContainmentPassRate, fixture.name).toBeCloseTo(1, 5);
     }
   });
 
@@ -425,5 +429,9 @@ describe("offline replay eval harness", () => {
     expect(fixture?.scorecard.fileRecall).toBeGreaterThanOrEqual(0.8);
     expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
     expect(fixture?.signalMetrics.surveyHypothesisCount).toBeGreaterThanOrEqual(2);
+    expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(
+      fixture?.scorecard.actualModuleCount,
+    );
+    expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
   });
 });

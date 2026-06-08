@@ -151,7 +151,7 @@ function javaScriptExports(text: string, line: number): ExportRef[] {
   const exports: ExportRef[] = [];
 
   const patterns: [string, SymbolKind][] = [
-    [String.raw`export\s+(?:default\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)`, "function"],
+    [String.raw`export\s+(?:default\s+)?(?:async\s+)?function\s+([A-Za-z_$][A-Za-z0-9_$]*)`, "function"],
     [String.raw`export\s+(?:default\s+)?class\s+([A-Za-z_$][A-Za-z0-9_$]*)`, "class"],
     [String.raw`export\s+interface\s+([A-Za-z_$][A-Za-z0-9_$]*)`, "interface"],
     [String.raw`export\s+type\s+([A-Za-z_$][A-Za-z0-9_$]*)`, "type"],
@@ -179,6 +179,12 @@ function javaScriptExports(text: string, line: number): ExportRef[] {
   }
 
   return exports;
+}
+
+function javaScriptReExportSpecifiers(text: string): string[] {
+  return analysisMatches(text, String.raw`\bfrom\s+["']([^"']+)["']`)
+    .map((groups) => groups[0])
+    .filter((value): value is string => value !== undefined);
 }
 
 function swiftPrimaryDeclaration(text: string, line: number): Symbol | null {
@@ -495,7 +501,7 @@ function collectJavaScriptLike(
       break;
     case "export_statement":
       exports.push(...javaScriptExports(text, line));
-      for (const specifier of moduleSpecifiers(text)) {
+      for (const specifier of javaScriptReExportSpecifiers(text)) {
         imports.push({
           moduleSpecifier: specifier,
           resolvedTarget: relativeTarget(specifier),
