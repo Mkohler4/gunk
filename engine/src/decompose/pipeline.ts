@@ -33,6 +33,7 @@ import { TracingLLMClient, type LLMClient } from "../llm/client.js";
 import type { EmbeddingProvider } from "../llm/embeddings.js";
 import { EmbeddingIndex } from "../search/embeddingIndex.js";
 import { Extractor } from "../extract/extractor.js";
+import { BuildVerifier } from "../extract/buildVerify.js";
 
 import { scanFolder } from "../ingest/scanner.js";
 import { ContextBuilder } from "../ingest/contextBuilder.js";
@@ -59,6 +60,7 @@ export interface PipelineOptions {
   embeddingProvider?: EmbeddingProvider | null;
   observer?: DecompositionObserver;
   eventSink?: EventSink;
+  verifyBuild?: boolean;
   now?: () => number;
 }
 
@@ -87,6 +89,7 @@ export class DecompositionPipeline {
   private readonly gunkHome: string;
   private readonly observer: DecompositionObserver;
   private readonly events: EventSink;
+  private readonly verifyBuild: boolean;
   private readonly now: () => number;
   private readonly embeddingProvider: EmbeddingProvider | null;
   private readonly symbolExtractorOverride: SymbolExtractor | null;
@@ -102,6 +105,7 @@ export class DecompositionPipeline {
     this.gunkHome = options.gunkHome ?? join(homedir(), ".gunk");
     this.observer = options.observer ?? new NoopObserver();
     this.events = options.eventSink ?? new NullEventSink();
+    this.verifyBuild = options.verifyBuild ?? false;
     this.now = options.now ?? Date.now;
     this.embeddingProvider = options.embeddingProvider ?? null;
     this.symbolExtractorOverride = options.symbolExtractor ?? null;
@@ -252,6 +256,11 @@ export class DecompositionPipeline {
       const result = await this.extractAccepted(persisted);
       return { value: result, counts: { extracted: result.length } };
     });
+    if (this.verifyBuild) {
+      this.observer.recordedBuildVerification(
+        new BuildVerifier().verifyGunks(gunks),
+      );
+    }
 
     const accepted = persistable.evaluations.filter((e) => e.decision === "accepted").length;
     const needsApproval = persistable.evaluations.filter((e) => e.decision === "needsApproval").length;

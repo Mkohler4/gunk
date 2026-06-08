@@ -53,6 +53,9 @@ export interface SignalMetrics {
   medianExpansionClosureSize: number;
   selfContainmentVerifiedCount: number;
   selfContainmentPassRate: number;
+  buildVerifiedCount: number;
+  buildPassRate: number;
+  buildSkippedCount: number;
   gateRejectionHistogram: Partial<Record<QualityGateReason, number>>;
 }
 
@@ -204,6 +207,9 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
   const selfContainmentPasses = selfContainmentResults.filter(
     (result) => result.imports === "pass" && result.entrypoint === "pass",
   ).length;
+  const buildResults = trace.verification?.build ?? [];
+  const attemptedBuilds = buildResults.filter((result) => !result.skipped);
+  const buildPasses = attemptedBuilds.filter((result) => result.built).length;
   const gateRejectionHistogram: Partial<Record<QualityGateReason, number>> = {};
 
   for (const evaluation of trace.gateEvaluations) {
@@ -233,6 +239,9 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
     medianExpansionClosureSize: median(closureSizes),
     selfContainmentVerifiedCount: selfContainmentResults.length,
     selfContainmentPassRate: ratio(selfContainmentPasses, selfContainmentResults.length),
+    buildVerifiedCount: buildResults.length,
+    buildPassRate: ratio(buildPasses, attemptedBuilds.length),
+    buildSkippedCount: buildResults.filter((result) => result.skipped).length,
     gateRejectionHistogram,
   };
 }
