@@ -51,6 +51,8 @@ export interface SignalMetrics {
   surveyHypothesisCount: number;
   meanExpansionClosureSize: number;
   medianExpansionClosureSize: number;
+  selfContainmentVerifiedCount: number;
+  selfContainmentPassRate: number;
   gateRejectionHistogram: Partial<Record<QualityGateReason, number>>;
 }
 
@@ -198,6 +200,10 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
   const graphCounts = stage(trace, "graph")?.counts ?? {};
   const surveyCounts = stage(trace, "survey")?.counts ?? {};
   const closureSizes = trace.expansions.map((expansion) => expansion.closureFiles.length);
+  const selfContainmentResults = trace.verification?.selfContainment ?? [];
+  const selfContainmentPasses = selfContainmentResults.filter(
+    (result) => result.imports === "pass" && result.entrypoint === "pass",
+  ).length;
   const gateRejectionHistogram: Partial<Record<QualityGateReason, number>> = {};
 
   for (const evaluation of trace.gateEvaluations) {
@@ -225,6 +231,8 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
     surveyHypothesisCount: surveyCounts.hypotheses ?? trace.hypotheses.length,
     meanExpansionClosureSize: average(closureSizes),
     medianExpansionClosureSize: median(closureSizes),
+    selfContainmentVerifiedCount: selfContainmentResults.length,
+    selfContainmentPassRate: ratio(selfContainmentPasses, selfContainmentResults.length),
     gateRejectionHistogram,
   };
 }

@@ -573,6 +573,24 @@
       "cohesionScore": 0.75
     }
   ],
+  "verification": {
+    "selfContainment": [
+      {
+        "moduleName": "Email password authentication",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      },
+      {
+        "moduleName": "User profile API client",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      }
+    ]
+  },
   "summary": {
     "gunkIds": [
       1,

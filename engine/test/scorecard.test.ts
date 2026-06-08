@@ -81,6 +81,7 @@ function trace(partial: Partial<RunTrace>): RunTrace {
     expansions: [],
     refinements: [],
     gateEvaluations: [],
+    verification: { selfContainment: [] },
     summary: { accepted: 0, needsApproval: 0, rejected: 0, gunkIds: [] },
     ...partial,
   };
@@ -162,6 +163,41 @@ describe("SignalMetrics", () => {
     expect(metrics.surveyHypothesisCount).toBe(2);
     expect(metrics.meanExpansionClosureSize).toBe(2);
     expect(metrics.medianExpansionClosureSize).toBe(2);
+  });
+
+  it("computes self-containment pass rate from verification results", () => {
+    const metrics = signalMetrics(
+      trace({
+        verification: {
+          selfContainment: [
+            {
+              moduleName: "auth",
+              imports: "pass",
+              entrypoint: "pass",
+              danglingImports: [],
+              missingEntrypoints: [],
+            },
+            {
+              moduleName: "billing",
+              imports: "fail",
+              entrypoint: "pass",
+              danglingImports: [
+                {
+                  fromPath: "src/billing.ts",
+                  moduleSpecifier: "./stripe",
+                  resolvedTarget: "src/stripe.ts",
+                  reason: "internalImportOutsideModule",
+                },
+              ],
+              missingEntrypoints: [],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(metrics.selfContainmentVerifiedCount).toBe(2);
+    expect(metrics.selfContainmentPassRate).toBeCloseTo(0.5, 5);
   });
 
   it("builds a gate-rejection histogram", () => {

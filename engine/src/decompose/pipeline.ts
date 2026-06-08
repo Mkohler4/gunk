@@ -46,6 +46,7 @@ import { survey } from "./survey.js";
 import { CapabilityExpander } from "./expander.js";
 import { CapabilityRefiner } from "./refiner.js";
 import { ModuleQualityGate } from "./qualityGate.js";
+import { verifySelfContainment } from "./selfContainment.js";
 import { dedupe } from "./dedupe.js";
 import { readFileSync } from "node:fs";
 import { basename } from "node:path";
@@ -229,6 +230,18 @@ export class DecompositionPipeline {
     });
 
     // 10. persist
+    const selfContainmentResults = persistable.keep.map((evaluation) => {
+      const filePaths = new Set(evaluation.module.files);
+      const aggregate = fingerprintBuilder.aggregate(fingerprints, filePaths);
+      return verifySelfContainment({
+        module: evaluation.module,
+        graph,
+        files: fileSymbols,
+        declaredExternalDependencies: aggregate.importedDependencies,
+      });
+    });
+    this.observer.recordedSelfContainment(selfContainmentResults);
+
     const persisted = await this.stage("persist", 0.92, () => {
       const rows = this.persist(persistable.keep, source);
       return { value: rows, counts: { persisted: rows.length } };
