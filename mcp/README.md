@@ -17,14 +17,15 @@ bun install
 
 ## Scripts
 
-| Script              | What it does                                   |
-| ------------------- | ---------------------------------------------- |
-| `bun run start`     | Start the MCP server over stdio.               |
-| `bun test`          | Run Vitest tests.                              |
-| `bun run lint`      | Run ESLint.                                    |
-| `bun run typecheck` | Run TypeScript without emitting files.         |
-| `bun run format`    | Check formatting with Prettier.                |
-| `bun run build`     | Compile the standalone `dist/gunk-mcp` binary. |
+| Script                | What it does                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `bun run start`       | Start the MCP server over stdio.                                                                                                                        |
+| `bun test`            | Run Vitest tests.                                                                                                                                       |
+| `bun run lint`        | Run ESLint.                                                                                                                                             |
+| `bun run typecheck`   | Run TypeScript without emitting files.                                                                                                                  |
+| `bun run format`      | Check formatting with Prettier.                                                                                                                         |
+| `bun run build`       | Compile the standalone `dist/gunk-mcp` binary.                                                                                                          |
+| `bun run install:bin` | Rebuild and install the binary to `~/.local/bin/gunk-mcp` (override with `GUNK_MCP_INSTALL_PATH`). Always rebuilds first so the install can't go stale. |
 
 ## Schema (v2)
 

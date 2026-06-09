@@ -14,30 +14,33 @@ your dropped folders from any workspace.
   module bundle, so `~/.gunk/store.db` and `~/.gunk/modules/` have data.
 - Cursor installed.
 
-Build the binary from a repo checkout:
+Install dependencies from a repo checkout:
 
 ```bash
 cd /path/to/gunk/mcp
 bun install --frozen-lockfile
-bun run build
 ```
 
 ## Install the Binary
 
-Prefer a user-local install first:
+Use the one-step installer. It **always rebuilds from the current source**
+before copying, so the installed binary can never lag behind the code (a stale
+binary is the usual cause of MCP "Not connected" errors):
 
 ```bash
-mkdir -p ~/.local/bin
-cp /path/to/gunk/mcp/dist/gunk-mcp ~/.local/bin/gunk-mcp
-chmod +x ~/.local/bin/gunk-mcp
+cd /path/to/gunk/mcp
+bun run install:bin
 ```
 
-If you want a system-wide install instead:
+This installs to `~/.local/bin/gunk-mcp`. For a different location (e.g. a
+system-wide install), set `GUNK_MCP_INSTALL_PATH`:
 
 ```bash
-sudo cp /path/to/gunk/mcp/dist/gunk-mcp /usr/local/bin/gunk-mcp
-sudo chmod +x /usr/local/bin/gunk-mcp
+GUNK_MCP_INSTALL_PATH=/usr/local/bin/gunk-mcp sudo -E bun run install:bin
 ```
+
+Re-run `bun run install:bin` any time you pull new code, so the installed
+binary stays in sync with the source.
 
 Smoke-test the installed binary. It should stay running until you press
 `Ctrl-C`:
