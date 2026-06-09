@@ -23,7 +23,10 @@ final class BrowseModelTests: XCTestCase {
       confidence: 0.84,
       extractedAt: 300
     )
-    let model = BrowseModel(store: store)
+    let model = BrowseModel(
+      store: store,
+      extractGunk: { _ in }
+    )
 
     model.refresh()
 
@@ -35,6 +38,97 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertEqual(itemsBySection["auth"], [auth.id])
     XCTAssertEqual(itemsBySection["cli"], [cli.id])
     XCTAssertTrue(model.approvalQueue.isEmpty)
+  }
+
+  func testFiltersModulesBySourceTagLanguageAndApproval() throws {
+    let store = try makeStore()
+    let apiSource = try store.insertSource(name: "api", path: "/tmp/api")
+    let cliSource = try store.insertSource(name: "cli", path: "/tmp/cli")
+    let apiModule = try insertGunk(
+      store: store,
+      source: apiSource,
+      name: "api-auth",
+      tags: ["auth", "sessions"],
+      language: "Swift",
+      confidence: 0.92,
+      extractedAt: 200
+    )
+    _ = try insertGunk(
+      store: store,
+      source: cliSource,
+      name: "cli-reports",
+      tags: ["reports"],
+      language: "Go",
+      confidence: 0.81,
+      extractedAt: 300
+    )
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+    model.filters.sourceId = apiSource.id
+    model.filters.tag = "auth"
+    model.filters.language = "Swift"
+    model.filters.approval = .autoAccepted
+    model.filters.group = .source
+
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [apiModule.id])
+    XCTAssertEqual(model.availableTags, ["auth", "reports", "sessions"])
+    XCTAssertEqual(model.availableLanguages, ["Go", "Swift"])
+    XCTAssertEqual(model.availableSources.map(\.name), ["api", "cli"])
+  }
+
+  func testGroupsModulesBySourceLanguageAndApproval() throws {
+    let store = try makeStore(now: { 500 })
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let approved = try insertGunk(
+      store: store,
+      source: source,
+      name: "approved-module",
+      tags: ["auth"],
+      language: "Swift",
+      confidence: 0.42
+    )
+    let extracted = try insertGunk(
+      store: store,
+      source: source,
+      name: "extracted-module",
+      tags: ["auth"],
+      language: "Go",
+      confidence: 0.93,
+      extractedAt: 300
+    )
+    let pending = try insertGunk(
+      store: store,
+      source: source,
+      name: "pending-module",
+      tags: ["queue"],
+      language: nil,
+      confidence: 0.35
+    )
+    let model = BrowseModel(store: store)
+
+    model.approve(gunkId: approved.id)
+    model.refresh()
+
+    model.filters.group = .language
+    XCTAssertEqual(
+      Dictionary(uniqueKeysWithValues: model.sections.map { ($0.tag, $0.items.map(\.gunk.id)) }),
+      [
+        "Go": [extracted.id],
+        "Swift": [approved.id],
+        "Unknown language": [pending.id],
+      ]
+    )
+
+    model.filters.group = .approval
+    XCTAssertEqual(
+      Dictionary(uniqueKeysWithValues: model.sections.map { ($0.tag, $0.items.map(\.gunk.id)) }),
+      [
+        "Approved": [approved.id],
+        "Auto accepted": [extracted.id],
+        "Needs approval": [pending.id],
+      ]
+    )
   }
 
   func testApproveMarksApprovedAt() throws {
@@ -120,6 +214,7 @@ final class BrowseModelTests: XCTestCase {
     source: Source,
     name: String,
     tags: [String],
+    language: String? = "Swift",
     confidence: Double,
     extractedAt: Int64? = nil
   ) throws -> Gunk {
@@ -127,7 +222,7 @@ final class BrowseModelTests: XCTestCase {
       sourceId: source.id,
       name: name,
       purpose: "\(name) purpose",
-      language: "Swift",
+      language: language,
       confidence: confidence,
       bundlePath: extractedAt.map { _ in "/tmp/modules/\(name)" },
       manifestPath: extractedAt.map { _ in "/tmp/modules/\(name)/gunk.yml" },

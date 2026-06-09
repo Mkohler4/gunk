@@ -20,6 +20,62 @@ struct BrowseSection: Equatable, Identifiable, Sendable {
   }
 }
 
+enum BrowseGroup: String, CaseIterable, Identifiable, Sendable {
+  case tag
+  case source
+  case language
+  case approval
+
+  var id: String {
+    rawValue
+  }
+
+  var label: String {
+    switch self {
+    case .tag:
+      return "Tag"
+    case .source:
+      return "Source"
+    case .language:
+      return "Language"
+    case .approval:
+      return "Approval"
+    }
+  }
+}
+
+enum BrowseApprovalFilter: String, CaseIterable, Identifiable, Sendable {
+  case all
+  case autoAccepted
+  case approved
+  case needsApproval
+
+  var id: String {
+    rawValue
+  }
+
+  var label: String {
+    switch self {
+    case .all:
+      return "All"
+    case .autoAccepted:
+      return "Auto accepted"
+    case .approved:
+      return "Approved"
+    case .needsApproval:
+      return "Needs approval"
+    }
+  }
+}
+
+struct BrowseFilters: Equatable, Sendable {
+  var group: BrowseGroup = .tag
+  var sourceId: Int64?
+  var tag: String?
+  var language: String?
+  var approval: BrowseApprovalFilter = .all
+}
+
 @MainActor
 @Observable
 final class BrowseModel {
@@ -35,7 +91,17 @@ final class BrowseModel {
 
   private(set) var sections: [BrowseSection] = []
   private(set) var approvalQueue: [BrowseItem] = []
+  private(set) var availableSources: [Source] = []
+  private(set) var availableTags: [String] = []
+  private(set) var availableLanguages: [String] = []
   private(set) var errorMessage: String?
+  var filters = BrowseFilters() {
+    didSet {
+      applyFilters()
+    }
+  }
+
+  private var items: [BrowseItem] = []
 
   init(
     store: Store,
@@ -57,12 +123,15 @@ final class BrowseModel {
   func refresh() {
     do {
       let items = try loadItems()
+      self.items = items
       approvalQueue = items
         .filter(isPendingApproval)
         .sorted(by: itemSort)
-      sections = groupedSections(
-        from: items.filter { !isPendingApproval($0) }
-      )
+      availableSources = availableSources(from: items)
+      availableTags = availableTags(from: items)
+      availableLanguages = availableLanguages(from: items)
+      sanitizeFilters()
+      applyFilters()
       errorMessage = nil
     } catch {
       errorMessage = error.localizedDescription
@@ -131,19 +200,99 @@ final class BrowseModel {
     var buckets: [String: [BrowseItem]] = [:]
 
     for item in items {
-      let tags = item.tags.isEmpty ? [Self.untaggedSection] : item.tags
+      let groupNames: [String]
+      switch filters.group {
+      case .tag:
+        groupNames = item.tags.isEmpty ? [Self.untaggedSection] : item.tags
+      case .source:
+        groupNames = [item.source.name]
+      case .language:
+        groupNames = [languageLabel(for: item)]
+      case .approval:
+        groupNames = [approvalLabel(for: item)]
+      }
 
-      for tag in tags {
-        buckets[tag, default: []].append(item)
+      for groupName in groupNames {
+        buckets[groupName, default: []].append(item)
       }
     }
 
     return buckets
-      .map { tag, items in
-        BrowseSection(tag: tag, items: items.sorted(by: itemSort))
+      .map { groupName, items in
+        BrowseSection(tag: groupName, items: items.sorted(by: itemSort))
       }
       .sorted { lhs, rhs in
         lhs.tag.localizedStandardCompare(rhs.tag) == .orderedAscending
+      }
+  }
+
+  private func applyFilters() {
+    sections = groupedSections(from: filteredItems())
+  }
+
+  private func filteredItems() -> [BrowseItem] {
+    items.filter { item in
+      if let sourceId = filters.sourceId, item.source.id != sourceId {
+        return false
+      }
+
+      if let tag = filters.tag, !item.tags.contains(tag) {
+        return false
+      }
+
+      if let language = filters.language, item.gunk.language != language {
+        return false
+      }
+
+      switch filters.approval {
+      case .all:
+        return true
+      case .autoAccepted:
+        return approvalFilter(for: item) == .autoAccepted
+      case .approved:
+        return approvalFilter(for: item) == .approved
+      case .needsApproval:
+        return approvalFilter(for: item) == .needsApproval
+      }
+    }
+  }
+
+  private func sanitizeFilters() {
+    if let sourceId = filters.sourceId,
+       !availableSources.contains(where: { $0.id == sourceId }) {
+      filters.sourceId = nil
+    }
+
+    if let tag = filters.tag,
+       !availableTags.contains(tag) {
+      filters.tag = nil
+    }
+
+    if let language = filters.language,
+       !availableLanguages.contains(language) {
+      filters.language = nil
+    }
+  }
+
+  private func availableSources(from items: [BrowseItem]) -> [Source] {
+    Dictionary(grouping: items.map(\.source), by: \.id)
+      .compactMap { _, sources in sources.first }
+      .sorted { lhs, rhs in
+        lhs.name.localizedStandardCompare(rhs.name) == .orderedAscending
+      }
+  }
+
+  private func availableTags(from items: [BrowseItem]) -> [String] {
+    Array(Set(items.flatMap(\.tags)))
+      .sorted { lhs, rhs in
+        lhs.localizedStandardCompare(rhs) == .orderedAscending
+      }
+  }
+
+  private func availableLanguages(from items: [BrowseItem]) -> [String] {
+    Array(Set(items.compactMap(\.gunk.language)))
+      .sorted { lhs, rhs in
+        lhs.localizedStandardCompare(rhs) == .orderedAscending
       }
   }
 
@@ -151,6 +300,30 @@ final class BrowseModel {
     (item.gunk.confidence ?? 0) < confidenceThreshold
       && item.gunk.approvedAt == nil
       && item.gunk.extractedAt == nil
+  }
+
+  func approvalFilter(for item: BrowseItem) -> BrowseApprovalFilter {
+    if isPendingApproval(item) {
+      return .needsApproval
+    }
+
+    if item.gunk.approvedAt != nil {
+      return .approved
+    }
+
+    return .autoAccepted
+  }
+
+  func approvalLabel(for item: BrowseItem) -> String {
+    approvalFilter(for: item).label
+  }
+
+  func extractionLabel(for item: BrowseItem) -> String {
+    item.gunk.extractedAt == nil ? "Not extracted" : "Extracted"
+  }
+
+  func languageLabel(for item: BrowseItem) -> String {
+    item.gunk.language ?? "Unknown language"
   }
 
   private func itemSort(_ lhs: BrowseItem, _ rhs: BrowseItem) -> Bool {

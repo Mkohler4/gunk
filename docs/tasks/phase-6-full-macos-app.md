@@ -65,7 +65,7 @@ Make adding sources obvious from the main window and Dock.
 
 ## T-6.3 — Modules browser
 
-**Status:** Not started
+**Status:** Shipped in PR for T-6.3
 **Owner:** Codex
 
 ### Goal
