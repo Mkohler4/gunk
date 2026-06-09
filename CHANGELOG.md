@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `gunk.app` now launches as a regular Dock/window app with a SwiftUI sidebar
+  shell for Sources, Modules, Runs, Settings, and Approval; the status item now
+  opens the main window instead of presenting the workspace in a popover.
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added

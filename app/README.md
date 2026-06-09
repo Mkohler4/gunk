@@ -25,20 +25,23 @@ opening controls, not the primary workspace.
 ## Launching Locally
 
 After `make app`, open `build/gunk.app`. The app launches as a regular macOS
-app and may also show a `G` status item. Drag a folder onto the Dock icon or the
-app's import/drop surface to add it to `~/.gunk/store.db`. Files and non-file
-URLs are rejected. Successful drops post a `gunkInserted` notification so the
-views can refresh immediately.
+app with a Dock icon and a primary window. The window uses a sidebar with
+Sources, Modules, Runs, Settings, and Approval destinations. The optional `G`
+status item is a shortcut back to that main window rather than a separate
+workspace.
+
+Drag a folder onto the Dock icon or the Sources drop surface to add it to
+`~/.gunk/store.db`. Files and non-file URLs are rejected. Successful drops post
+a `gunkInserted` notification so the views can refresh immediately.
 
 If an LLM provider and key are configured in Settings, the drop also starts the
 Phase 3 processing path: scan the source, build a token-budgeted context, call
 the selected LLM with temperature `0`, persist module gunks, and extract
 high-confidence modules into `~/.gunk/modules/`.
 
-The active product target is a full app shell with navigation for Sources,
-Modules, Runs, Approval, and Settings. Older popover-first views still exist in
-the codebase and should be treated as scaffolding to migrate into the main
-window.
+The active product surface is the full app shell. Older popover-first views may
+still exist in the codebase for compatibility, but they are no longer the main
+workspace.
 
 ## Module bundles and runability
 
@@ -163,7 +166,7 @@ count as the idle Dock badge.
 
 ## Browse and Approval
 
-The full app shell should expose Browse, Approval, Runs, and Settings as
+The full app shell exposes Sources, Modules, Approval, Runs, and Settings as
 primary navigation destinations. `BrowseModel` loads module gunks, groups them
 by tag, attaches their source information for provenance, and exposes actions to
 open an extracted bundle, re-classify the source, or delete the module.

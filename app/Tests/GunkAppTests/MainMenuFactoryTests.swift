@@ -2,6 +2,7 @@ import AppKit
 import XCTest
 @testable import GunkApp
 
+@MainActor
 final class MainMenuFactoryTests: XCTestCase {
   func testMainMenuIncludesStandardEditCommands() {
     let menu = MainMenuFactory.makeMainMenu()
