@@ -59,6 +59,7 @@ final class AppRuntime: ObservableObject {
       return
     }
 
+    services.processingModel.queue(sourceId: source.id)
     Task {
       await services.sourceProcessingRunner.process(source: source)
     }

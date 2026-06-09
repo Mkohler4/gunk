@@ -1,7 +1,17 @@
 import SwiftUI
 
+@MainActor
 struct GunkListView: View {
   let model: GunkListModel
+  let processingModel: ProcessingModel?
+
+  init(
+    model: GunkListModel,
+    processingModel: ProcessingModel? = nil
+  ) {
+    self.model = model
+    self.processingModel = processingModel
+  }
 
   var body: some View {
     Group {
@@ -29,7 +39,11 @@ struct GunkListView: View {
   }
 
   private func sourceRow(_ source: Source) -> some View {
-    HStack(alignment: .top, spacing: 10) {
+    let status = processingModel?.status(for: source) ?? .complete
+    let progress = processingModel?.progress(for: source)
+    let errorMessage = processingModel?.error(for: source)
+
+    return HStack(alignment: .top, spacing: 10) {
       VStack(alignment: .leading, spacing: 4) {
         Text(source.name)
           .font(.body.weight(.medium))
@@ -44,9 +58,26 @@ struct GunkListView: View {
         Text(Date(timeIntervalSince1970: Double(source.droppedAt) / 1_000), style: .relative)
           .font(.caption2)
           .foregroundStyle(.tertiary)
+
+        if status == .processing, let progress {
+          ProgressView(value: progress)
+            .progressViewStyle(.linear)
+            .frame(maxWidth: 260)
+            .accessibilityLabel("Import progress")
+        }
+
+        if let errorMessage {
+          Text(errorMessage)
+            .font(.caption2)
+            .foregroundStyle(.red)
+            .lineLimit(2)
+            .textSelection(.enabled)
+        }
       }
 
       Spacer(minLength: 8)
+
+      statusBadge(status)
 
       Button(role: .destructive) {
         Task { @MainActor in
@@ -60,5 +91,30 @@ struct GunkListView: View {
       .accessibilityLabel("Remove \(source.name)")
     }
     .padding(.vertical, 10)
+  }
+
+  private func statusBadge(_ status: SourceImportStatus) -> some View {
+    Text(status.label)
+      .font(.caption2.bold())
+      .padding(.horizontal, 7)
+      .padding(.vertical, 3)
+      .background(statusColor(status).opacity(0.14))
+      .foregroundStyle(statusColor(status))
+      .clipShape(Capsule())
+      .frame(minWidth: 76, alignment: .trailing)
+      .accessibilityLabel("Import status \(status.label)")
+  }
+
+  private func statusColor(_ status: SourceImportStatus) -> Color {
+    switch status {
+    case .queued:
+      return .secondary
+    case .processing:
+      return .orange
+    case .complete:
+      return .green
+    case .failed:
+      return .red
+    }
   }
 }

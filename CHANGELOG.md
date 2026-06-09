@@ -7,6 +7,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `gunk.app` Sources now shows per-source import states for queued,
+  processing, complete, and failed drops, including row-level progress and
+  failure details while preserving the Dock and main-window drop paths.
 - `gunk.app` now launches as a regular Dock/window app with a SwiftUI sidebar
   shell for Sources, Modules, Runs, Settings, and Approval; the status item now
   opens the main window instead of presenting the workspace in a popover.
