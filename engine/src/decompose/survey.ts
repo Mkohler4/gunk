@@ -155,27 +155,60 @@ export function parseHypotheses(value: unknown, knownFiles: Set<string>): Capabi
   return result;
 }
 
+function hypothesisKey(hypothesis: CapabilityHypothesis): string {
+  return hypothesis.name.toLowerCase().replace(/\s+/g, " ").trim();
+}
+
+function mergedHypotheses(hypotheses: CapabilityHypothesis[]): CapabilityHypothesis[] {
+  const byName = new Map<string, CapabilityHypothesis>();
+  for (const hypothesis of hypotheses) {
+    const key = hypothesisKey(hypothesis);
+    const existing = byName.get(key);
+    if (!existing) {
+      byName.set(key, hypothesis);
+      continue;
+    }
+
+    byName.set(key, {
+      ...existing,
+      anchors: uniqued([...existing.anchors, ...hypothesis.anchors]).sort((a, b) => a.localeCompare(b)),
+      seedFiles: uniqued([...existing.seedFiles, ...hypothesis.seedFiles]).sort((a, b) => a.localeCompare(b)),
+      expectedCollaborators: uniqued([...existing.expectedCollaborators, ...hypothesis.expectedCollaborators]).sort(
+        (a, b) => a.localeCompare(b),
+      ),
+      priority: existing.priority === "normal" || hypothesis.priority === "normal" ? "normal" : "low",
+    });
+  }
+  return [...byName.values()];
+}
+
 export async function survey(
   client: LLMClient,
-  args: { model: string; sourceName: string; repoMap: string; knownFiles: string[] },
+  args: { model: string; sourceName: string; repoMap: string; repoMapChunks?: string[]; knownFiles: string[] },
   options: SurveyOptions = {},
 ): Promise<CapabilityHypothesis[]> {
   const now = options.now ?? Date.now;
   const maxOutputTokens = options.maxOutputTokens ?? 4096;
   const knownFiles = new Set(args.knownFiles);
+  const repoMaps = args.repoMapChunks && args.repoMapChunks.length > 1 ? args.repoMapChunks : [args.repoMap];
+  const parsed: CapabilityHypothesis[] = [];
 
-  const startedAt = now();
-  const response = await client.complete(
-    surveyRequest(args.model, args.sourceName, args.repoMap, args.knownFiles, maxOutputTokens),
-  );
-  const finishedAt = now();
+  for (const repoMap of repoMaps) {
+    const startedAt = now();
+    const response = await client.complete(
+      surveyRequest(args.model, args.sourceName, repoMap, args.knownFiles, maxOutputTokens),
+    );
+    const finishedAt = now();
 
-  options.recordRun?.({
-    inputTokens: response.usage.inputTokens,
-    outputTokens: response.usage.outputTokens,
-    startedAt,
-    finishedAt,
-  });
+    options.recordRun?.({
+      inputTokens: response.usage.inputTokens,
+      outputTokens: response.usage.outputTokens,
+      startedAt,
+      finishedAt,
+    });
 
-  return parseHypotheses(response.json, knownFiles);
+    parsed.push(...parseHypotheses(response.json, knownFiles));
+  }
+
+  return mergedHypotheses(parsed);
 }

@@ -89,7 +89,12 @@ export const DEFAULT_EVAL_FIXTURES: EvalFixtureConfig[] = [
   },
   {
     name: "large-repo",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 2,
+      minFileRecall: 1,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 2 },
   },
 ];
 

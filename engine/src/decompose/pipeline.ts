@@ -169,11 +169,19 @@ export class DecompositionPipeline {
     });
 
     // 5. repoMap
-    const repoMap = await this.stage("repoMap", 0.48, () => {
-      const map = new ContextBuilder(symbolExtractor, manifestParser, fingerprintBuilder)
-        .buildRepoMap(scannedFiles)
-        .serialized(this.contextBudgetTokens);
-      return { value: map, counts: { chars: map.length } };
+    const repoMapContext = await this.stage("repoMap", 0.48, () => {
+      const builder = new ContextBuilder(symbolExtractor, manifestParser, fingerprintBuilder);
+      const map = builder.buildRepoMap(scannedFiles);
+      const serialized = builder.serialize(map, this.contextBudgetTokens);
+      const chunks = builder.serializeChunks(map, this.contextBudgetTokens);
+      return {
+        value: { serialized, chunks },
+        counts: {
+          chars: serialized.length,
+          chunks: chunks.length,
+          chunkChars: chunks.reduce((sum, chunk) => sum + chunk.length, 0),
+        },
+      };
     });
 
     // 6. survey
@@ -182,7 +190,13 @@ export class DecompositionPipeline {
     const hypotheses = await this.stage("survey", 0.58, async () => {
       const result = await survey(
         tracing,
-        { model: this.model, sourceName: source.name, repoMap, knownFiles },
+        {
+          model: this.model,
+          sourceName: source.name,
+          repoMap: repoMapContext.serialized,
+          repoMapChunks: repoMapContext.chunks,
+          knownFiles,
+        },
         { recordRun: (r) => this.recordRun(source.id, r) },
       );
       this.observer.recordedHypotheses(result);

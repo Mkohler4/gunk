@@ -323,6 +323,67 @@ describe("survey", () => {
     expect(result.map((h) => h.name)).toEqual(["Auth"]);
     expect(result[0].priority).toBe("normal");
   });
+
+  it("merges chunked survey hypotheses deterministically", async () => {
+    const client = new FakeClient({
+      hypotheses: [
+        {
+          name: "Auth",
+          rationale: "Login flow",
+          anchors: ["session"],
+          seedFiles: ["session.ts"],
+          expectedCollaborators: [],
+          granularity: "feature",
+        },
+      ],
+    });
+    let calls = 0;
+    client.complete = async () => {
+      calls += 1;
+      return {
+        json:
+          calls === 1
+            ? {
+                hypotheses: [
+                  {
+                    name: "Auth",
+                    rationale: "Login flow",
+                    anchors: ["route:/login"],
+                    seedFiles: ["login.ts"],
+                    expectedCollaborators: [],
+                    granularity: "feature",
+                  },
+                ],
+              }
+            : {
+                hypotheses: [
+                  {
+                    name: "Auth",
+                    rationale: "Login flow",
+                    anchors: ["session"],
+                    seedFiles: ["session.ts"],
+                    expectedCollaborators: [],
+                    granularity: "feature",
+                  },
+                ],
+              },
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    };
+
+    const result = await survey(client, {
+      model: "gpt",
+      sourceName: "demo",
+      repoMap: "truncated",
+      repoMapChunks: ["chunk-a", "chunk-b"],
+      knownFiles: ["login.ts", "session.ts"],
+    });
+
+    expect(calls).toBe(2);
+    expect(result).toHaveLength(1);
+    expect(result[0].anchors).toEqual(["route:/login", "session"]);
+    expect(result[0].seedFiles).toEqual(["login.ts", "session.ts"]);
+  });
 });
 
 describe("CapabilityRefiner", () => {
