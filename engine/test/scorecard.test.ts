@@ -201,6 +201,66 @@ describe("SignalMetrics", () => {
     expect(metrics.selfContainmentPassRate).toBeCloseTo(0.5, 5);
   });
 
+  it("computes proxy agreement against self-containment results", () => {
+    const metrics = signalMetrics(
+      trace({
+        gateEvaluations: [
+          { name: "auth", decision: "accepted", reasons: [], cohesionScore: 0.8 },
+          { name: "fake surface", decision: "rejected", reasons: ["missingSurface"], cohesionScore: 0.8 },
+          { name: "low cohesion", decision: "rejected", reasons: ["lowCohesion"], cohesionScore: 0.1 },
+        ],
+        verification: {
+          build: [],
+          selfContainment: [
+            {
+              moduleName: "auth",
+              imports: "pass",
+              entrypoint: "pass",
+              danglingImports: [],
+              missingEntrypoints: [],
+            },
+            {
+              moduleName: "fake surface",
+              imports: "pass",
+              entrypoint: "fail",
+              danglingImports: [],
+              missingEntrypoints: [{ path: "src/auth.ts", symbol: "login", reason: "notExported" }],
+            },
+            {
+              moduleName: "low cohesion",
+              imports: "pass",
+              entrypoint: "pass",
+              danglingImports: [],
+              missingEntrypoints: [],
+            },
+          ],
+        },
+      }),
+    );
+
+    expect(metrics.proxyAgreement.cohesion).toEqual({
+      evaluated: 3,
+      agreements: 1,
+      agreementRate: 1 / 3,
+      falsePositiveCount: 1,
+      falseNegativeCount: 1,
+    });
+    expect(metrics.proxyAgreement.surface).toEqual({
+      evaluated: 3,
+      agreements: 3,
+      agreementRate: 1,
+      falsePositiveCount: 0,
+      falseNegativeCount: 0,
+    });
+    expect(metrics.proxyAgreement.classification).toEqual({
+      evaluated: 3,
+      agreements: 2,
+      agreementRate: 2 / 3,
+      falsePositiveCount: 1,
+      falseNegativeCount: 0,
+    });
+  });
+
   it("computes build verification metrics", () => {
     const metrics = signalMetrics(
       trace({

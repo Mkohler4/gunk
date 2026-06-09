@@ -128,6 +128,28 @@ describe("ModuleQualityGate", () => {
     expect(evaluation.reasons).toEqual(["failsSelfContainment"]);
   });
 
+  it("rejects a claimed surface when verification proves the entrypoint is not real", () => {
+    const evaluation = gate.evaluateModule(
+      module({ name: "auth", files: ["src/auth.ts"], surface: [{ path: "src/auth.ts", symbol: "login" }] }),
+      [],
+      null,
+      { "src/auth.ts": "function login() { return 1 }" },
+      selfContainment({
+        entrypoint: "fail",
+        missingEntrypoints: [
+          {
+            path: "src/auth.ts",
+            symbol: "login",
+            reason: "notExported",
+          },
+        ],
+      }),
+    );
+
+    expect(evaluation.decision).toBe("rejected");
+    expect(evaluation.reasons).toEqual(["failsSelfContainment", "missingSurface"]);
+  });
+
   it("allows a self-contained low-cohesion mobile module to survive", () => {
     const graph: CodeGraph = {
       nodes: [
