@@ -5,6 +5,10 @@
 import type { Module, QualityGateReason } from "../models.js";
 import type { RunTrace, StageRecord } from "../trace/trace.js";
 
+const COHESION_PROXY_THRESHOLD = 0.35;
+const SURFACE_REASONS = new Set<string>(["missingSurface", "singleFileWithoutOwnedSurface"]);
+const CLASSIFICATION_REASONS = new Set<string>(["configOnly", "generatedOnly", "typeOnly", "utilityOnly"]);
+
 export interface ExpectedModule {
   name: string;
   tags: string[];
@@ -57,7 +61,20 @@ export interface SignalMetrics {
   buildPassRate: number;
   buildSkippedCount: number;
   gateRejectionHistogram: Partial<Record<QualityGateReason, number>>;
+  proxyAgreement: ProxyAgreementMetrics;
 }
+
+export type QualityProxyName = "cohesion" | "surface" | "classification";
+
+export interface ProxyAgreementMetric {
+  evaluated: number;
+  agreements: number;
+  agreementRate: number;
+  falsePositiveCount: number;
+  falseNegativeCount: number;
+}
+
+export type ProxyAgreementMetrics = Record<QualityProxyName, ProxyAgreementMetric>;
 
 export interface SignalFloor {
   minParseCoverage?: number;
@@ -146,6 +163,69 @@ function stage(trace: RunTrace, name: StageRecord["stage"]): StageRecord | undef
   return trace.stages.find((record) => record.stage === name && record.status === "ok");
 }
 
+function emptyProxyMetric(): ProxyAgreementMetric {
+  return {
+    evaluated: 0,
+    agreements: 0,
+    agreementRate: 0,
+    falsePositiveCount: 0,
+    falseNegativeCount: 0,
+  };
+}
+
+function emptyProxyAgreementMetrics(): ProxyAgreementMetrics {
+  return {
+    cohesion: emptyProxyMetric(),
+    surface: emptyProxyMetric(),
+    classification: emptyProxyMetric(),
+  };
+}
+
+function selfContainmentPasses(result: RunTrace["verification"]["selfContainment"][number]): boolean {
+  return result.imports === "pass" && result.entrypoint === "pass";
+}
+
+function finalProxyMetric(metric: Omit<ProxyAgreementMetric, "agreementRate">): ProxyAgreementMetric {
+  return {
+    ...metric,
+    agreementRate: ratio(metric.agreements, metric.evaluated),
+  };
+}
+
+function proxyAgreementMetrics(trace: RunTrace): ProxyAgreementMetrics {
+  const metrics = emptyProxyAgreementMetrics();
+
+  trace.gateEvaluations.forEach((evaluation, index) => {
+    const selfContainment = trace.verification.selfContainment[index];
+    if (selfContainment === undefined) return;
+
+    const expected = selfContainmentPasses(selfContainment);
+    const predictions: Record<QualityProxyName, boolean> = {
+      cohesion: evaluation.cohesionScore === null || evaluation.cohesionScore >= COHESION_PROXY_THRESHOLD,
+      surface: !evaluation.reasons.some((reason) => SURFACE_REASONS.has(reason)),
+      classification: !evaluation.reasons.some((reason) => CLASSIFICATION_REASONS.has(reason)),
+    };
+
+    for (const [name, prediction] of Object.entries(predictions) as [QualityProxyName, boolean][]) {
+      const metric = metrics[name];
+      metric.evaluated += 1;
+      if (prediction === expected) {
+        metric.agreements += 1;
+      } else if (prediction) {
+        metric.falsePositiveCount += 1;
+      } else {
+        metric.falseNegativeCount += 1;
+      }
+    }
+  });
+
+  return {
+    cohesion: finalProxyMetric(metrics.cohesion),
+    surface: finalProxyMetric(metrics.surface),
+    classification: finalProxyMetric(metrics.classification),
+  };
+}
+
 export function score(actual: Module[], expected: ExpectedDecomposition): Scorecard {
   let unusedActual = actual.map((element, offset) => ({ offset, element }));
   const moduleScores: ModuleScore[] = [];
@@ -204,7 +284,7 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
   const surveyCounts = stage(trace, "survey")?.counts ?? {};
   const closureSizes = trace.expansions.map((expansion) => expansion.closureFiles.length);
   const selfContainmentResults = trace.verification?.selfContainment ?? [];
-  const selfContainmentPasses = selfContainmentResults.filter(
+  const selfContainmentPassCount = selfContainmentResults.filter(
     (result) => result.imports === "pass" && result.entrypoint === "pass",
   ).length;
   const buildResults = trace.verification?.build ?? [];
@@ -238,11 +318,12 @@ export function signalMetrics(trace: RunTrace): SignalMetrics {
     meanExpansionClosureSize: average(closureSizes),
     medianExpansionClosureSize: median(closureSizes),
     selfContainmentVerifiedCount: selfContainmentResults.length,
-    selfContainmentPassRate: ratio(selfContainmentPasses, selfContainmentResults.length),
+    selfContainmentPassRate: ratio(selfContainmentPassCount, selfContainmentResults.length),
     buildVerifiedCount: buildResults.length,
     buildPassRate: ratio(buildPasses, attemptedBuilds.length),
     buildSkippedCount: buildResults.filter((result) => result.skipped).length,
     gateRejectionHistogram,
+    proxyAgreement: proxyAgreementMetrics(trace),
   };
 }
 
