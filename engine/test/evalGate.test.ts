@@ -22,7 +22,7 @@ import {
   signalMetrics,
 } from "../src/eval/scorecard.js";
 import { ReplayClient } from "../src/eval/replayClient.js";
-import { runEval } from "../src/eval/runEval.js";
+import { formatEvalReport, runEval } from "../src/eval/runEval.js";
 import type { Module } from "../src/models.js";
 import type { LLMClient, LLMResponse } from "../src/llm/client.js";
 import { RunTraceRecorder } from "../src/trace/trace.js";
@@ -415,6 +415,21 @@ describe("offline replay eval harness", () => {
       );
       expect(fixture.signalMetrics.selfContainmentPassRate, fixture.name).toBeCloseTo(1, 5);
     }
+  });
+
+  it("eval report includes proxy agreement per fixture", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["express-saas"],
+    });
+    const fixture = report.fixtures[0];
+    const formatted = formatEvalReport(report);
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.signalMetrics.proxyAgreement.cohesion.evaluated).toBeGreaterThan(0);
+    expect(formatted).toContain("proxy_cohesion_agreement:");
+    expect(formatted).toContain("proxy_surface_agreement:");
+    expect(formatted).toContain("proxy_classification_agreement:");
   });
 
   it("flutter-app replay accepts mobile capabilities without trap false positives", async () => {
