@@ -77,7 +77,12 @@ export const DEFAULT_EVAL_FIXTURES: EvalFixtureConfig[] = [
   },
   {
     name: "kotlin-android",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 2,
+      minFileRecall: 1,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0.6, minSurveyHypotheses: 2 },
   },
   {
     name: "java-service",

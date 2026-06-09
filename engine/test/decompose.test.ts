@@ -33,6 +33,16 @@ class FakeClient implements LLMClient {
   }
 }
 
+class CapturingClient implements LLMClient {
+  readonly provider = "OpenAI" as const;
+  requests: Parameters<LLMClient["complete"]>[0][] = [];
+
+  async complete(request: Parameters<LLMClient["complete"]>[0]): Promise<LLMResponse> {
+    this.requests.push(request);
+    return { json: { hypotheses: [] }, usage: { inputTokens: 1, outputTokens: 1 } };
+  }
+}
+
 function selfContainment(partial: Partial<SelfContainmentResult> = {}): SelfContainmentResult {
   return {
     moduleName: "module",
@@ -383,6 +393,19 @@ describe("survey", () => {
     expect(result).toHaveLength(1);
     expect(result[0].anchors).toEqual(["route:/login", "session"]);
     expect(result[0].seedFiles).toEqual(["login.ts", "session.ts"]);
+  });
+
+  it("prompts for JVM and Android feature-package capabilities", async () => {
+    const client = new CapturingClient();
+    await survey(client, {
+      model: "gpt",
+      sourceName: "android",
+      repoMap: "repo_map_v1",
+      knownFiles: ["FeatureActivity.kt"],
+    });
+
+    expect(client.requests[0]?.messages[0]?.content).toContain("JVM/Android");
+    expect(client.requests[0]?.messages[0]?.content).toContain("controller/activity/view-model/service/repository");
   });
 });
 

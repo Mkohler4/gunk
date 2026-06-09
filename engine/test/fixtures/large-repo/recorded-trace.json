@@ -136,7 +136,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -157,7 +157,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -178,7 +178,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -199,7 +199,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -220,7 +220,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -241,7 +241,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -262,7 +262,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -283,7 +283,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -304,7 +304,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -325,7 +325,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -346,7 +346,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -367,7 +367,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -419,7 +419,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -440,7 +440,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -822,7 +822,24 @@
     }
   ],
   "verification": {
-    "build": [],
+    "build": [
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-large-repo-psR0FI/modules/1",
+        "language": "java",
+        "built": false,
+        "skipped": true,
+        "command": null,
+        "log": "Build tool not available."
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-large-repo-psR0FI/modules/2",
+        "language": "java",
+        "built": false,
+        "skipped": true,
+        "command": null,
+        "log": "Build tool not available."
+      }
+    ],
     "selfContainment": [
       {
         "moduleName": "Session token login",

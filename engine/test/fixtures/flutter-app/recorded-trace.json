@@ -59,7 +59,9 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "chars": 4664
+        "chars": 4664,
+        "chunks": 1,
+        "chunkChars": 4664
       },
       "status": "ok"
     },
@@ -134,7 +136,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -574,6 +576,24 @@
     }
   ],
   "verification": {
+    "build": [
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-flutter-app-ocIqCi/modules/1",
+        "language": "dart",
+        "built": false,
+        "skipped": false,
+        "command": "dart analyze .",
+        "log": "$ dart analyze .\nAnalyzing ....\n\n  error - lib/features/auth/auth_repository.dart:1:8 - Target of URI doesn't exist: 'package:firebase_auth/firebase_auth.dart'. Try creating the file referenced by the URI, or try using a URI for a file that does exist. - uri_does_not_exist\n  error - lib/features/auth/auth_repository.dart:2:8 - Target of URI doesn't exist: 'package:flutter_secure_storage/flutter_secure_storage.dart'. Try creating the file referenced by the URI, or try using a URI for a file that does exist. - uri_does_not_exist\n  error - lib/features/auth/auth_repository.dart:6:9 - Undefined class 'FirebaseAuth'. Try changing the name to the name of an existing class, or creating a class with the name 'FirebaseAuth'. - undefined_class\n  error - lib/features/auth/auth_repository.dart:6:37 - Undefined name 'FirebaseAuth'. Try correcting the name to one that is defined, or defining the name. - undefined_identifier\n  error - lib/features/auth/auth_repository.dart:7:9 - Undefined class 'FlutterSecureStorage'. Try changing the name to the name of an existing class, or creating a class with the name 'FlutterSecureStorage'. - undefined_class\n  error - lib/features/auth/auth_repository.dart:7:46 - The name 'FlutterSecureStorage' isn't a class. Try correcting the name to match an existing class. - creation_with_non_type\n\n6 issues found."
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-flutter-app-ocIqCi/modules/2",
+        "language": "dart",
+        "built": false,
+        "skipped": false,
+        "command": "dart analyze .",
+        "log": "$ dart analyze .\nAnalyzing ....\n\n  error - lib/features/profile/user_api.dart:1:8 - Target of URI doesn't exist: 'package:dio/dio.dart'. Try creating the file referenced by the URI, or try using a URI for a file that does exist. - uri_does_not_exist\n  error - lib/features/profile/user_api.dart:5:9 - Undefined class 'Dio'. Try changing the name to the name of an existing class, or creating a class with the name 'Dio'. - undefined_class\n  error - lib/features/profile/user_api.dart:5:19 - The method 'Dio' isn't defined for the type 'UserApi'. Try correcting the name to the name of an existing method, or defining a method named 'Dio'. - undefined_method\n  error - lib/features/profile/user_api.dart:5:23 - The method 'BaseOptions' isn't defined for the type 'UserApi'. Try correcting the name to the name of an existing method, or defining a method named 'BaseOptions'. - undefined_method\n\n4 issues found."
+      }
+    ],
     "selfContainment": [
       {
         "moduleName": "Email password authentication",

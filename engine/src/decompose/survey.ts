@@ -79,6 +79,7 @@ Propose capability hypotheses from the structural repo map only.
 Real-module rubric:
 - A real module is a reusable capability or feature slice that spans the files needed to stand alone.
 - Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.
+- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.
 - Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.
 - Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.
 - Name the capability by what it does, not by a filename.`,
