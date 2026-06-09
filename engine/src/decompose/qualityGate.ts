@@ -39,11 +39,12 @@ export class ModuleQualityGate {
     const cohesionScore = graph ? this.cohesion(moduleFiles, graph) : null;
     const trivialityReasons = this.trivialityReasons(fileKinds);
     const failsSelfContainment = this.failsSelfContainment(selfContainment);
+    const failsVerifiedEntrypoint = selfContainment?.entrypoint === "fail";
     const selfContainedEntrypoint = this.hasVerifiedSelfContainedEntrypoint(moduleFiles, module, selfContainment);
     const reasons: QualityGateReason[] = [];
 
     if (moduleFiles.length === 0) reasons.push("missingFiles");
-    if (!this.hasSurface(module, fingerprints)) reasons.push("missingSurface");
+    if (!this.hasSurface(module, fingerprints) || failsVerifiedEntrypoint) reasons.push("missingSurface");
     if (moduleFiles.length === 1 && !this.singleFileOwnsSurface(module, fingerprints)) {
       reasons.push("singleFileWithoutOwnedSurface");
     }

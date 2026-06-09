@@ -22,9 +22,9 @@ import {
   signalMetrics,
 } from "../src/eval/scorecard.js";
 import { ReplayClient } from "../src/eval/replayClient.js";
-import { runEval } from "../src/eval/runEval.js";
+import { formatEvalReport, runEval } from "../src/eval/runEval.js";
 import type { Module } from "../src/models.js";
-import type { LLMClient, LLMResponse } from "../src/llm/client.js";
+import type { LLMClient, LLMRequest, LLMResponse } from "../src/llm/client.js";
 import { RunTraceRecorder } from "../src/trace/trace.js";
 
 const fixturesDir = join(dirname(fileURLToPath(import.meta.url)), "fixtures");
@@ -69,6 +69,7 @@ function refinementJSON(args: {
   name: string;
   purpose: string;
   tags: string[];
+  language?: string;
   ownedFiles: string[];
   sharedDependencies: string[];
   entrypoints: { path: string; symbol: string }[];
@@ -79,7 +80,7 @@ function refinementJSON(args: {
       name: args.name,
       purpose: args.purpose,
       tags: args.tags,
-      language: "TypeScript",
+      language: args.language ?? "TypeScript",
       ownedFiles: args.ownedFiles,
       sharedDependencies: args.sharedDependencies,
       entrypoints: args.entrypoints,
@@ -94,6 +95,93 @@ function refinementJSON(args: {
     },
     reject: null,
   };
+}
+
+class LargeRepoMapReduceClient implements LLMClient {
+  readonly provider = "OpenAI" as const;
+
+  async complete(request: LLMRequest): Promise<LLMResponse> {
+    const prompt = request.messages.map((message) => message.content).join("\n");
+    if (request.jsonSchemaName === "CapabilitySurvey") {
+      const repoMap = prompt.split("Structural repo map:\n").at(-1) ?? prompt;
+      const hypotheses = [];
+      if (
+        repoMap.includes("src/main/java/com/gunk/identity/LoginController.java") &&
+        repoMap.includes("src/main/java/com/gunk/identity/LoginService.java") &&
+        repoMap.includes("src/main/java/com/gunk/identity/SessionTokenStore.java")
+      ) {
+        hypotheses.push(
+          hypothesisJSON(
+            "Session token login",
+            ["LoginController", "SessionTokenStore"],
+            [
+              "src/main/java/com/gunk/identity/LoginController.java",
+              "src/main/java/com/gunk/identity/LoginService.java",
+              "src/main/java/com/gunk/identity/SessionTokenStore.java",
+            ],
+            [],
+          ),
+        );
+      }
+      if (
+        repoMap.includes("src/main/java/com/gunk/billing/InvoiceController.java") &&
+        repoMap.includes("src/main/java/com/gunk/billing/InvoiceService.java") &&
+        repoMap.includes("src/main/java/com/gunk/billing/TaxCalculator.java")
+      ) {
+        hypotheses.push(
+          hypothesisJSON(
+            "Invoice generation",
+            ["InvoiceController", "TaxCalculator"],
+            [
+              "src/main/java/com/gunk/billing/InvoiceController.java",
+              "src/main/java/com/gunk/billing/InvoiceService.java",
+              "src/main/java/com/gunk/billing/TaxCalculator.java",
+            ],
+            [],
+          ),
+        );
+      }
+      return { json: surveyJSON(hypotheses), usage: { inputTokens: null, outputTokens: null } };
+    }
+
+    if (prompt.includes("name: Session token login")) {
+      return {
+        json: refinementJSON({
+          name: "Session token login",
+          purpose: "Issues session tokens for email login requests.",
+          tags: ["auth", "api"],
+          language: "Java",
+          ownedFiles: [
+            "src/main/java/com/gunk/identity/LoginController.java",
+            "src/main/java/com/gunk/identity/LoginService.java",
+            "src/main/java/com/gunk/identity/SessionTokenStore.java",
+          ],
+          sharedDependencies: [],
+          entrypoints: [{ path: "src/main/java/com/gunk/identity/LoginController.java", symbol: "LoginController" }],
+          anchors: ["LoginController", "SessionTokenStore"],
+        }),
+        usage: { inputTokens: null, outputTokens: null },
+      };
+    }
+
+    return {
+      json: refinementJSON({
+        name: "Invoice generation",
+        purpose: "Creates invoices and calculates tax totals.",
+        tags: ["payments", "api"],
+        language: "Java",
+        ownedFiles: [
+          "src/main/java/com/gunk/billing/InvoiceController.java",
+          "src/main/java/com/gunk/billing/InvoiceService.java",
+          "src/main/java/com/gunk/billing/TaxCalculator.java",
+        ],
+        sharedDependencies: [],
+        entrypoints: [{ path: "src/main/java/com/gunk/billing/InvoiceController.java", symbol: "InvoiceController" }],
+        anchors: ["InvoiceController", "TaxCalculator"],
+      }),
+      usage: { inputTokens: null, outputTokens: null },
+    };
+  }
 }
 
 function responsesFor(fixture: string): unknown[] {
@@ -366,6 +454,78 @@ describe("eval signal metrics: Flutter Dart coverage", () => {
   });
 });
 
+describe("large-repo map-reduce survey", () => {
+  let db: Database;
+  let gunkHome: string;
+  let runsDir: string;
+  let extractor: Awaited<ReturnType<typeof createTreeSitterSymbolExtractor>>;
+
+  beforeEach(async () => {
+    db = new Database(":memory:");
+    db.exec("PRAGMA foreign_keys = ON;");
+    runMigrations(db);
+    gunkHome = mkdtempSync(join(tmpdir(), "gunk-eval-home-"));
+    runsDir = mkdtempSync(join(tmpdir(), "gunk-runs-"));
+    extractor = await createTreeSitterSymbolExtractor();
+  });
+
+  afterEach(() => {
+    db.close();
+    rmSync(gunkHome, { recursive: true, force: true });
+    rmSync(runsDir, { recursive: true, force: true });
+  });
+
+  it("large-repo capabilities survive chunked survey without silent truncation", async () => {
+    const fixturePath = join(fixturesDir, "large-repo");
+    const source = insertSource(db, "large-repo", fixturePath, 100);
+    const observer = new RunTraceRecorder(
+      {
+        runId: "large-map-reduce",
+        sourceId: source.id,
+        sourceName: source.name,
+        provider: "OpenAI",
+        model: "phase-5-map-reduce",
+      },
+      { runsDir, now: () => 100 },
+    );
+    const pipeline = new DecompositionPipeline(db, "OpenAI", "phase-5-map-reduce", {
+      contextBudgetTokens: 4000,
+      confidenceThreshold: 0.7,
+      gunkHome,
+      symbolExtractor: extractor,
+      embeddingProvider: null,
+      observer,
+      now: () => 100,
+    });
+
+    await pipeline.run(source, new LargeRepoMapReduceClient());
+
+    const modules: Module[] = gunksForSource(db, source.id).map((gunk) => ({
+      name: gunk.name,
+      purpose: gunk.purpose,
+      tags: listGunkTags(db, gunk.id).map((t) => t.tag),
+      files: filesForGunk(db, gunk.id).map((f) => f.relpath),
+      language: gunk.language,
+      confidence: gunk.confidence ?? 0,
+      ownedFiles: [],
+      sharedDeps: [],
+      surface: [],
+      anchors: [],
+    }));
+    const expected = loadExpected(JSON.parse(readFileSync(join(fixturePath, "expected.json"), "utf8")));
+    const card = score(modules, expected);
+    const metrics = signalMetrics(observer.current);
+    const repoMapStage = observer.current.stages.find((stage) => stage.stage === "repoMap");
+
+    expect(repoMapStage?.counts.chunks).toBeGreaterThan(1);
+    expect(metrics.surveyHypothesisCount).toBe(2);
+    expect(card.actualModuleCount).toBe(2);
+    expect(card.filePrecision).toBeCloseTo(1, 5);
+    expect(card.fileRecall).toBeCloseTo(1, 5);
+    expect(card.trivialModuleFalsePositiveCount).toBe(0);
+  });
+});
+
 describe("offline replay eval harness", () => {
   it("replays recorded LLM calls deterministically", async () => {
     const report = await runEval({
@@ -415,6 +575,21 @@ describe("offline replay eval harness", () => {
       );
       expect(fixture.signalMetrics.selfContainmentPassRate, fixture.name).toBeCloseTo(1, 5);
     }
+  });
+
+  it("eval report includes proxy agreement per fixture", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["express-saas"],
+    });
+    const fixture = report.fixtures[0];
+    const formatted = formatEvalReport(report);
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.signalMetrics.proxyAgreement.cohesion.evaluated).toBeGreaterThan(0);
+    expect(formatted).toContain("proxy_cohesion_agreement:");
+    expect(formatted).toContain("proxy_surface_agreement:");
+    expect(formatted).toContain("proxy_classification_agreement:");
   });
 
   it("flutter-app replay accepts mobile capabilities without trap false positives", async () => {

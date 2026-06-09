@@ -128,6 +128,28 @@ describe("ModuleQualityGate", () => {
     expect(evaluation.reasons).toEqual(["failsSelfContainment"]);
   });
 
+  it("rejects a claimed surface when verification proves the entrypoint is not real", () => {
+    const evaluation = gate.evaluateModule(
+      module({ name: "auth", files: ["src/auth.ts"], surface: [{ path: "src/auth.ts", symbol: "login" }] }),
+      [],
+      null,
+      { "src/auth.ts": "function login() { return 1 }" },
+      selfContainment({
+        entrypoint: "fail",
+        missingEntrypoints: [
+          {
+            path: "src/auth.ts",
+            symbol: "login",
+            reason: "notExported",
+          },
+        ],
+      }),
+    );
+
+    expect(evaluation.decision).toBe("rejected");
+    expect(evaluation.reasons).toEqual(["failsSelfContainment", "missingSurface"]);
+  });
+
   it("allows a self-contained low-cohesion mobile module to survive", () => {
     const graph: CodeGraph = {
       nodes: [
@@ -300,6 +322,67 @@ describe("survey", () => {
     });
     expect(result.map((h) => h.name)).toEqual(["Auth"]);
     expect(result[0].priority).toBe("normal");
+  });
+
+  it("merges chunked survey hypotheses deterministically", async () => {
+    const client = new FakeClient({
+      hypotheses: [
+        {
+          name: "Auth",
+          rationale: "Login flow",
+          anchors: ["session"],
+          seedFiles: ["session.ts"],
+          expectedCollaborators: [],
+          granularity: "feature",
+        },
+      ],
+    });
+    let calls = 0;
+    client.complete = async () => {
+      calls += 1;
+      return {
+        json:
+          calls === 1
+            ? {
+                hypotheses: [
+                  {
+                    name: "Auth",
+                    rationale: "Login flow",
+                    anchors: ["route:/login"],
+                    seedFiles: ["login.ts"],
+                    expectedCollaborators: [],
+                    granularity: "feature",
+                  },
+                ],
+              }
+            : {
+                hypotheses: [
+                  {
+                    name: "Auth",
+                    rationale: "Login flow",
+                    anchors: ["session"],
+                    seedFiles: ["session.ts"],
+                    expectedCollaborators: [],
+                    granularity: "feature",
+                  },
+                ],
+              },
+        usage: { inputTokens: 1, outputTokens: 1 },
+      };
+    };
+
+    const result = await survey(client, {
+      model: "gpt",
+      sourceName: "demo",
+      repoMap: "truncated",
+      repoMapChunks: ["chunk-a", "chunk-b"],
+      knownFiles: ["login.ts", "session.ts"],
+    });
+
+    expect(calls).toBe(2);
+    expect(result).toHaveLength(1);
+    expect(result[0].anchors).toEqual(["route:/login", "session"]);
+    expect(result[0].seedFiles).toEqual(["login.ts", "session.ts"]);
   });
 });
 

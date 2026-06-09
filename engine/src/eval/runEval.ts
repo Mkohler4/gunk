@@ -89,7 +89,12 @@ export const DEFAULT_EVAL_FIXTURES: EvalFixtureConfig[] = [
   },
   {
     name: "large-repo",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 2,
+      minFileRecall: 1,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 2 },
   },
 ];
 
@@ -333,6 +338,13 @@ export function formatEvalReport(report: EvalReport): string {
     lines.push(
       `build_skipped: ${fixture.signalMetrics.buildSkippedCount}`,
     );
+    for (const name of ["cohesion", "surface", "classification"] as const) {
+      const metric = fixture.signalMetrics.proxyAgreement[name];
+      const agreement = metric.evaluated === 0 ? "n/a" : metric.agreementRate.toFixed(2);
+      lines.push(
+        `proxy_${name}_agreement: ${agreement} (${metric.agreements}/${metric.evaluated}, fp:${metric.falsePositiveCount}, fn:${metric.falseNegativeCount})`,
+      );
+    }
     if (fixture.errors.length > 0) {
       lines.push("errors:");
       for (const error of fixture.errors) {

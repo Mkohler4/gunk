@@ -108,6 +108,10 @@ export class ContextBuilder {
     return repoMap.serialized(budgetTokens);
   }
 
+  serializeChunks(repoMap: RepoMap, budgetTokens: number): string[] {
+    return repoMap.serializedChunks(budgetTokens);
+  }
+
   buildRepoMap(files: ScannedFile[]): RepoMap {
     const sortedFiles = [...files].sort((lhs, rhs) =>
       lhs.relpath < rhs.relpath ? -1 : lhs.relpath > rhs.relpath ? 1 : 0,
