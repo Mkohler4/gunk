@@ -188,3 +188,12 @@ an injected extractor path, and refreshes the Browse list; rejecting a module
 soft-removes it from the store. Approval rows can also re-run decomposition for
 the source through the same engine runner used by drops, then refresh from the
 shared store when the runner posts completion.
+
+## Settings Status
+
+Settings shows the selected provider and model, whether the selected provider
+has a saved API key, the active SQLite store path, the resolved `gunk-engine`
+binary or development runner, and Cursor MCP configuration status. Missing
+items are shown in-app with the next setup step: save a hosted provider key,
+build the app or set `GUNK_ENGINE_BIN`, use an on-disk store, or follow
+`docs/integration/cursor.md` to add the `gunk` MCP server.

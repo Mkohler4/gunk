@@ -19,7 +19,7 @@ struct PopoverView: View {
           Text("Runs")
         }
 
-      SettingsView()
+      SettingsView(storePath: store.databasePath)
         .tabItem {
           Text("Settings")
         }

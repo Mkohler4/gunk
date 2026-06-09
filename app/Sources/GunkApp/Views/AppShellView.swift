@@ -70,7 +70,7 @@ struct AppShellView: View {
     case .runs:
       RunsView()
     case .settings:
-      SettingsView()
+      SettingsView(storePath: services.store.databasePath)
     case .approval:
       ApprovalSectionView(model: services.browseModel)
     }

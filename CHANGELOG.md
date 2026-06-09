@@ -23,6 +23,9 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- `gunk.app` Settings now surfaces provider/model, API-key, local store, engine
+  binary, and Cursor MCP config status with setup guidance when something is
+  missing.
 - `gunk.app` Modules now has a module detail pane that shows owned files,
   shared dependencies, entrypoints, bundle path, self-containment for AI reuse,
   and optional standalone build verification when trace data is available.

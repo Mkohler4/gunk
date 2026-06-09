@@ -113,7 +113,7 @@ Make low-confidence and needs-approval modules manageable inside the app.
 
 ## T-6.6 — Settings and provider status
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** Codex
 
 ### Goal
