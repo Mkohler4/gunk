@@ -51,9 +51,11 @@ app: build engine
 		'  <key>LSMinimumSystemVersion</key>' \
 		'  <string>14.0</string>' \
 		'  <key>LSUIElement</key>' \
-		'  <true/>' \
+		'  <false/>' \
 		'  <key>NSHighResolutionCapable</key>' \
 		'  <true/>' \
+		'  <key>NSQuitAlwaysKeepsWindows</key>' \
+		'  <false/>' \
 		'</dict>' \
 		'</plist>' > "$(APP_BUNDLE)/Contents/Info.plist"
 	codesign --force --sign - "$(APP_BUNDLE)"

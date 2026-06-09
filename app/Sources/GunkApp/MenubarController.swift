@@ -1,25 +1,15 @@
 import AppKit
-import SwiftUI
 
 @MainActor
 final class MenubarController {
   private let statusItem: NSStatusItem
-  private let popover: NSPopover
+  private let openMainWindow: () -> Void
 
-  init(
-    store: Store,
-    processingModel: ProcessingModel,
-    sourceProcessingRunner: SourceProcessingRunner
-  ) {
+  init(openMainWindow: @escaping () -> Void) {
     self.statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
-    self.popover = NSPopover()
+    self.openMainWindow = openMainWindow
 
     configureStatusItem()
-    configurePopover(
-      store: store,
-      processingModel: processingModel,
-      sourceProcessingRunner: sourceProcessingRunner
-    )
   }
 
   private func configureStatusItem() {
@@ -28,39 +18,13 @@ final class MenubarController {
     }
 
     button.title = "G"
-    button.toolTip = "gunk"
+    button.toolTip = "Open gunk"
     button.target = self
-    button.action = #selector(togglePopover)
-  }
-
-  private func configurePopover(
-    store: Store,
-    processingModel: ProcessingModel,
-    sourceProcessingRunner: SourceProcessingRunner
-  ) {
-    popover.behavior = .transient
-    popover.contentSize = NSSize(width: 520, height: 560)
-    popover.contentViewController = NSHostingController(
-      rootView: PopoverView(
-        browseModel: BrowseModel(store: store),
-        store: store,
-        processingModel: processingModel,
-        sourceProcessingRunner: sourceProcessingRunner
-      )
-    )
+    button.action = #selector(openWindow)
   }
 
   @objc
-  private func togglePopover() {
-    guard let button = statusItem.button else {
-      return
-    }
-
-    if popover.isShown {
-      popover.performClose(nil)
-    } else {
-      popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-      popover.contentViewController?.view.window?.becomeKey()
-    }
+  private func openWindow() {
+    openMainWindow()
   }
 }

@@ -32,7 +32,7 @@ visible without relying on a menubar popover.
 
 ## T-6.1 — App shell and navigation
 
-**Status:** Not started
+**Status:** Shipped in PR for T-6.1
 **Owner:** Codex
 
 ### Goal
