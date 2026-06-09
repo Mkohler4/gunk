@@ -167,9 +167,12 @@ count as the idle Dock badge.
 ## Browse and Approval
 
 The full app shell exposes Sources, Modules, Approval, Runs, and Settings as
-primary navigation destinations. `BrowseModel` loads module gunks, groups them
-by tag, attaches their source information for provenance, and exposes actions to
-open an extracted bundle, re-classify the source, or delete the module.
+primary navigation destinations. `BrowseModel` loads module gunks, attaches
+their source information for provenance, reads live tag/language/source filter
+options from the store, and lets the Modules view group by tag, source,
+language, or approval state. Module rows show name, purpose, tags, source,
+language, confidence, approval state, extraction status, and actions to open an
+extracted bundle, re-classify the source, or delete the module.
 
 Below-threshold modules that have not been approved or extracted appear in the
 approval queue. Approving a module marks `approved_at`, runs extraction through
