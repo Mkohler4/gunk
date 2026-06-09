@@ -59,7 +59,9 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "chars": 4658
+        "chars": 4658,
+        "chunks": 1,
+        "chunkChars": 4658
       },
       "status": "ok"
     },
@@ -134,7 +136,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -154,6 +156,7 @@
   "refinements": [],
   "gateEvaluations": [],
   "verification": {
+    "build": [],
     "selfContainment": []
   },
   "summary": {

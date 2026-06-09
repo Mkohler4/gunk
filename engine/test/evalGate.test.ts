@@ -609,4 +609,20 @@ describe("offline replay eval harness", () => {
     );
     expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
   });
+
+  it("kotlin-android replay accepts mobile capabilities without trap false positives", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["kotlin-android"],
+    });
+    const fixture = report.fixtures[0];
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.scorecard.actualModuleCount).toBe(2);
+    expect(fixture?.scorecard.filePrecision).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.fileRecall).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
+    expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(2);
+    expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
+  });
 });

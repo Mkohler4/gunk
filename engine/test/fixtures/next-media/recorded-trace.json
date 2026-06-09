@@ -59,7 +59,9 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "chars": 3315
+        "chars": 3315,
+        "chunks": 1,
+        "chunkChars": 3315
       },
       "status": "ok"
     },
@@ -134,7 +136,7 @@
       "requestMessages": [
         {
           "role": "system",
-          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
+          "content": "You are Pass 1 of gunk's capability-centric decomposition pipeline.\nPropose capability hypotheses from the structural repo map only.\n\nReal-module rubric:\n- A real module is a reusable capability or feature slice that spans the files needed to stand alone.\n- Prefer user-visible or integration-visible capabilities such as OAuth login, Stripe checkout, upload pipeline, API endpoint group, CLI command, SDK client, or workflow.\n- For JVM/Android stacks, controller/activity/view-model/service/repository/client groups in the same feature package are strong capability evidence even when package-local references do not appear as import edges.\n- Reject file-level chunks, type-only files, generic utilities, config-only groups, generated files, docs-only groups, and arbitrary folders.\n- Each hypothesis needs at least one structural anchor: route, entrypoint, public export, dependency capability hint, env/config key, or strongly connected graph cluster.\n- Name the capability by what it does, not by a filename."
         },
         {
           "role": "user",
@@ -700,6 +702,24 @@
     }
   ],
   "verification": {
+    "build": [
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-next-media-xjZyXl/modules/1",
+        "language": "typeScript",
+        "built": false,
+        "skipped": false,
+        "command": "tsc --noEmit app/api/upload/route.ts src/config/storage.ts src/services/s3Upload.ts src/types/upload.ts",
+        "log": "$ tsc --noEmit app/api/upload/route.ts src/config/storage.ts src/services/s3Upload.ts src/types/upload.ts\nsrc/config/storage.ts(2,11): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.\nsrc/config/storage.ts(3,11): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.\nsrc/services/s3Upload.ts(1,44): error TS2307: Cannot find module '@aws-sdk/client-s3' or its corresponding type declarations."
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-next-media-xjZyXl/modules/2",
+        "language": "typeScript",
+        "built": false,
+        "skipped": false,
+        "command": "tsc --noEmit app/api/invites/route.ts src/config/mail.ts src/services/emailInvite.ts src/types/invite.ts",
+        "log": "$ tsc --noEmit app/api/invites/route.ts src/config/mail.ts src/services/emailInvite.ts src/types/invite.ts\nsrc/config/mail.ts(2,12): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.\nsrc/services/emailInvite.ts(1,24): error TS2307: Cannot find module 'nodemailer' or its corresponding type declarations."
+      }
+    ],
     "selfContainment": [
       {
         "moduleName": "S3 image upload",
