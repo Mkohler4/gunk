@@ -167,6 +167,7 @@ export type QualityGateDecision = "accepted" | "needsApproval" | "rejected";
 export type QualityGateReason =
   | "belowConfidenceThreshold"
   | "duplicateOverlap"
+  | "failsSelfContainment"
   | "generatedOnly"
   | "lowCohesion"
   | "missingFiles"

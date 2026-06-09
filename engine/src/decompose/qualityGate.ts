@@ -10,6 +10,7 @@ import type {
 } from "../models.js";
 import { uniqued } from "../models.js";
 import type { CapabilityFingerprint } from "../analyze/capabilityFingerprint.js";
+import type { SelfContainmentResult } from "./selfContainment.js";
 
 export interface QualityGateOptions {
   confidenceThreshold: number;
@@ -31,10 +32,14 @@ export class ModuleQualityGate {
     fingerprints: CapabilityFingerprint[] = [],
     graph: CodeGraph | null = null,
     contentsByPath: Record<string, string> = {},
+    selfContainment: SelfContainmentResult | null = null,
   ): QualityGateEvaluation {
     const moduleFiles = uniqued(module.files);
     const fileKinds = this.fileKinds(moduleFiles, contentsByPath);
     const cohesionScore = graph ? this.cohesion(moduleFiles, graph) : null;
+    const trivialityReasons = this.trivialityReasons(fileKinds);
+    const failsSelfContainment = this.failsSelfContainment(selfContainment);
+    const selfContainedEntrypoint = this.hasVerifiedSelfContainedEntrypoint(moduleFiles, module, selfContainment);
     const reasons: QualityGateReason[] = [];
 
     if (moduleFiles.length === 0) reasons.push("missingFiles");
@@ -42,17 +47,36 @@ export class ModuleQualityGate {
     if (moduleFiles.length === 1 && !this.singleFileOwnsSurface(module, fingerprints)) {
       reasons.push("singleFileWithoutOwnedSurface");
     }
-    if (moduleFiles.length > 1 && cohesionScore !== null && cohesionScore < this.options.cohesionThreshold) {
+    if (
+      moduleFiles.length > 1 &&
+      cohesionScore !== null &&
+      cohesionScore < this.options.cohesionThreshold &&
+      !selfContainedEntrypoint
+    ) {
       reasons.push("lowCohesion");
     }
-    reasons.push(...this.trivialityReasons(fileKinds));
+    reasons.push(...trivialityReasons);
 
     const rejectionReasons = uniqued(reasons).sort((a, b) => a.localeCompare(b));
     if (rejectionReasons.length > 0) {
-      return { module, decision: "rejected", reasons: rejectionReasons, cohesionScore, fileKinds };
+      const allReasons = failsSelfContainment
+        ? uniqued([...rejectionReasons, "failsSelfContainment" as QualityGateReason]).sort((a, b) =>
+            a.localeCompare(b),
+          )
+        : rejectionReasons;
+      return { module, decision: "rejected", reasons: allReasons, cohesionScore, fileKinds };
     }
-    if (module.confidence < this.options.confidenceThreshold) {
-      return { module, decision: "needsApproval", reasons: ["belowConfidenceThreshold"], cohesionScore, fileKinds };
+    const approvalReasons: QualityGateReason[] = [];
+    if (failsSelfContainment) approvalReasons.push("failsSelfContainment");
+    if (module.confidence < this.options.confidenceThreshold) approvalReasons.push("belowConfidenceThreshold");
+    if (approvalReasons.length > 0) {
+      return {
+        module,
+        decision: "needsApproval",
+        reasons: uniqued(approvalReasons).sort((a, b) => a.localeCompare(b)),
+        cohesionScore,
+        fileKinds,
+      };
     }
     return { module, decision: "accepted", reasons: [], cohesionScore, fileKinds };
   }
@@ -62,8 +86,11 @@ export class ModuleQualityGate {
     fingerprints: CapabilityFingerprint[] = [],
     graph: CodeGraph | null = null,
     contentsByPath: Record<string, string> = {},
+    selfContainmentResults: SelfContainmentResult[] = [],
   ): QualityGateEvaluation[] {
-    const evaluations = modules.map((m) => this.evaluateModule(m, fingerprints, graph, contentsByPath));
+    const evaluations = modules.map((m, index) =>
+      this.evaluateModule(m, fingerprints, graph, contentsByPath, selfContainmentResults[index] ?? null),
+    );
     const duplicateIndexes = this.duplicateEvaluationIndexes(evaluations);
     for (const index of duplicateIndexes) {
       const evaluation = evaluations[index];
@@ -103,6 +130,20 @@ export class ModuleQualityGate {
   private fingerprintsForModule(module: Module, fingerprints: CapabilityFingerprint[]): CapabilityFingerprint[] {
     const files = new Set(module.files);
     return fingerprints.filter((fp) => files.has(fp.filePath));
+  }
+
+  private failsSelfContainment(result: SelfContainmentResult | null): boolean {
+    return result !== null && (result.imports === "fail" || result.entrypoint === "fail");
+  }
+
+  private hasVerifiedSelfContainedEntrypoint(
+    moduleFiles: string[],
+    module: Module,
+    result: SelfContainmentResult | null,
+  ): boolean {
+    if (result === null || this.failsSelfContainment(result)) return false;
+    const fileSet = new Set(moduleFiles);
+    return module.surface.some((entrypoint) => fileSet.has(entrypoint.path) && (entrypoint.symbol?.length ?? 0) > 0);
   }
 
   private cohesion(files: string[], graph: CodeGraph): number {

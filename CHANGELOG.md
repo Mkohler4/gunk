@@ -18,6 +18,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Kotlin and Java tree-sitter symbol extraction plus package-path import resolution for Android/JVM fixtures.
 - Generalized non-web module surface detection so public APIs and capability-hint anchors can pass quality gates without HTTP routes.
 - Flutter replay eval coverage now requires accepted mobile modules, with `mobile` seeded as an allowed module tag.
+- `gunk-engine` quality gates now consume deterministic self-containment results: failures downgrade or reject modules, while verified modules with real entrypoints can survive weak cohesion without bypassing trivial-module traps.
 - Deterministic self-containment verification in `gunk-engine` traces and eval reports, checking module imports and exported entrypoints observe-only.
 - Optional `gunk-engine` build verification for extracted bundles in eval and CLI trace runs, reporting best-effort pass/skipped metrics without failing decomposition.
 - `engine/docs/ARCHITECTURE.md`: stage-by-stage walkthrough of the engine with the verbatim LLM prompts/schemas, survey/refine post-processing filters, quality-gate rules, the `trace.json` schema, and a symptom→fix debugging playbook for analyzing AI output.
