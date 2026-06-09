@@ -32,7 +32,10 @@ workspace.
 
 Drag a folder onto the Dock icon or the Sources drop surface to add it to
 `~/.gunk/store.db`. Files and non-file URLs are rejected. Successful drops post
-a `gunkInserted` notification so the views can refresh immediately.
+a `gunkInserted` notification so the views can refresh immediately. Newly
+accepted sources move through queued, processing, complete, or failed states in
+the Sources list; active imports show row-level progress and failures keep their
+error message visible on the source row.
 
 If an LLM provider and key are configured in Settings, the drop also starts the
 Phase 3 processing path: scan the source, build a token-budgeted context, call
@@ -162,7 +165,9 @@ flagged in the manifest but do not block extraction.
 `isProcessing`, per-source progress fractions, and the number of modules found
 so far, then drives `DockIconController` to show the processing bin state and a
 live badge count. When all active work completes, it reflects the current gunk
-count as the idle Dock badge.
+count as the idle Dock badge. It also tracks in-memory import status for each
+dropped source (`queued`, `processing`, `complete`, or `failed`) so the Sources
+view can show progress and failure details without changing the shared schema.
 
 ## Browse and Approval
 

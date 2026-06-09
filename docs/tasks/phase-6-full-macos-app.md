@@ -52,7 +52,7 @@ Replace the popover-first experience with a full windowed macOS app shell.
 
 ## T-6.2 — Import/drop source workflow
 
-**Status:** Not started
+**Status:** Shipped in PR for T-6.2
 **Owner:** Codex
 
 ### Goal

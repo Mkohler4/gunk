@@ -132,7 +132,10 @@ private struct SourcesSectionView: View {
       DropZoneView(handler: dropZoneHandler)
         .frame(height: 170)
 
-      GunkListView(model: sourceListModel)
+      GunkListView(
+        model: sourceListModel,
+        processingModel: processingModel
+      )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .onAppear {
