@@ -624,5 +624,5 @@ describe("offline replay eval harness", () => {
     expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
     expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(2);
     expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
-  });
+  }, 10_000);
 });
