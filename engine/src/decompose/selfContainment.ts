@@ -1,4 +1,5 @@
 import type { CodeGraph } from "../analyze/codeGraph.js";
+import { isStandardLibraryImport } from "../analyze/standardLibraries.js";
 import type { FileSymbols, Module } from "../models.js";
 import { fileNode } from "../models.js";
 
@@ -121,7 +122,11 @@ export function verifySelfContainment({
       });
     }
 
+    const language = filesByPath.get(path)?.language ?? "unknown";
     for (const moduleSpecifier of graph.externalDependencies[path] ?? []) {
+      if (isStandardLibraryImport(moduleSpecifier, language)) {
+        continue;
+      }
       if (isExternalImportCovered(moduleSpecifier, dependencies)) {
         continue;
       }

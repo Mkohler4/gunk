@@ -514,6 +514,17 @@ function collectJavaScriptLike(
   }
 }
 
+function appendPythonExport(node: Node, kind: SymbolKind, line: number, exports: ExportRef[]): void {
+  // Python has no `export` keyword. By convention a name is part of a module's
+  // public surface when it is defined at module top level and not prefixed with
+  // an underscore. Nested defs (methods, closures) live under a `block`, so the
+  // module-level parent check excludes them.
+  if (node.parent?.type !== "module") return;
+  const name = node.childForFieldName("name")?.text;
+  if (!name || name.length === 0 || name.startsWith("_")) return;
+  exports.push({ name, kind, line });
+}
+
 function collectPython(
   node: Node,
   type: string,
@@ -521,6 +532,7 @@ function collectPython(
   line: number,
   symbols: Symbol[],
   imports: ImportRef[],
+  exports: ExportRef[],
 ): void {
   switch (type) {
     case "import_statement":
@@ -531,9 +543,11 @@ function collectPython(
       break;
     case "function_definition":
       appendSymbol(node, "function", line, symbols);
+      appendPythonExport(node, "function", line, exports);
       break;
     case "class_definition":
       appendSymbol(node, "class", line, symbols);
+      appendPythonExport(node, "class", line, exports);
       break;
     default:
       break;
@@ -817,7 +831,7 @@ class TreeSitterSymbolExtractor implements SymbolExtractor {
             collectDart(node, type, text, line, symbols, imports, exports);
             break;
           case "python":
-            collectPython(node, type, text, line, symbols, imports);
+            collectPython(node, type, text, line, symbols, imports, exports);
             break;
           case "swift":
             collectSwift(type, text, line, symbols, imports, exports);

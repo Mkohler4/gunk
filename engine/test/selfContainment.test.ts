@@ -103,6 +103,75 @@ describe("verifySelfContainment", () => {
     ]);
   });
 
+  it("treats Python standard-library imports as covered", () => {
+    const files = [
+      fileSymbols("svc/cli.py", {
+        symbols: [{ name: "main", kind: "function", line: 3 }],
+        exports: [{ name: "main", kind: "function", line: 3 }],
+        imports: [
+          { moduleSpecifier: "argparse", resolvedTarget: null, line: 1 },
+          { moduleSpecifier: "os.path", resolvedTarget: null, line: 2 },
+          { moduleSpecifier: "typing", resolvedTarget: null, line: 2 },
+        ],
+      }),
+    ];
+
+    const result = verifySelfContainment({
+      module: module({
+        name: "CLI",
+        language: "Python",
+        files: ["svc/cli.py"],
+        ownedFiles: ["svc/cli.py"],
+        surface: [{ path: "svc/cli.py", symbol: "main" }],
+        anchors: ["svc/cli.py"],
+      }),
+      graph: buildGraph(files),
+      files,
+      declaredExternalDependencies: [],
+    });
+
+    expect(result.imports).toBe("pass");
+    expect(result.entrypoint).toBe("pass");
+    expect(result.danglingImports).toEqual([]);
+  });
+
+  it("still fails on undeclared third-party Python imports", () => {
+    const files = [
+      fileSymbols("svc/cli.py", {
+        symbols: [{ name: "main", kind: "function", line: 2 }],
+        exports: [{ name: "main", kind: "function", line: 2 }],
+        imports: [
+          { moduleSpecifier: "os", resolvedTarget: null, line: 1 },
+          { moduleSpecifier: "requests", resolvedTarget: null, line: 1 },
+        ],
+      }),
+    ];
+
+    const result = verifySelfContainment({
+      module: module({
+        name: "CLI",
+        language: "Python",
+        files: ["svc/cli.py"],
+        ownedFiles: ["svc/cli.py"],
+        surface: [{ path: "svc/cli.py", symbol: "main" }],
+        anchors: ["svc/cli.py"],
+      }),
+      graph: buildGraph(files),
+      files,
+      declaredExternalDependencies: [],
+    });
+
+    expect(result.imports).toBe("fail");
+    expect(result.danglingImports).toEqual([
+      {
+        fromPath: "svc/cli.py",
+        moduleSpecifier: "requests",
+        resolvedTarget: null,
+        reason: "missingExternalDependency",
+      },
+    ]);
+  });
+
   it("fails when the claimed entrypoint is not exported", () => {
     const files = [
       fileSymbols("src/auth/route.ts", {
