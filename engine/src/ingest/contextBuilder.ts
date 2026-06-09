@@ -29,6 +29,7 @@ const MANIFEST_BASENAMES = [
   "requirements.txt",
   "go.mod",
   "cargo.toml",
+  "pom.xml",
   "pubspec.yaml",
   "build.gradle",
   "build.gradle.kts",

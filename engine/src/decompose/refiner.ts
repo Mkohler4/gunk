@@ -7,6 +7,7 @@
 
 import type { CapabilityExpansion, Module, ModuleSurface } from "../models.js";
 import { clamp, uniqued } from "../models.js";
+import { normalizeTags } from "../analyze/tagNormalizer.js";
 import type { JsonSchema, LLMClient, LLMRequest } from "../llm/client.js";
 
 export interface RefinerOptions {
@@ -50,16 +51,15 @@ export class CapabilityRefiner {
 
   async refine(
     client: LLMClient,
-    args: { model: string; sourceName: string; expansions: CapabilityExpansion[]; contentsByPath: Record<string, string>; allowedTags: string[] },
+    args: { model: string; sourceName: string; expansions: CapabilityExpansion[]; contentsByPath: Record<string, string>; suggestedTags: string[] },
   ): Promise<Module[]> {
-    const allowedTagsSorted = [...args.allowedTags].sort((a, b) => a.localeCompare(b));
-    const allowedTagSet = new Set(args.allowedTags);
+    const suggestedTagsSorted = [...args.suggestedTags].sort((a, b) => a.localeCompare(b));
     const modules: Module[] = [];
 
     for (const expansion of args.expansions) {
       const startedAt = this.now();
       const response = await client.complete(
-        this.request(args.model, args.sourceName, expansion, args.contentsByPath, allowedTagsSorted),
+        this.request(args.model, args.sourceName, expansion, args.contentsByPath, suggestedTagsSorted),
       );
       const finishedAt = this.now();
       this.options.recordRun?.({
@@ -69,7 +69,7 @@ export class CapabilityRefiner {
         finishedAt,
       });
 
-      const parsed = this.parseModule(response.json, expansion, allowedTagSet);
+      const parsed = this.parseModule(response.json, expansion);
       this.options.onRefinement?.({
         capability: expansion.hypothesis.name,
         accepted: parsed.module !== null,
@@ -87,7 +87,7 @@ export class CapabilityRefiner {
     sourceName: string,
     expansion: CapabilityExpansion,
     contentsByPath: Record<string, string>,
-    allowedTags: string[],
+    suggestedTags: string[],
   ): LLMRequest {
     return {
       model,
@@ -100,13 +100,14 @@ Deep-read one expanded capability closure and return structured JSON only.
 Real-module rubric:
 - Keep only files needed for the reusable capability.
 - Separate owned files from shared dependencies.
-- Use only allowed tags and only files present in the closure.
+- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.
+- Use only files present in the closure.
 - Return module null with a reject reason if this is not a real module.`,
         },
         {
           role: "user",
           content: `Source: ${sourceName}
-Allowed tags: ${allowedTags.join(", ")}
+Suggested tags: ${suggestedTags.join(", ")}
 
 Candidate:
 name: ${expansion.hypothesis.name}
@@ -127,7 +128,7 @@ ${this.fileContentsContext(expansion, contentsByPath)}`,
         },
       ],
       jsonSchemaName: "CapabilityRefinement",
-      jsonSchema: refinerOutputSchema(allowedTags),
+      jsonSchema: refinerOutputSchema(),
       maxTokens: this.maxOutputTokens,
       temperature: 0,
     };
@@ -162,7 +163,6 @@ ${this.fileContentsContext(expansion, contentsByPath)}`,
   private parseModule(
     value: unknown,
     expansion: CapabilityExpansion,
-    allowedTags: Set<string>,
   ): { module: Module | null; rejectReason: string | null } {
     const root = asObject(value);
     if (!root || !("module" in root) || asObject(root.qualityGateHints) === null || !("reject" in root)) {
@@ -196,9 +196,7 @@ ${this.fileContentsContext(expansion, contentsByPath)}`,
       return { module: null, rejectReason };
     }
 
-    const tags = uniqued(
-      (nonEmptyStrings(object.tags) ?? []).filter((t) => allowedTags.has(t)),
-    );
+    const tags = normalizeTags(nonEmptyStrings(object.tags) ?? []);
     const parsedAnchors = nonEmptyStrings(object.anchors);
     const anchors = parsedAnchors && parsedAnchors.length > 0 ? uniqued(parsedAnchors) : expansion.hypothesis.anchors;
     const surface = this.parseSurface(object.entrypoints, new Set(finalFiles));
@@ -236,13 +234,13 @@ ${this.fileContentsContext(expansion, contentsByPath)}`,
   }
 }
 
-export function refinerOutputSchema(allowedTags: string[]): JsonSchema {
+export function refinerOutputSchema(): JsonSchema {
   const moduleSchema: JsonSchema = {
     type: "object",
     properties: {
       name: { type: "string" },
       purpose: { type: "string" },
-      tags: { type: "array", items: { type: "string", enum: allowedTags } },
+      tags: { type: "array", items: { type: "string" } },
       language: { type: "string" },
       ownedFiles: { type: "array", items: { type: "string" } },
       sharedDependencies: { type: "array", items: { type: "string" } },

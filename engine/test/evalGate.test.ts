@@ -577,6 +577,52 @@ describe("offline replay eval harness", () => {
     }
   });
 
+  it("eval gate: all multi-language fixtures meet acceptance criteria", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: multiLanguageFixtures,
+    });
+
+    expect(report.passed).toBe(true);
+    for (const fixture of report.fixtures) {
+      expect(fixture.scorecard.filePrecision, fixture.name).toBeCloseTo(1, 5);
+      expect(fixture.scorecard.fileRecall, fixture.name).toBeCloseTo(1, 5);
+      expect(fixture.scorecard.moduleCountDelta, fixture.name).toBe(0);
+      expect(fixture.scorecard.trivialModuleFalsePositiveCount, fixture.name).toBe(0);
+      expect(fixture.signalMetrics.surveyHypothesisCount, fixture.name).toBeGreaterThanOrEqual(
+        fixture.scorecard.expectedModuleCount,
+      );
+    }
+  }, 30_000);
+
+  it("eval gate: 100% of accepted modules pass self-containment", async () => {
+    const report = await runEval({ fixturesDir });
+
+    expect(report.passed).toBe(true);
+    for (const fixture of report.fixtures) {
+      expect(fixture.signalMetrics.selfContainmentVerifiedCount, fixture.name).toBe(
+        fixture.scorecard.actualModuleCount,
+      );
+      expect(fixture.signalMetrics.selfContainmentPassRate, fixture.name).toBeCloseTo(1, 5);
+    }
+  }, 30_000);
+
+  it("eval gate: express-saas/next-media at baseline; 0 trap FPs", async () => {
+    const report = await runEval({ fixturesDir });
+
+    expect(report.passed).toBe(true);
+    for (const fixture of report.fixtures) {
+      expect(fixture.scorecard.trivialModuleFalsePositiveCount, fixture.name).toBe(0);
+    }
+
+    for (const name of ["express-saas", "next-media"]) {
+      const fixture = report.fixtures.find((candidate) => candidate.name === name);
+      expect(fixture?.scorecard.filePrecision, name).toBeCloseTo(1, 5);
+      expect(fixture?.scorecard.fileRecall, name).toBeCloseTo(1, 5);
+      expect(fixture?.scorecard.tagAccuracy, name).toBeCloseTo(1, 5);
+    }
+  }, 30_000);
+
   it("eval report includes proxy agreement per fixture", async () => {
     const report = await runEval({
       fixturesDir,
@@ -625,4 +671,36 @@ describe("offline replay eval harness", () => {
     expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(2);
     expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
   }, 30_000);
+
+  it("java-service replay accepts JVM capabilities without trap false positives", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["java-service"],
+    });
+    const fixture = report.fixtures[0];
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.scorecard.actualModuleCount).toBe(2);
+    expect(fixture?.scorecard.filePrecision).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.fileRecall).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
+    expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(2);
+    expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
+  });
+
+  it("mixed-monorepo replay accepts web, mobile, and JVM capabilities without trap false positives", async () => {
+    const report = await runEval({
+      fixturesDir,
+      fixtureNames: ["mixed-monorepo"],
+    });
+    const fixture = report.fixtures[0];
+
+    expect(report.passed).toBe(true);
+    expect(fixture?.scorecard.actualModuleCount).toBe(3);
+    expect(fixture?.scorecard.filePrecision).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.fileRecall).toBeCloseTo(1, 5);
+    expect(fixture?.scorecard.trivialModuleFalsePositiveCount).toBe(0);
+    expect(fixture?.signalMetrics.selfContainmentVerifiedCount).toBe(3);
+    expect(fixture?.signalMetrics.selfContainmentPassRate).toBeCloseTo(1, 5);
+  });
 });

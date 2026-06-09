@@ -59,9 +59,9 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "chars": 4658,
+        "chars": 4880,
         "chunks": 1,
-        "chunkChars": 4658
+        "chunkChars": 4880
       },
       "status": "ok"
     },
@@ -71,7 +71,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "hypotheses": 0
+        "hypotheses": 2
       },
       "status": "ok"
     },
@@ -81,7 +81,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "expansions": 0
+        "expansions": 2
       },
       "status": "ok"
     },
@@ -91,7 +91,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "modules": 0
+        "modules": 2
       },
       "status": "ok"
     },
@@ -101,7 +101,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "accepted": 0,
+        "accepted": 2,
         "needsApproval": 0,
         "rejected": 0
       },
@@ -113,7 +113,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "persisted": 0
+        "persisted": 2
       },
       "status": "ok"
     },
@@ -123,7 +123,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "extracted": 0
+        "extracted": 2
       },
       "status": "ok"
     }
@@ -140,28 +140,520 @@
         },
         {
           "role": "user",
-          "content": "Source: java-service\n\nKnown source files:\n- expected.json\n- pom.xml\n- src/main/java/com/gunk/generated/OpenApiClient.java\n- src/main/java/com/gunk/notifications/EmailController.java\n- src/main/java/com/gunk/notifications/EmailRequest.java\n- src/main/java/com/gunk/notifications/EmailService.java\n- src/main/java/com/gunk/notifications/SendGridClient.java\n- src/main/java/com/gunk/orders/OrderController.java\n- src/main/java/com/gunk/orders/OrderRepository.java\n- src/main/java/com/gunk/orders/OrderRequest.java\n- src/main/java/com/gunk/orders/OrderService.java\n- src/main/java/com/gunk/shared/Types.java\n- src/main/java/com/gunk/util/Slug.java\n\nReturn capability hypotheses with anchors, seed files, expected collaborators, and granularity.\n\nStructural repo map:\nrepo_map_v1\ntree:\n- expected.json (907 bytes)\n- pom.xml (414 bytes)\n- src/main/java/com/gunk/generated/OpenApiClient.java (89 bytes)\n- src/main/java/com/gunk/notifications/EmailController.java (390 bytes)\n- src/main/java/com/gunk/notifications/EmailRequest.java (131 bytes)\n- src/main/java/com/gunk/notifications/EmailService.java (232 bytes)\n- src/main/java/com/gunk/notifications/SendGridClient.java (148 bytes)\n- src/main/java/com/gunk/orders/OrderController.java (375 bytes)\n- src/main/java/com/gunk/orders/OrderRepository.java (138 bytes)\n- src/main/java/com/gunk/orders/OrderRequest.java (123 bytes)\n- src/main/java/com/gunk/orders/OrderService.java (249 bytes)\n- src/main/java/com/gunk/shared/Types.java (52 bytes)\n- src/main/java/com/gunk/util/Slug.java (99 bytes)\nclusters:\n- id: c1\n  files: expected.json\n  cohesion: 0.00\n- id: c10\n  files: src/main/java/com/gunk/orders/OrderRequest.java\n  cohesion: 1.00\n- id: c11\n  files: src/main/java/com/gunk/orders/OrderService.java\n  cohesion: 0.00\n- id: c12\n  files: src/main/java/com/gunk/shared/Types.java\n  cohesion: 1.00\n- id: c13\n  files: src/main/java/com/gunk/util/Slug.java\n  cohesion: 1.00\n- id: c2\n  files: pom.xml\n  cohesion: 1.00\n- id: c3\n  files: src/main/java/com/gunk/generated/OpenApiClient.java\n  cohesion: 1.00\n- id: c4\n  files: src/main/java/com/gunk/notifications/EmailController.java\n  cohesion: 0.00\n- id: c5\n  files: src/main/java/com/gunk/notifications/EmailRequest.java\n  cohesion: 1.00\n- id: c6\n  files: src/main/java/com/gunk/notifications/EmailService.java\n  cohesion: 0.00\n- id: c7\n  files: src/main/java/com/gunk/notifications/SendGridClient.java\n  cohesion: 0.00\n- id: c8\n  files: src/main/java/com/gunk/orders/OrderController.java\n  cohesion: 0.00\n- id: c9\n  files: src/main/java/com/gunk/orders/OrderRepository.java\n  cohesion: 0.00\nfiles:\n- path: expected.json\n  size: 907\n  cluster: c1\n- path: src/main/java/com/gunk/orders/OrderRequest.java\n  size: 123\n  cluster: c10\n  exports: OrderRequest:type@2, OrderReceipt:type@3\n  symbols: OrderRequest:type@2, OrderReceipt:type@3\n- path: src/main/java/com/gunk/orders/OrderService.java\n  size: 249\n  cluster: c11\n  exports: OrderService:class@2, OrderService:method@2, createOrder:method@2\n  symbols: OrderService:class@2, OrderService:method@2, createOrder:method@2\n- path: src/main/java/com/gunk/shared/Types.java\n  size: 52\n  cluster: c12\n  exports: Page:class@2\n  symbols: Page:class@2\n- path: src/main/java/com/gunk/util/Slug.java\n  size: 99\n  cluster: c13\n  exports: Slug:class@2, compact:method@2\n  symbols: Slug:class@2, compact:method@2\n- path: pom.xml\n  size: 414\n  cluster: c2\n- path: src/main/java/com/gunk/generated/OpenApiClient.java\n  size: 89\n  cluster: c3\n  exports: OpenApiClient:class@2, generated:method@2\n  symbols: OpenApiClient:class@2, generated:method@2\n- path: src/main/java/com/gunk/notifications/EmailController.java\n  size: 390\n  cluster: c4\n  exports: EmailController:class@4, sendInvite:method@5\n  symbols: EmailController:class@4, sendInvite:method@5\n  imports: org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/notifications/EmailRequest.java\n  size: 131\n  cluster: c5\n  exports: EmailRequest:type@2, EmailResult:type@3\n  symbols: EmailRequest:type@2, EmailResult:type@3\n- path: src/main/java/com/gunk/notifications/EmailService.java\n  size: 232\n  cluster: c6\n  exports: EmailService:class@2, EmailService:method@2, sendInvite:method@2\n  symbols: EmailService:class@2, EmailService:method@2, sendInvite:method@2\n- path: src/main/java/com/gunk/notifications/SendGridClient.java\n  size: 148\n  cluster: c7\n  exports: SendGridClient:class@2, send:method@2\n  symbols: SendGridClient:class@2, send:method@2\n- path: src/main/java/com/gunk/orders/OrderController.java\n  size: 375\n  cluster: c8\n  exports: OrderController:class@4, create:method@5\n  symbols: OrderController:class@4, create:method@5\n  imports: org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/orders/OrderRepository.java\n  size: 138\n  cluster: c9\n  exports: OrderRepository:class@2, save:method@2\n  symbols: OrderRepository:class@2, save:method@2\nexternal_deps:\n- file: src/main/java/com/gunk/notifications/EmailController.java\n  deps: org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n- file: src/main/java/com/gunk/orders/OrderController.java\n  deps: org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n"
+          "content": "Source: java-service\n\nKnown source files:\n- expected.json\n- pom.xml\n- src/main/java/com/gunk/generated/OpenApiClient.java\n- src/main/java/com/gunk/notifications/EmailController.java\n- src/main/java/com/gunk/notifications/EmailRequest.java\n- src/main/java/com/gunk/notifications/EmailService.java\n- src/main/java/com/gunk/notifications/SendGridClient.java\n- src/main/java/com/gunk/orders/OrderController.java\n- src/main/java/com/gunk/orders/OrderRepository.java\n- src/main/java/com/gunk/orders/OrderRequest.java\n- src/main/java/com/gunk/orders/OrderService.java\n- src/main/java/com/gunk/shared/Types.java\n- src/main/java/com/gunk/util/Slug.java\n\nReturn capability hypotheses with anchors, seed files, expected collaborators, and granularity.\n\nStructural repo map:\nrepo_map_v1\ntree:\n- expected.json (907 bytes)\n- pom.xml (414 bytes)\n- src/main/java/com/gunk/generated/OpenApiClient.java (89 bytes)\n- src/main/java/com/gunk/notifications/EmailController.java (390 bytes)\n- src/main/java/com/gunk/notifications/EmailRequest.java (131 bytes)\n- src/main/java/com/gunk/notifications/EmailService.java (232 bytes)\n- src/main/java/com/gunk/notifications/SendGridClient.java (148 bytes)\n- src/main/java/com/gunk/orders/OrderController.java (375 bytes)\n- src/main/java/com/gunk/orders/OrderRepository.java (138 bytes)\n- src/main/java/com/gunk/orders/OrderRequest.java (123 bytes)\n- src/main/java/com/gunk/orders/OrderService.java (249 bytes)\n- src/main/java/com/gunk/shared/Types.java (52 bytes)\n- src/main/java/com/gunk/util/Slug.java (99 bytes)\nclusters:\n- id: c1\n  files: expected.json\n  cohesion: 0.00\n- id: c10\n  files: src/main/java/com/gunk/orders/OrderRequest.java\n  cohesion: 1.00\n- id: c11\n  files: src/main/java/com/gunk/orders/OrderService.java\n  cohesion: 0.00\n- id: c12\n  files: src/main/java/com/gunk/shared/Types.java\n  cohesion: 1.00\n- id: c13\n  files: src/main/java/com/gunk/util/Slug.java\n  cohesion: 1.00\n- id: c2\n  files: pom.xml\n  cohesion: 1.00\n- id: c3\n  files: src/main/java/com/gunk/generated/OpenApiClient.java\n  cohesion: 1.00\n- id: c4\n  files: src/main/java/com/gunk/notifications/EmailController.java\n  cohesion: 0.00\n- id: c5\n  files: src/main/java/com/gunk/notifications/EmailRequest.java\n  cohesion: 1.00\n- id: c6\n  files: src/main/java/com/gunk/notifications/EmailService.java\n  cohesion: 0.00\n- id: c7\n  files: src/main/java/com/gunk/notifications/SendGridClient.java\n  cohesion: 0.00\n- id: c8\n  files: src/main/java/com/gunk/orders/OrderController.java\n  cohesion: 0.00\n- id: c9\n  files: src/main/java/com/gunk/orders/OrderRepository.java\n  cohesion: 0.00\nfiles:\n- path: expected.json\n  size: 907\n  cluster: c1\n- path: src/main/java/com/gunk/orders/OrderRequest.java\n  size: 123\n  cluster: c10\n  exports: OrderRequest:type@2, OrderReceipt:type@3\n  symbols: OrderRequest:type@2, OrderReceipt:type@3\n- path: src/main/java/com/gunk/orders/OrderService.java\n  size: 249\n  cluster: c11\n  exports: OrderService:class@2, OrderService:method@2, createOrder:method@2\n  symbols: OrderService:class@2, OrderService:method@2, createOrder:method@2\n- path: src/main/java/com/gunk/shared/Types.java\n  size: 52\n  cluster: c12\n  exports: Page:class@2\n  symbols: Page:class@2\n- path: src/main/java/com/gunk/util/Slug.java\n  size: 99\n  cluster: c13\n  exports: Slug:class@2, compact:method@2\n  symbols: Slug:class@2, compact:method@2\n- path: pom.xml\n  size: 414\n  cluster: c2\n  snippets:\n    - manifest@1: dependencies: com.sendgrid, com.sendgrid:sendgrid-java, org.springframework, org.springframework.boot, org.springframework.boot:spring-boot-starter-web, sendgrid-java, spring-boot-starter-web\n- path: src/main/java/com/gunk/generated/OpenApiClient.java\n  size: 89\n  cluster: c3\n  exports: OpenApiClient:class@2, generated:method@2\n  symbols: OpenApiClient:class@2, generated:method@2\n- path: src/main/java/com/gunk/notifications/EmailController.java\n  size: 390\n  cluster: c4\n  exports: EmailController:class@4, sendInvite:method@5\n  symbols: EmailController:class@4, sendInvite:method@5\n  imports: org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/notifications/EmailRequest.java\n  size: 131\n  cluster: c5\n  exports: EmailRequest:type@2, EmailResult:type@3\n  symbols: EmailRequest:type@2, EmailResult:type@3\n- path: src/main/java/com/gunk/notifications/EmailService.java\n  size: 232\n  cluster: c6\n  exports: EmailService:class@2, EmailService:method@2, sendInvite:method@2\n  symbols: EmailService:class@2, EmailService:method@2, sendInvite:method@2\n- path: src/main/java/com/gunk/notifications/SendGridClient.java\n  size: 148\n  cluster: c7\n  exports: SendGridClient:class@2, send:method@2\n  symbols: SendGridClient:class@2, send:method@2\n- path: src/main/java/com/gunk/orders/OrderController.java\n  size: 375\n  cluster: c8\n  exports: OrderController:class@4, create:method@5\n  symbols: OrderController:class@4, create:method@5\n  imports: org.springframework.web.bind.annotation.PostMapping->external, org.springframework.web.bind.annotation.RestController->external\n- path: src/main/java/com/gunk/orders/OrderRepository.java\n  size: 138\n  cluster: c9\n  exports: OrderRepository:class@2, save:method@2\n  symbols: OrderRepository:class@2, save:method@2\nexternal_deps:\n- file: src/main/java/com/gunk/notifications/EmailController.java\n  deps: org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n- file: src/main/java/com/gunk/orders/OrderController.java\n  deps: org.springframework.web.bind.annotation.PostMapping, org.springframework.web.bind.annotation.RestController\n"
         }
       ],
       "responseJson": {
-        "hypotheses": []
+        "hypotheses": [
+          {
+            "name": "Order intake API",
+            "rationale": "Order intake API is anchored by controller, route, service, repository, client, config, or store collaborators.",
+            "anchors": [
+              "OrderController",
+              "OrderService",
+              "OrderRepository",
+              "/orders"
+            ],
+            "seedFiles": [
+              "src/main/java/com/gunk/orders/OrderController.java",
+              "src/main/java/com/gunk/orders/OrderService.java",
+              "src/main/java/com/gunk/orders/OrderRepository.java",
+              "src/main/java/com/gunk/orders/OrderRequest.java"
+            ],
+            "expectedCollaborators": [],
+            "granularity": "feature"
+          },
+          {
+            "name": "Transactional email sending",
+            "rationale": "Transactional email sending is anchored by controller, route, service, repository, client, config, or store collaborators.",
+            "anchors": [
+              "EmailController",
+              "EmailService",
+              "SendGridClient",
+              "/emails/invite"
+            ],
+            "seedFiles": [
+              "src/main/java/com/gunk/notifications/EmailController.java",
+              "src/main/java/com/gunk/notifications/EmailService.java",
+              "src/main/java/com/gunk/notifications/SendGridClient.java",
+              "src/main/java/com/gunk/notifications/EmailRequest.java"
+            ],
+            "expectedCollaborators": [],
+            "granularity": "feature"
+          }
+        ]
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.\n- Use only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: java-service\nSuggested tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Order intake API\nrationale: Order intake API is anchored by controller, route, service, repository, client, config, or store collaborators.\nanchors: OrderController, OrderService, OrderRepository, /orders\nexpected collaborators: \n\nClosure:\nowned candidates: src/main/java/com/gunk/orders/OrderController.java, src/main/java/com/gunk/orders/OrderRepository.java, src/main/java/com/gunk/orders/OrderRequest.java, src/main/java/com/gunk/orders/OrderService.java\nshared dependency candidates: \nexcluded files: \n\nEdge evidence:\n- src/main/java/com/gunk/orders/OrderController.java --call--> src/main/java/com/gunk/orders/OrderRepository.java depth=1\n- src/main/java/com/gunk/orders/OrderController.java --reference--> src/main/java/com/gunk/orders/OrderRequest.java depth=1\n- src/main/java/com/gunk/orders/OrderController.java --call--> src/main/java/com/gunk/orders/OrderService.java depth=1\n- src/main/java/com/gunk/orders/OrderRepository.java --call--> src/main/java/com/gunk/orders/OrderRequest.java depth=1\n- src/main/java/com/gunk/orders/OrderRepository.java --reference--> src/main/java/com/gunk/orders/OrderRequest.java depth=1\n- src/main/java/com/gunk/orders/OrderService.java --call--> src/main/java/com/gunk/orders/OrderRepository.java depth=1\n- src/main/java/com/gunk/orders/OrderService.java --reference--> src/main/java/com/gunk/orders/OrderRepository.java depth=1\n- src/main/java/com/gunk/orders/OrderService.java --reference--> src/main/java/com/gunk/orders/OrderRequest.java depth=1\n\nClosure file contents:\n### src/main/java/com/gunk/orders/OrderController.java\npackage com.gunk.orders;\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RestController;\n@RestController\nclass OrderController { private final OrderService service = new OrderService(new OrderRepository()); @PostMapping(\"/orders\") OrderReceipt create(OrderRequest request) { return service.createOrder(request); } }\n\n\n### src/main/java/com/gunk/orders/OrderRepository.java\npackage com.gunk.orders;\nclass OrderRepository { OrderReceipt save(OrderRequest request) { return new OrderReceipt(request.sku(), 1); } }\n\n\n### src/main/java/com/gunk/orders/OrderRequest.java\npackage com.gunk.orders;\nrecord OrderRequest(String sku, int quantity) {}\nrecord OrderReceipt(String sku, int quantity) {}\n\n\n### src/main/java/com/gunk/orders/OrderService.java\npackage com.gunk.orders;\nclass OrderService { private final OrderRepository repository; OrderService(OrderRepository repository) { this.repository = repository; } OrderReceipt createOrder(OrderRequest request) { return repository.save(request); } }\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Order intake API",
+          "purpose": "Accepts order create requests and persists order receipts.",
+          "tags": [
+            "api"
+          ],
+          "language": "Java",
+          "ownedFiles": [
+            "src/main/java/com/gunk/orders/OrderController.java",
+            "src/main/java/com/gunk/orders/OrderService.java",
+            "src/main/java/com/gunk/orders/OrderRepository.java",
+            "src/main/java/com/gunk/orders/OrderRequest.java"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "src/main/java/com/gunk/orders/OrderController.java",
+              "symbol": "OrderController"
+            }
+          ],
+          "anchors": [
+            "OrderController",
+            "OrderService",
+            "OrderRepository",
+            "/orders"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.\n- Use only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: java-service\nSuggested tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Transactional email sending\nrationale: Transactional email sending is anchored by controller, route, service, repository, client, config, or store collaborators.\nanchors: EmailController, EmailService, SendGridClient, /emails/invite\nexpected collaborators: \n\nClosure:\nowned candidates: src/main/java/com/gunk/notifications/EmailController.java, src/main/java/com/gunk/notifications/EmailRequest.java, src/main/java/com/gunk/notifications/EmailService.java, src/main/java/com/gunk/notifications/SendGridClient.java\nshared dependency candidates: \nexcluded files: \n\nEdge evidence:\n- src/main/java/com/gunk/notifications/EmailController.java --reference--> src/main/java/com/gunk/notifications/EmailRequest.java depth=1\n- src/main/java/com/gunk/notifications/EmailController.java --call--> src/main/java/com/gunk/notifications/EmailService.java depth=1\n- src/main/java/com/gunk/notifications/EmailController.java --call--> src/main/java/com/gunk/notifications/SendGridClient.java depth=1\n- src/main/java/com/gunk/notifications/EmailService.java --call--> src/main/java/com/gunk/notifications/EmailController.java depth=1\n- src/main/java/com/gunk/notifications/EmailService.java --reference--> src/main/java/com/gunk/notifications/EmailRequest.java depth=1\n- src/main/java/com/gunk/notifications/EmailService.java --call--> src/main/java/com/gunk/notifications/SendGridClient.java depth=1\n- src/main/java/com/gunk/notifications/EmailService.java --reference--> src/main/java/com/gunk/notifications/SendGridClient.java depth=1\n- src/main/java/com/gunk/notifications/SendGridClient.java --call--> src/main/java/com/gunk/notifications/EmailRequest.java depth=1\n- src/main/java/com/gunk/notifications/SendGridClient.java --reference--> src/main/java/com/gunk/notifications/EmailRequest.java depth=1\n\nClosure file contents:\n### src/main/java/com/gunk/notifications/EmailController.java\npackage com.gunk.notifications;\nimport org.springframework.web.bind.annotation.PostMapping;\nimport org.springframework.web.bind.annotation.RestController;\n@RestController\nclass EmailController { private final EmailService service = new EmailService(new SendGridClient()); @PostMapping(\"/emails/invite\") EmailResult sendInvite(EmailRequest request) { return service.sendInvite(request); } }\n\n\n### src/main/java/com/gunk/notifications/EmailRequest.java\npackage com.gunk.notifications;\nrecord EmailRequest(String to, String template) {}\nrecord EmailResult(String to, String status) {}\n\n\n### src/main/java/com/gunk/notifications/EmailService.java\npackage com.gunk.notifications;\nclass EmailService { private final SendGridClient client; EmailService(SendGridClient client) { this.client = client; } EmailResult sendInvite(EmailRequest request) { return client.send(request); } }\n\n\n### src/main/java/com/gunk/notifications/SendGridClient.java\npackage com.gunk.notifications;\nclass SendGridClient { EmailResult send(EmailRequest request) { return new EmailResult(request.to(), \"queued\"); } }\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Transactional email sending",
+          "purpose": "Sends transactional invite emails through the notification service.",
+          "tags": [
+            "email",
+            "api"
+          ],
+          "language": "Java",
+          "ownedFiles": [
+            "src/main/java/com/gunk/notifications/EmailController.java",
+            "src/main/java/com/gunk/notifications/EmailService.java",
+            "src/main/java/com/gunk/notifications/SendGridClient.java",
+            "src/main/java/com/gunk/notifications/EmailRequest.java"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "src/main/java/com/gunk/notifications/EmailController.java",
+              "symbol": "EmailController"
+            }
+          ],
+          "anchors": [
+            "EmailController",
+            "EmailService",
+            "SendGridClient",
+            "/emails/invite"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
       },
       "inputTokens": null,
       "outputTokens": null,
       "durationMs": 0
     }
   ],
-  "hypotheses": [],
-  "expansions": [],
-  "refinements": [],
-  "gateEvaluations": [],
+  "hypotheses": [
+    {
+      "name": "Order intake API",
+      "rationale": "Order intake API is anchored by controller, route, service, repository, client, config, or store collaborators.",
+      "anchors": [
+        "OrderController",
+        "OrderService",
+        "OrderRepository",
+        "/orders"
+      ],
+      "seedFiles": [
+        "src/main/java/com/gunk/orders/OrderController.java",
+        "src/main/java/com/gunk/orders/OrderService.java",
+        "src/main/java/com/gunk/orders/OrderRepository.java",
+        "src/main/java/com/gunk/orders/OrderRequest.java"
+      ],
+      "expectedCollaborators": [],
+      "granularity": "feature",
+      "priority": "normal"
+    },
+    {
+      "name": "Transactional email sending",
+      "rationale": "Transactional email sending is anchored by controller, route, service, repository, client, config, or store collaborators.",
+      "anchors": [
+        "EmailController",
+        "EmailService",
+        "SendGridClient",
+        "/emails/invite"
+      ],
+      "seedFiles": [
+        "src/main/java/com/gunk/notifications/EmailController.java",
+        "src/main/java/com/gunk/notifications/EmailService.java",
+        "src/main/java/com/gunk/notifications/SendGridClient.java",
+        "src/main/java/com/gunk/notifications/EmailRequest.java"
+      ],
+      "expectedCollaborators": [],
+      "granularity": "feature",
+      "priority": "normal"
+    }
+  ],
+  "expansions": [
+    {
+      "hypothesis": {
+        "name": "Order intake API",
+        "rationale": "Order intake API is anchored by controller, route, service, repository, client, config, or store collaborators.",
+        "anchors": [
+          "OrderController",
+          "OrderService",
+          "OrderRepository",
+          "/orders"
+        ],
+        "seedFiles": [
+          "src/main/java/com/gunk/orders/OrderController.java",
+          "src/main/java/com/gunk/orders/OrderService.java",
+          "src/main/java/com/gunk/orders/OrderRepository.java",
+          "src/main/java/com/gunk/orders/OrderRequest.java"
+        ],
+        "expectedCollaborators": [],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "src/main/java/com/gunk/orders/OrderController.java",
+        "src/main/java/com/gunk/orders/OrderRepository.java",
+        "src/main/java/com/gunk/orders/OrderRequest.java",
+        "src/main/java/com/gunk/orders/OrderService.java"
+      ],
+      "ownedFiles": [
+        "src/main/java/com/gunk/orders/OrderController.java",
+        "src/main/java/com/gunk/orders/OrderRepository.java",
+        "src/main/java/com/gunk/orders/OrderRequest.java",
+        "src/main/java/com/gunk/orders/OrderService.java"
+      ],
+      "sharedDependencyFiles": [],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderController.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRepository.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderController.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRequest.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderController.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderService.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderRepository.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRequest.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderRepository.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRequest.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderService.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRepository.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderService.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRepository.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/orders/OrderService.java",
+          "toPath": "src/main/java/com/gunk/orders/OrderRequest.java",
+          "kind": "reference",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "hypothesis": {
+        "name": "Transactional email sending",
+        "rationale": "Transactional email sending is anchored by controller, route, service, repository, client, config, or store collaborators.",
+        "anchors": [
+          "EmailController",
+          "EmailService",
+          "SendGridClient",
+          "/emails/invite"
+        ],
+        "seedFiles": [
+          "src/main/java/com/gunk/notifications/EmailController.java",
+          "src/main/java/com/gunk/notifications/EmailService.java",
+          "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "src/main/java/com/gunk/notifications/EmailRequest.java"
+        ],
+        "expectedCollaborators": [],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "src/main/java/com/gunk/notifications/EmailController.java",
+        "src/main/java/com/gunk/notifications/EmailRequest.java",
+        "src/main/java/com/gunk/notifications/EmailService.java",
+        "src/main/java/com/gunk/notifications/SendGridClient.java"
+      ],
+      "ownedFiles": [
+        "src/main/java/com/gunk/notifications/EmailController.java",
+        "src/main/java/com/gunk/notifications/EmailRequest.java",
+        "src/main/java/com/gunk/notifications/EmailService.java",
+        "src/main/java/com/gunk/notifications/SendGridClient.java"
+      ],
+      "sharedDependencyFiles": [],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailController.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailRequest.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailController.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailService.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailController.java",
+          "toPath": "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailService.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailController.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailService.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailRequest.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailService.java",
+          "toPath": "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/EmailService.java",
+          "toPath": "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailRequest.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "toPath": "src/main/java/com/gunk/notifications/EmailRequest.java",
+          "kind": "reference",
+          "depth": 1
+        }
+      ]
+    }
+  ],
+  "refinements": [
+    {
+      "capability": "Order intake API",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Order intake API",
+        "purpose": "Accepts order create requests and persists order receipts.",
+        "tags": [
+          "api"
+        ],
+        "files": [
+          "src/main/java/com/gunk/orders/OrderController.java",
+          "src/main/java/com/gunk/orders/OrderService.java",
+          "src/main/java/com/gunk/orders/OrderRepository.java",
+          "src/main/java/com/gunk/orders/OrderRequest.java"
+        ],
+        "language": "Java",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "src/main/java/com/gunk/orders/OrderController.java",
+          "src/main/java/com/gunk/orders/OrderService.java",
+          "src/main/java/com/gunk/orders/OrderRepository.java",
+          "src/main/java/com/gunk/orders/OrderRequest.java"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "src/main/java/com/gunk/orders/OrderController.java",
+            "symbol": "OrderController"
+          }
+        ],
+        "anchors": [
+          "OrderController",
+          "OrderService",
+          "OrderRepository",
+          "/orders"
+        ]
+      }
+    },
+    {
+      "capability": "Transactional email sending",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Transactional email sending",
+        "purpose": "Sends transactional invite emails through the notification service.",
+        "tags": [
+          "email",
+          "api"
+        ],
+        "files": [
+          "src/main/java/com/gunk/notifications/EmailController.java",
+          "src/main/java/com/gunk/notifications/EmailService.java",
+          "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "src/main/java/com/gunk/notifications/EmailRequest.java"
+        ],
+        "language": "Java",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "src/main/java/com/gunk/notifications/EmailController.java",
+          "src/main/java/com/gunk/notifications/EmailService.java",
+          "src/main/java/com/gunk/notifications/SendGridClient.java",
+          "src/main/java/com/gunk/notifications/EmailRequest.java"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "src/main/java/com/gunk/notifications/EmailController.java",
+            "symbol": "EmailController"
+          }
+        ],
+        "anchors": [
+          "EmailController",
+          "EmailService",
+          "SendGridClient",
+          "/emails/invite"
+        ]
+      }
+    }
+  ],
+  "gateEvaluations": [
+    {
+      "name": "Order intake API",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.7333333333333333
+    },
+    {
+      "name": "Transactional email sending",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.75
+    }
+  ],
   "verification": {
-    "build": [],
-    "selfContainment": []
+    "build": [
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-home-oLTMAF/modules/1",
+        "language": "java",
+        "built": false,
+        "skipped": true,
+        "command": null,
+        "log": "Build tool not available."
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-home-oLTMAF/modules/2",
+        "language": "java",
+        "built": false,
+        "skipped": true,
+        "command": null,
+        "log": "Build tool not available."
+      }
+    ],
+    "selfContainment": [
+      {
+        "moduleName": "Order intake API",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      },
+      {
+        "moduleName": "Transactional email sending",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      }
+    ]
   },
   "summary": {
-    "gunkIds": [],
-    "accepted": 0,
+    "gunkIds": [
+      1,
+      2
+    ],
+    "accepted": 2,
     "needsApproval": 0,
     "rejected": 0
   }

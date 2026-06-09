@@ -46,6 +46,9 @@ describe("DependencyManifestParser", () => {
       "requirements.txt": "Flask==3.0\n# ignored\nrequests>=2",
       "go.mod": "require github.com/gin-gonic/gin v1.10.0",
       "Cargo.toml": '[dependencies]\nserde = "1"',
+      "pom.xml": `<project><dependencies>
+        <dependency><groupId>org.springframework.boot</groupId><artifactId>spring-boot-starter-web</artifactId></dependency>
+      </dependencies></project>`,
     });
 
     const allDependencies = new Set(manifests.flatMap((manifest) => manifest.dependencies));
@@ -59,6 +62,10 @@ describe("DependencyManifestParser", () => {
         "requests",
         "github.com/gin-gonic/gin",
         "serde",
+        "org.springframework.boot:spring-boot-starter-web",
+        "spring-boot-starter-web",
+        "org.springframework.boot",
+        "org.springframework",
       ]),
     );
   });

@@ -8,13 +8,22 @@ We ship in **weekly increments** (the build-in-public cadence) and group them
 into **phases**, each with a tangible demo. A phase is "done" when we can show
 its demo to a stranger and they understand what gunk is.
 
-The architecture is set in [ADR-0001](adr/0001-what-is-gunk.md) and
-[ADR-0002](adr/0002-stack-and-runtime.md): a Swift macOS menubar app
+The architecture is set in [ADR-0001](adr/0001-what-is-gunk.md),
+[ADR-0002](adr/0002-stack-and-runtime.md), and
+[ADR-0015](adr/0015-full-macos-app-first.md): a full Swift macOS app
 (`gunk.app`) and a short-lived TypeScript MCP server (`gunk-mcp`), sharing a
-local SQLite store at `~/.gunk/store.db`. No daemon. The product principles
-are set in [ADR-0003](adr/0003-ambient-over-invoked.md) and
-[ADR-0004](adr/0004-drag-in-over-file-watch.md): ambient, not invoked;
-drag-in, not file-watch.
+local SQLite store at `~/.gunk/store.db`. No daemon. The product principles are
+set in [ADR-0003](adr/0003-ambient-over-invoked.md) and
+[ADR-0004](adr/0004-drag-in-over-file-watch.md): ambient, not invoked; drag-in,
+not file-watch.
+
+## Current focus
+
+The next product milestone is **a legit macOS app you can open**. Engine quality
+is now good enough to build around. The priority is a full windowed app with
+clear source import, module browsing, module detail, approval, runs/debugging,
+and settings. One-click AI-tool wiring is still useful, but it moves behind the
+core app experience.
 
 The roadmap below builds toward that, **walking-skeleton-first**: Phase 2 is
 the dumbest possible end-to-end loop, and every later phase deepens it.
@@ -116,11 +125,50 @@ context window.
 
 ---
 
-## Phase 5 — AI-tool wiring (Weeks 5–6)
+## Phase 5 — Multi-language evals and verification feedback (Weeks 5–6)
 
-**Demo:** First-run experience: app launches, sees Cursor + Claude Code +
-Codex + OpenCode installed, offers a single button: *"Wire them all to gunk."*
-One click. From that moment, every one of those tools knows about your gunk.
+**Demo:** Run the engine eval gate and watch web, Flutter/Dart,
+Kotlin/Android, Java service, mixed monorepo, and large-repo fixtures all meet
+their floors with zero trap false positives. Every persisted module has
+deterministic self-containment evidence in `trace.json`.
+
+- [x] Dart, Kotlin, and Java tree-sitter symbol extraction
+- [x] Mobile/JVM manifest and import-resolution coverage for pubspec, Gradle,
+      and Maven POM-backed dependencies
+- [x] Multi-language eval fixtures with golden modules and negative traps:
+      Flutter, Kotlin Android, Java service, mixed monorepo, and large repo
+- [x] Deterministic offline replay eval harness and CLI report
+- [x] Repo-map chunking/map-reduce survey for large repositories
+- [x] Self-containment verification wired into quality gates
+- [x] `trace.json` verification fields for self-containment and optional build
+      checks
+- [x] Phase retro and updated engine architecture contract
+
+---
+
+## Phase 6 — Full macOS app (Weeks 6–7)
+
+**Demo:** Open `gunk.app` like a normal Mac app. Drop a source, watch it
+process, browse extracted modules, inspect a module's owned files and
+self-containment status, approve/reject borderline modules, and open settings
+without touching a menu-bar popover.
+
+- [ ] Main window shell with navigation: Sources, Modules, Runs, Approval,
+      Settings
+- [ ] Dock/window source import flow with visible processing state
+- [ ] Modules browser with source/tag/language/status filtering
+- [ ] Module detail view: owned files, shared deps, entrypoints,
+      self-containment, optional build verification, bundle path
+- [ ] Approval queue and re-run controls
+- [ ] Provider/model/store/engine status in Settings
+- [ ] Packaging notes for signing, notarization, and update path
+
+---
+
+## Phase 7 — AI-tool wiring (Weeks 7–8)
+
+**Demo:** The finished app sees Cursor + Claude Code + Codex + OpenCode
+installed and offers one-click MCP setup from Settings or onboarding.
 
 - [ ] AI tool detectors:
   - Cursor: writes `.cursor/rules/gunk.mdc` and global MCP config
@@ -128,14 +176,14 @@ One click. From that moment, every one of those tools knows about your gunk.
   - Codex: writes `~/.codex/config.toml`
   - OpenCode: writes the appropriate config file
   - Claude Desktop: writes `claude_desktop_config.json`
-- [ ] One-click "wire all" button in the app's onboarding
-- [ ] Per-tool toggle in settings (don't wire OpenCode if user doesn't want)
+- [ ] One-click "wire all" button after app onboarding is coherent
+- [ ] Per-tool toggle in settings
 - [ ] Idempotent: re-running detection doesn't duplicate config entries
 - [ ] Usage telemetry: every time an AI tool calls gunk, log it locally
 
 ---
 
-## Phase 6 — Polish (Weeks 6–7)
+## Phase 8 — Polish (Weeks 8–9)
 
 **Demo:** App feels finished. Browse view shows your gunks grouped by tag.
 Approval queue handles low-confidence classifications. Menu bar shows "Cursor
@@ -152,7 +200,7 @@ used gunk 14× today." Settings let you tune classification cost vs. quality.
 
 ---
 
-## Phase 7 — Friend alpha (Week 8)
+## Phase 9 — Friend alpha (Week 10)
 
 **Demo:** Five real users from the Twitter circle have gunk installed, have
 seen their AI use a module from gunk at least once, and have one piece of
@@ -167,7 +215,7 @@ feedback that we shipped in response.
 
 ---
 
-## Phase 8 — Public alpha (Week 9)
+## Phase 10 — Public alpha (Week 11)
 
 **Demo:** Public download of `gunk.app`, public roadmap, demo video, Show HN
 post, landing page. The launch.
@@ -182,7 +230,7 @@ post, landing page. The launch.
 
 ---
 
-## Beyond Phase 8 (speculative — not committed)
+## Beyond Phase 10 (speculative — not committed)
 
 These are ideas, not promises. Each one will get its own ADR if it advances:
 

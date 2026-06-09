@@ -77,6 +77,47 @@ class Pattern {
 }
 
 export class IgnoreRules {
+  // Directories that are essentially never first-party source: VCS, build
+  // output, dependency/vendor trees, language virtualenvs, and tool caches.
+  // The scanner prunes the whole subtree when a directory is skipped, so adding
+  // a basename here keeps huge installed-dependency trees (e.g. a committed
+  // Python `.venv` with tens of thousands of files) out of the pipeline.
+  private static readonly DEFAULT_IGNORED_DIRECTORIES = new Set<string>([
+    // VCS + generic build output
+    ".git",
+    "node_modules",
+    "build",
+    "dist",
+    ".build",
+    // Python virtualenvs, packaging, and caches
+    ".venv",
+    "venv",
+    "site-packages",
+    "__pycache__",
+    ".tox",
+    ".mypy_cache",
+    ".pytest_cache",
+    ".ruff_cache",
+    ".eggs",
+    // JS/web build + tool caches
+    ".next",
+    ".nuxt",
+    ".svelte-kit",
+    ".turbo",
+    ".parcel-cache",
+    "bower_components",
+    "coverage",
+    // Other ecosystems
+    ".gradle",
+    ".dart_tool",
+    "Pods",
+    ".terraform",
+    // Editor/tooling caches
+    ".idea",
+    ".vscode",
+    ".cache",
+  ]);
+
   private readonly patterns: Pattern[];
 
   constructor(patterns: string[] = []) {
@@ -100,7 +141,7 @@ export class IgnoreRules {
     const normalized = IgnoreRules.normalize(relpath);
     const basename = basenameOf(normalized);
 
-    if (this.isDefaultIgnored(normalized, basename, isDirectory)) {
+    if (this.isDefaultIgnored(basename, isDirectory)) {
       return "skip";
     }
 
@@ -115,7 +156,7 @@ export class IgnoreRules {
     return "include";
   }
 
-  private isDefaultIgnored(relpath: string, basename: string, isDirectory: boolean): boolean {
+  private isDefaultIgnored(basename: string, isDirectory: boolean): boolean {
     if (basename === ".DS_Store" || basename === ".gunkignore") {
       return true;
     }
@@ -124,14 +165,7 @@ export class IgnoreRules {
       return false;
     }
 
-    return (
-      [".git", "node_modules", "build", "dist", ".build"].includes(basename) ||
-      relpath.endsWith("/.git") ||
-      relpath.endsWith("/node_modules") ||
-      relpath.endsWith("/build") ||
-      relpath.endsWith("/dist") ||
-      relpath.endsWith("/.build")
-    );
+    return IgnoreRules.DEFAULT_IGNORED_DIRECTORIES.has(basename);
   }
 
   private static isLikelySecret(relpath: string, basename: string): boolean {

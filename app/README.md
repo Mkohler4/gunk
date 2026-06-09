@@ -1,10 +1,11 @@
 # gunk.app
 
-Native macOS menubar app for gunk.
+Native macOS app for gunk.
 
 This package is the Swift / SwiftUI / AppKit half of the product described in
-the root README and ADR-0002. It runs as a menu bar accessory with an
-`NSStatusItem` and a popover for dropping, listing, and removing gunks.
+the root README, ADR-0002, ADR-0009, and ADR-0015. The product direction is a
+regular Dock/window app first. The menubar item is a secondary shortcut for
+opening controls, not the primary workspace.
 
 ## Requirements
 
@@ -23,20 +24,34 @@ the root README and ADR-0002. It runs as a menu bar accessory with an
 
 ## Launching Locally
 
-After `make app`, open `build/gunk.app`. The app runs as a menu bar accessory
-and shows a `G` status item. Open the popover and drag a folder onto the
-Browse tab's drop zone to add it to `~/.gunk/store.db`. Files and non-file URLs
-are rejected. Successful drops post a `gunkInserted` notification so the list
-view can refresh immediately.
+After `make app`, open `build/gunk.app`. The app launches as a regular macOS
+app and may also show a `G` status item. Drag a folder onto the Dock icon or the
+app's import/drop surface to add it to `~/.gunk/store.db`. Files and non-file
+URLs are rejected. Successful drops post a `gunkInserted` notification so the
+views can refresh immediately.
 
 If an LLM provider and key are configured in Settings, the drop also starts the
 Phase 3 processing path: scan the source, build a token-budgeted context, call
 the selected LLM with temperature `0`, persist module gunks, and extract
 high-confidence modules into `~/.gunk/modules/`.
 
-The popover lists active dropped sources below the drop zone in newest-first
-order. Each row shows the folder name, middle-truncated path, relative drop
-date, and a trash button that soft-removes the source from the shared store.
+The active product target is a full app shell with navigation for Sources,
+Modules, Runs, Approval, and Settings. Older popover-first views still exist in
+the codebase and should be treated as scaffolding to migrate into the main
+window.
+
+## Module bundles and runability
+
+An extracted gunk is a module bundle under `~/.gunk/modules/<gunk_id>/`. It
+contains selected source files, a `gunk.yml` manifest, and `README.gunk.md`.
+
+"Self-contained" means the engine verified that module-owned internal imports
+stay inside the module and that claimed entrypoints are exported by owned files.
+It does **not** mean every bundle is a standalone runnable app. Some bundles are
+library slices or feature slices that need a host project, package install, or
+runtime configuration. Optional build verification records whether a bundle can
+be typechecked/built with available local tools, but that result is diagnostic
+and separate from module extraction.
 
 ## Store
 
@@ -148,10 +163,10 @@ count as the idle Dock badge.
 
 ## Browse and Approval
 
-The menubar popover opens Browse and Settings. `BrowseModel` loads module
-gunks, groups them by tag, attaches their source information for provenance,
-and exposes actions to open an extracted bundle, re-classify the source, or
-delete the module.
+The full app shell should expose Browse, Approval, Runs, and Settings as
+primary navigation destinations. `BrowseModel` loads module gunks, groups them
+by tag, attaches their source information for provenance, and exposes actions to
+open an extracted bundle, re-classify the source, or delete the module.
 
 Below-threshold modules that have not been approved or extracted appear in the
 approval queue. Approving a module marks `approved_at`, runs extraction through

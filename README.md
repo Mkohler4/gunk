@@ -49,11 +49,11 @@ Two processes. One local store. No daemon. No file-system scanning.
                               │ writes (only on user drop)
                               │
         ┌─────────────────────┴────────────────────┐
-        │  gunk.app  (macOS menubar)               │
-        │  - drop zone for folders                 │
-        │  - in-process classifier + extractor     │
-        │  - browse / approve UI                   │
-        │  - one-click MCP setup for all 4 tools   │
+        │  gunk.app  (full macOS app)              │
+        │  - Dock/window drop zone for folders     │
+        │  - engine-backed modularizer             │
+        │  - browse / approve / runs / settings UI │
+        │  - MCP setup status and controls         │
         └──────────────────────────────────────────┘
 ```
 
@@ -88,10 +88,11 @@ What exists today: this README, four ADRs, a roadmap, and a clear thesis. That's
 | 2. Walking skeleton | Drop a folder → it appears in the store → MCP server exposes it → Cursor can reference it. End-to-end, no classification. |
 | 3. Classifier | Drops get tagged: auth, payments, ui-kit, scraper, dashboard… |
 | 4. Extractor | Tagged modules become portable bundles with manifests. |
-| 5. AI-tool wiring | One-click MCP setup for Cursor, Claude Code, Codex, OpenCode. |
-| 6. Polish | Approval UI, usage counter, browse view, settings. |
-| 7. Friend alpha | Five real users from the Twitter circle. |
-| 8. Public alpha | `gunk.app` download, demo video, Show HN. |
+| 5. Multi-language evals | Engine proves module quality across web, mobile, JVM, mixed, and large fixtures. |
+| 6. Full macOS app | Real windowed app: sources, modules, runs, approval, settings, bundle details. |
+| 7. AI-tool wiring | One-click MCP setup for Cursor, Claude Code, Codex, OpenCode. |
+| 8. Friend alpha | Five real users from the Twitter circle. |
+| 9. Public alpha | `gunk.app` download, demo video, Show HN. |
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the week-by-week version.
 
@@ -105,14 +106,14 @@ For the Phase 2 end-to-end path, see the manual
 - **Drop-only ingestion.** Gunk only knows about folders you explicitly drop on it. No filesystem watching, no Full Disk Access, no path config. ([ADR-0004](docs/adr/0004-drag-in-over-file-watch.md))
 - **Ambient, not invoked.** Once configured, the user types zero gunk commands. The AI tool does the work. ([ADR-0003](docs/adr/0003-ambient-over-invoked.md))
 - **Local-first.** Your gunk stays on your machine. There is no cloud component in v0.
-- **Two processes, no daemon.** A short-lived MCP server (spawned by AI tools) and a macOS menubar app. They share a SQLite store. ([ADR-0002](docs/adr/0002-stack-and-runtime.md))
+- **Two processes, no daemon.** A short-lived MCP server (spawned by AI tools) and a full macOS app. They share a SQLite store. ([ADR-0002](docs/adr/0002-stack-and-runtime.md), [ADR-0015](docs/adr/0015-full-macos-app-first.md))
 - **AI-native.** Every feature is designed around "how does an AI consume this?" first.
 - **Boring stack, durable choices.** TypeScript MCP server, Swift macOS app, SQLite store. We optimize for shipping.
 - **Build in public.** Weekly visible progress, not promises.
 
 ## Stack ([ADR-0002](docs/adr/0002-stack-and-runtime.md))
 
-- **`gunk.app`:** Swift / SwiftUI / AppKit. macOS 14+. Native menubar app.
+- **`gunk.app`:** Swift / SwiftUI / AppKit. macOS 14+. Native full macOS app with Dock/window surfaces; menubar controls are secondary.
 - **`gunk-mcp`:** TypeScript on Bun. Single-binary. Spawned by AI tools using the standard MCP stdio pattern.
 - **Local store:** SQLite + a modules directory under `~/.gunk/`.
 - **AI tool integration:** MCP. Works for Cursor, Claude Code, Codex, OpenCode, Claude Desktop, Cline, and any future MCP-compatible client.

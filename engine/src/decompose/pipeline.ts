@@ -15,6 +15,7 @@ import {
   insertGunk,
   listTags,
   recordLLMRun,
+  upsertTag,
   type Gunk,
   type Source,
 } from "../store/index.js";
@@ -78,6 +79,7 @@ const MANIFEST_BASENAMES = [
   "requirements.txt",
   "go.mod",
   "cargo.toml",
+  "pom.xml",
   "pubspec.yaml",
   "build.gradle",
   "build.gradle.kts",
@@ -211,7 +213,7 @@ export class DecompositionPipeline {
     });
 
     // 8. refine
-    const allowedTags = listTags(this.db).map((t) => t.name);
+    const suggestedTags = listTags(this.db).map((t) => t.name);
     tracing.stage = "refine";
     const modules = await this.stage("refine", 0.78, async () => {
       const refiner = new CapabilityRefiner({
@@ -223,7 +225,7 @@ export class DecompositionPipeline {
         sourceName: source.name,
         expansions,
         contentsByPath,
-        allowedTags,
+        suggestedTags,
       });
       return { value: result, counts: { modules: result.length } };
     });
@@ -356,7 +358,6 @@ export class DecompositionPipeline {
     source: Source,
   ): { gunk: Gunk; decision: string }[] {
     const sourceFileByPath = new Map(filesForSource(this.db, source.id).map((f) => [f.relpath, f]));
-    const tagByName = new Map(listTags(this.db).map((t) => [t.name, t]));
     const persisted: { gunk: Gunk; decision: string }[] = [];
 
     for (const evaluation of evaluations) {
@@ -369,8 +370,8 @@ export class DecompositionPipeline {
         confidence: module.confidence,
       });
       for (const tagName of module.tags) {
-        const tag = tagByName.get(tagName);
-        if (tag) addGunkTag(this.db, gunk.id, tag.id, module.confidence);
+        const tag = upsertTag(this.db, tagName);
+        addGunkTag(this.db, gunk.id, tag.id, module.confidence);
       }
       const seen = new Set<string>();
       for (const relpath of module.files) {

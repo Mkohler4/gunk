@@ -40,6 +40,21 @@ describe("SourceScanner / IgnoreRules", () => {
     expect(files.map((file) => file.relpath)).toEqual(["src/App.swift"]);
   });
 
+  it("skips Python virtualenvs and dependency/tool caches", () => {
+    writeFile("src/main.py", "print('ok')");
+    writeFile(".venv/lib/python3.12/site-packages/numpy/core.py", "import numpy");
+    writeFile("venv/lib/pkg/mod.py", "x = 1");
+    writeFile("__pycache__/main.cpython-312.pyc", "bytecode");
+    writeFile(".mypy_cache/3.12/main.data.json", "{}");
+    writeFile(".tox/py312/log.txt", "log");
+    writeFile(".gradle/caches/jar.bin", "cache");
+    writeFile(".idea/workspace.xml", "<xml/>");
+
+    const files = scanFolder(temporaryDirectory);
+
+    expect(files.map((file) => file.relpath)).toEqual(["src/main.py"]);
+  });
+
   it("skips likely secret files", () => {
     writeFile("src/App.swift", 'print("ok")');
     writeFile(".env", "TOKEN=secret");

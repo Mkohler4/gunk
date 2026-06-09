@@ -253,6 +253,11 @@ export function insertGunk(
   return gunkById(db, id)!;
 }
 
+export function upsertTag(db: Database, name: string): Tag {
+  db.query(`INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO NOTHING`).run(name);
+  return db.query<Tag, [string]>(`SELECT id, name FROM tags WHERE name = ?`).get(name)!;
+}
+
 export function addGunkTag(
   db: Database,
   gunkId: number,

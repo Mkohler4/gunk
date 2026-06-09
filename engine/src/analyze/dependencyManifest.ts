@@ -4,6 +4,7 @@ export type DependencyManifestKind =
   | "cargoToml"
   | "gradle"
   | "goMod"
+  | "mavenPom"
   | "packageJson"
   | "packageSwift"
   | "pubspecYaml"
@@ -55,6 +56,8 @@ export class DependencyManifestParser {
       return { path, kind: "goMod", dependencies: this.parseGoMod(contents) };
     } else if (lowercasedPath.endsWith("cargo.toml")) {
       return { path, kind: "cargoToml", dependencies: this.parseCargoToml(contents) };
+    } else if (lowercasedPath.endsWith("pom.xml")) {
+      return { path, kind: "mavenPom", dependencies: this.parseMavenPom(contents) };
     }
 
     return null;
@@ -144,6 +147,35 @@ export class DependencyManifestParser {
       dependencies.push(parts.length >= 2 ? `${parts[0]}:${parts[1]}` : coordinate);
       if (parts.length >= 2) {
         dependencies.push(parts[1]);
+      }
+    }
+
+    return dedupe(dependencies);
+  }
+
+  private parseMavenPom(contents: string): string[] {
+    const dependencies: string[] = [];
+    for (const match of analysisMatches(
+      contents,
+      String.raw`<dependency\b[^>]*>([\s\S]*?)</dependency>`,
+    )) {
+      const block = match[0];
+      if (block === undefined) {
+        continue;
+      }
+      const groupId = analysisFirstMatch(block, String.raw`<groupId>\s*([^<\s]+)\s*</groupId>`);
+      const artifactId = analysisFirstMatch(block, String.raw`<artifactId>\s*([^<\s]+)\s*</artifactId>`);
+      if (groupId === undefined || artifactId === undefined) {
+        continue;
+      }
+
+      dependencies.push(`${groupId}:${artifactId}`);
+      dependencies.push(artifactId);
+      dependencies.push(groupId);
+
+      const rootGroup = groupId.split(".").slice(0, 2).join(".");
+      if (rootGroup.length > 0 && rootGroup !== groupId) {
+        dependencies.push(rootGroup);
       }
     }
 

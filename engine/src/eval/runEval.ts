@@ -86,11 +86,21 @@ export const DEFAULT_EVAL_FIXTURES: EvalFixtureConfig[] = [
   },
   {
     name: "java-service",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 2,
+      minFileRecall: 1,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0.8, minSurveyHypotheses: 2 },
   },
   {
     name: "mixed-monorepo",
-    signalFloor: { minParseCoverage: 0, minSurveyHypotheses: 0 },
+    scoreFloor: {
+      minActualModules: 3,
+      minFileRecall: 1,
+      maxTrivialModuleFalsePositives: 0,
+    },
+    signalFloor: { minParseCoverage: 0.8, minSurveyHypotheses: 3 },
   },
   {
     name: "large-repo",

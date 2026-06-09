@@ -765,9 +765,16 @@ function grammarFor(language: LanguageKind, path: string): GrammarName | null {
 
 class TreeSitterSymbolExtractor implements SymbolExtractor {
   private readonly languages: Map<GrammarName, Language>;
+  // A single reused parser. web-tree-sitter is WASM/Emscripten-backed, so each
+  // `Parser` and `Tree` allocates in the WASM heap and must be freed explicitly.
+  // Allocating a parser per file (and never deleting trees) leaks the heap and
+  // aborts the runtime on large repos, so we keep one parser and delete every
+  // tree after walking it.
+  private readonly parser: Parser;
 
   constructor(languages: Map<GrammarName, Language>) {
     this.languages = languages;
+    this.parser = new Parser();
   }
 
   extract(file: SymbolFile): FileSymbols {
@@ -783,57 +790,61 @@ class TreeSitterSymbolExtractor implements SymbolExtractor {
       return fallbackExtract(file, language);
     }
 
-    const parser = new Parser();
-    parser.setLanguage(grammar);
-    const tree = parser.parse(file.contents);
+    this.parser.setLanguage(grammar);
+    const tree = this.parser.parse(file.contents);
     const root = tree?.rootNode;
     if (!root) {
+      tree?.delete();
       return fallbackExtract(file, language);
     }
 
-    const symbols: Symbol[] = [];
-    const imports: ImportRef[] = [];
-    const exports: ExportRef[] = [];
+    try {
+      const symbols: Symbol[] = [];
+      const imports: ImportRef[] = [];
+      const exports: ExportRef[] = [];
 
-    walk(root, (node) => {
-      const type = node.type;
-      const text = node.text;
-      const line = node.startPosition.row + 1;
+      walk(root, (node) => {
+        const type = node.type;
+        const text = node.text;
+        const line = node.startPosition.row + 1;
 
-      switch (language) {
-        case "javaScript":
-        case "typeScript":
-          collectJavaScriptLike(node, type, text, line, symbols, imports, exports);
-          break;
-        case "dart":
-          collectDart(node, type, text, line, symbols, imports, exports);
-          break;
-        case "python":
-          collectPython(node, type, text, line, symbols, imports);
-          break;
-        case "swift":
-          collectSwift(type, text, line, symbols, imports, exports);
-          break;
-        case "go":
-          collectGo(node, type, text, line, symbols, imports, exports);
-          break;
-        case "java":
-          collectJava(node, type, text, line, symbols, imports, exports);
-          break;
-        case "kotlin":
-          collectKotlin(node, type, text, line, symbols, imports, exports);
-          break;
-      }
-    });
+        switch (language) {
+          case "javaScript":
+          case "typeScript":
+            collectJavaScriptLike(node, type, text, line, symbols, imports, exports);
+            break;
+          case "dart":
+            collectDart(node, type, text, line, symbols, imports, exports);
+            break;
+          case "python":
+            collectPython(node, type, text, line, symbols, imports);
+            break;
+          case "swift":
+            collectSwift(type, text, line, symbols, imports, exports);
+            break;
+          case "go":
+            collectGo(node, type, text, line, symbols, imports, exports);
+            break;
+          case "java":
+            collectJava(node, type, text, line, symbols, imports, exports);
+            break;
+          case "kotlin":
+            collectKotlin(node, type, text, line, symbols, imports, exports);
+            break;
+        }
+      });
 
-    return {
-      path: file.path,
-      language,
-      viaFallback: false,
-      symbols: uniquedBy(symbols, symbolKey),
-      imports: uniquedBy(imports, importKey),
-      exports: uniquedBy(exports, exportKey),
-    };
+      return {
+        path: file.path,
+        language,
+        viaFallback: false,
+        symbols: uniquedBy(symbols, symbolKey),
+        imports: uniquedBy(imports, importKey),
+        exports: uniquedBy(exports, exportKey),
+      };
+    } finally {
+      tree.delete();
+    }
   }
 }
 
