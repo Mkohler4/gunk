@@ -56,6 +56,13 @@ runtime configuration. Optional build verification records whether a bundle can
 be typechecked/built with available local tools, but that result is diagnostic
 and separate from module extraction.
 
+The Modules browser opens a detail pane for each gunk. The pane shows the bundle
+path, owned files from the store, shared dependencies and entrypoints from the
+latest matching engine trace when present, and verification status using two
+separate labels: "self-contained for AI reuse" and "standalone runnable
+project." Users can open an extracted bundle directly in Finder from the row or
+detail pane.
+
 ## Store
 
 The app uses [GRDB](https://github.com/groue/GRDB.swift) to write the shared
@@ -172,7 +179,8 @@ their source information for provenance, reads live tag/language/source filter
 options from the store, and lets the Modules view group by tag, source,
 language, or approval state. Module rows show name, purpose, tags, source,
 language, confidence, approval state, extraction status, and actions to open an
-extracted bundle, re-classify the source, or delete the module.
+extracted bundle, re-classify the source, or delete the module. Selecting a row
+shows the module detail pane without leaving the app shell.
 
 Below-threshold modules that have not been approved or extracted appear in the
 approval queue. Approving a module marks `approved_at`, runs extraction through

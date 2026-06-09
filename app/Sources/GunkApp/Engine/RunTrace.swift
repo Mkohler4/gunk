@@ -3,7 +3,7 @@ import Foundation
 /// A per-run trace written by `gunk-engine` to `~/.gunk/runs/<runId>/trace.json`.
 /// Mirrors the `RunTrace` schema in `engine/src/trace/trace.ts`. Decoded
 /// best-effort for display in the Runs panel; unknown fields are ignored.
-struct RunTrace: Decodable, Identifiable, Equatable {
+struct RunTrace: Decodable, Identifiable, Equatable, Sendable {
   let runId: String
   let sourceId: Int64?
   let sourceName: String
@@ -14,6 +14,8 @@ struct RunTrace: Decodable, Identifiable, Equatable {
   let status: String
   let error: String?
   let stages: [Stage]
+  let refinements: [Refinement]?
+  let verification: Verification?
   let summary: Summary
 
   var id: String { runId }
@@ -25,7 +27,7 @@ struct RunTrace: Decodable, Identifiable, Equatable {
     return finishedAtMs - startedAtMs
   }
 
-  struct Stage: Decodable, Identifiable, Equatable {
+  struct Stage: Decodable, Identifiable, Equatable, Sendable {
     let stage: String
     let durationMs: Double
     let counts: [String: Int]
@@ -35,11 +37,65 @@ struct RunTrace: Decodable, Identifiable, Equatable {
     var id: String { stage }
   }
 
-  struct Summary: Decodable, Equatable {
+  struct Summary: Decodable, Equatable, Sendable {
     let accepted: Int
     let needsApproval: Int
     let rejected: Int
     let gunkIds: [Int64]
+  }
+
+  struct Refinement: Decodable, Equatable, Sendable {
+    let capability: String
+    let accepted: Bool
+    let rejectReason: String?
+    let module: Module?
+  }
+
+  struct Module: Decodable, Equatable, Sendable {
+    let name: String
+    let ownedFiles: [String]?
+    let sharedDeps: [String]?
+    let surface: [Surface]?
+  }
+
+  struct Surface: Decodable, Equatable, Sendable {
+    let path: String
+    let symbol: String?
+  }
+
+  struct Verification: Decodable, Equatable, Sendable {
+    let build: [BuildResult]?
+    let selfContainment: [SelfContainmentResult]?
+  }
+
+  struct BuildResult: Decodable, Equatable, Sendable {
+    let bundlePath: String
+    let language: String
+    let built: Bool
+    let skipped: Bool
+    let command: String?
+    let log: String
+  }
+
+  struct SelfContainmentResult: Decodable, Equatable, Sendable {
+    let moduleName: String
+    let imports: String
+    let entrypoint: String
+    let danglingImports: [DanglingImport]
+    let missingEntrypoints: [MissingEntrypoint]
+  }
+
+  struct DanglingImport: Decodable, Equatable, Sendable {
+    let fromPath: String
+    let moduleSpecifier: String?
+    let resolvedTarget: String?
+    let reason: String
+  }
+
+  struct MissingEntrypoint: Decodable, Equatable, Sendable {
+    let path: String
+    let symbol: String?
+    let reason: String
   }
 }
 

@@ -85,7 +85,7 @@ Show extracted modules as the primary object, not raw folders.
 
 ## T-6.4 — Module detail and runability contract
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** Codex
 
 ### Goal

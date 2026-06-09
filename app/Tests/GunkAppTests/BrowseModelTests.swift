@@ -1,3 +1,4 @@
+import Foundation
 import GRDB
 import XCTest
 @testable import GunkApp
@@ -205,6 +206,125 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertEqual(reclassifiedSourceIds, [source.id])
   }
 
+  func testDetailUsesTraceForRunabilityAndSharedDependencies() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let gunk = try insertGunk(
+      store: store,
+      source: source,
+      name: "oauth-login",
+      tags: ["auth"],
+      confidence: 0.93,
+      extractedAt: 300,
+      files: ["src/auth.ts", "src/types.ts"]
+    )
+    let trace = RunTrace(
+      runId: "run-1",
+      sourceId: source.id,
+      sourceName: source.name,
+      provider: "openai",
+      model: "gpt-test",
+      startedAtMs: 1,
+      finishedAtMs: 2,
+      status: "succeeded",
+      error: nil,
+      stages: [],
+      refinements: [
+        RunTrace.Refinement(
+          capability: "oauth-login",
+          accepted: true,
+          rejectReason: nil,
+          module: RunTrace.Module(
+            name: "oauth-login",
+            ownedFiles: ["src/auth.ts"],
+            sharedDeps: ["src/types.ts"],
+            surface: [
+              RunTrace.Surface(path: "src/auth.ts", symbol: "authCallback")
+            ]
+          )
+        )
+      ],
+      verification: RunTrace.Verification(
+        build: [
+          RunTrace.BuildResult(
+            bundlePath: "/tmp/modules/oauth-login",
+            language: "typeScript",
+            built: false,
+            skipped: false,
+            command: "tsc --noEmit src/auth.ts",
+            log: "missing package"
+          )
+        ],
+        selfContainment: [
+          RunTrace.SelfContainmentResult(
+            moduleName: "oauth-login",
+            imports: "pass",
+            entrypoint: "pass",
+            danglingImports: [],
+            missingEntrypoints: []
+          )
+        ]
+      ),
+      summary: RunTrace.Summary(
+        accepted: 1,
+        needsApproval: 0,
+        rejected: 0,
+        gunkIds: [gunk.id]
+      )
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [trace] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertEqual(detail.ownedFiles, ["src/auth.ts"])
+    XCTAssertEqual(detail.sharedDependencies, ["src/types.ts"])
+    XCTAssertEqual(detail.entrypoints, [BrowseEntrypoint(path: "src/auth.ts", symbol: "authCallback")])
+    XCTAssertEqual(detail.selfContainment?.passed, true)
+    XCTAssertEqual(detail.buildVerification?.built, false)
+    XCTAssertEqual(detail.buildVerification?.command, "tsc --noEmit src/auth.ts")
+  }
+
+  func testDetailFallsBackToStoreFilesAndManifestEntrypoints() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let tempDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    let manifestURL = tempDirectory.appendingPathComponent("gunk.yml")
+    try """
+    schema_version: 0
+    entrypoints:
+      - path: "src/main.swift"
+        symbol: "run"
+    """.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "runner",
+      purpose: "runner purpose",
+      language: "Swift",
+      confidence: 0.88,
+      bundlePath: tempDirectory.path,
+      manifestPath: manifestURL.path,
+      extractedAt: 300
+    )
+    try store.addGunkFile(gunkId: gunk.id, relpath: "src/main.swift", size: 42)
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertEqual(detail.ownedFiles, ["src/main.swift"])
+    XCTAssertEqual(detail.entrypoints, [BrowseEntrypoint(path: "src/main.swift", symbol: "run")])
+    XCTAssertNil(detail.selfContainment)
+    XCTAssertNil(detail.buildVerification)
+  }
+
   private func makeStore(now: @escaping () -> Int64 = { 100 }) throws -> Store {
     try Store(databaseQueue: DatabaseQueue(), now: now)
   }
@@ -216,7 +336,8 @@ final class BrowseModelTests: XCTestCase {
     tags: [String],
     language: String? = "Swift",
     confidence: Double,
-    extractedAt: Int64? = nil
+    extractedAt: Int64? = nil,
+    files: [String] = []
   ) throws -> Gunk {
     let gunk = try store.insertGunk(
       sourceId: source.id,
@@ -232,6 +353,10 @@ final class BrowseModelTests: XCTestCase {
     for tagName in tags {
       let tag = try store.addTag(name: tagName)
       try store.addGunkTag(gunkId: gunk.id, tagId: tag.id, confidence: confidence)
+    }
+
+    for file in files {
+      try store.addGunkFile(gunkId: gunk.id, relpath: file, size: nil)
     }
 
     return gunk
