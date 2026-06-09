@@ -126,16 +126,15 @@ export function parseHypotheses(value: unknown, knownFiles: Set<string>): Capabi
     }
 
     const uniqueSeedFiles = uniqued(seedFiles);
-    const uniqueCollaborators = uniqued(expectedCollaborators);
-    const citedFiles = new Set([
-      ...uniqueSeedFiles,
-      ...uniqueCollaborators.filter((f) => knownFiles.has(f)),
-    ]);
+    // Collaborators are hints, not the module definition. Models routinely return
+    // capability/symbol names ("logging", "utils", "process_runner") rather than
+    // exact repo file paths, so keep only the ones that resolve to known files
+    // instead of discarding the whole hypothesis when any collaborator is
+    // unresolved. seedFiles remain the strict integrity check below.
+    const knownCollaborators = uniqued(expectedCollaborators).filter((f) => knownFiles.has(f));
+    const citedFiles = new Set([...uniqueSeedFiles, ...knownCollaborators]);
 
     if (uniqueSeedFiles.length === 0 || !uniqueSeedFiles.every((f) => knownFiles.has(f))) {
-      continue;
-    }
-    if (uniqueCollaborators.some((f) => !knownFiles.has(f))) {
       continue;
     }
 
@@ -147,7 +146,7 @@ export function parseHypotheses(value: unknown, knownFiles: Set<string>): Capabi
       rationale,
       anchors: uniqued(anchors),
       seedFiles: uniqueSeedFiles,
-      expectedCollaborators: uniqueCollaborators,
+      expectedCollaborators: knownCollaborators,
       granularity,
       priority,
     });

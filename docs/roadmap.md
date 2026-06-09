@@ -28,6 +28,22 @@ core app experience.
 The roadmap below builds toward that, **walking-skeleton-first**: Phase 2 is
 the dumbest possible end-to-end loop, and every later phase deepens it.
 
+## How we actually got here (non-linear path)
+
+The phases below keep their original planned numbering, but we did **not** build
+them in that order. Engine quality was the riskiest, highest-leverage part of the
+product, so we front-loaded it: the classification, extraction, and
+multi-language eval work (the heart of Phases 3–5) was built first as a
+cross-platform TypeScript engine (`gunk-engine`, per ADR-0013/0014). The macOS
+app shell (Phase 6) is mid-build, and the product glue and launch work (cost
+meter UI, in-app reclassify, `list_tags`, AI-tool auto-wiring, packaging,
+alpha/launch) still trails.
+
+So the checkboxes below reflect **real status, not the original week order**: an
+item is checked if it actually exists today, wherever it was built. Note that
+several Phase 6 component views already exist from earlier app work even though
+the unified windowed shell does not yet.
+
 ---
 
 ## Phase 1 — Foundation (Week 1)
@@ -39,7 +55,7 @@ roadmap, here are the ADRs explaining what we're building and why."
 - [x] ADR-0001 (what is gunk), ADR-0002 (stack), ADR-0003 (ambient over
       invoked), ADR-0004 (drag-in over file-watch)
 - [x] `docs/roadmap.md` (this file)
-- [ ] `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
+- [x] `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`
 - [x] Initial git commit, push to GitHub (public)
 - [x] GitHub Project board with issues seeded from this roadmap
 - [x] Bun + TypeScript scaffold for `gunk-mcp` (lint, typecheck, test, format)
@@ -62,7 +78,7 @@ architecture is allowed to ship in isolation.
 
 ### App side
 
-- [ ] Swift menubar app skeleton (NSStatusItem, popover or panel, Defaults)
+- [x] Swift menubar app skeleton (NSStatusItem, popover or panel, Defaults)
 - [x] A single window with a drop zone ("Drag folders here")
 - [x] Drop handler: copy folder *path* (not contents) into `~/.gunk/store.db`
 - [x] List view: dropped folders, with name, path, file count, drop date
@@ -98,14 +114,19 @@ deepening, not green-fielding.
 "build me OAuth" demo drops noticeably because Cursor only pulls the relevant
 gunk.
 
-- [ ] Pluggable LLM client (OpenAI, Anthropic, local via Ollama) inside
-      `gunk.app`
-- [ ] Per-folder semantic tagging at drop-time, with confidence scores
+- [x] Pluggable LLM client (OpenAI, Anthropic, local via Ollama) inside
+      `gunk.app` (`LLM/{OpenAI,Anthropic,Ollama}Client.swift` + secret store)
+- [x] Per-folder semantic tagging at drop-time, with confidence scores
+      — evolved into engine-driven module decomposition with per-module
+      confidence (richer than the original per-folder tag)
 - [x] Tag taxonomy v0: `auth`, `payments`, `ui-kit`, `scraper`, `dashboard`,
-      `cli`, `api`, `db-layer`, `email`, `search`
-- [ ] LLM cost meter (reuse the spend-tracking insight from AICockpit)
-- [ ] Re-classify affordance per gunk
-- [ ] MCP `search_gunks(query)` and tag-based filtering
+      `cli`, `api`, `db-layer`, `email`, `search` (now a *seed*; tags are
+      AI-derived and open — see ADR/CHANGELOG dynamic tags)
+- [ ] LLM cost meter — partial: per-run `cost_usd` + token usage are tracked in
+      the store, but no in-app meter UI yet
+- [ ] Re-classify affordance per gunk — engine can re-run, but the app
+      `reclassify` hook is still a no-op (tracked in T-6.8)
+- [x] MCP `search_gunks(query)` and tag-based filtering
 
 ---
 
@@ -116,12 +137,14 @@ manifest, just the module-relevant files (auth-related, not the whole repo),
 and a generated mini-README. The AI gets a much smaller, more relevant
 context window.
 
-- [ ] Tree-sitter-based file/symbol relevance graph per tag
-- [ ] `gunk.yml` manifest spec v0 (id, name, tags, language, deps, entrypoints,
+- [x] Tree-sitter-based file/symbol relevance graph per tag (engine symbol
+      extraction + code graph + capability closures)
+- [x] `gunk.yml` manifest spec v0 (id, name, tags, language, deps, entrypoints,
       provenance, license, source path, source commit hash if git)
-- [ ] On-demand extraction triggered from the app
-- [ ] License-conflict detection
-- [ ] MCP `get_gunk` returns the extracted module bundle, not the whole folder
+- [x] On-demand extraction triggered from the app (engine `extract/*`, driven by
+      the app's `SourceProcessingRunner`)
+- [x] License-conflict detection (`LicenseDetector`, engine + app)
+- [x] MCP `get_gunk` returns the extracted module bundle, not the whole folder
 
 ---
 
@@ -152,6 +175,12 @@ deterministic self-containment evidence in `trace.json`.
 process, browse extracted modules, inspect a module's owned files and
 self-containment status, approve/reject borderline modules, and open settings
 without touching a menu-bar popover.
+
+> Status: several component views already exist from earlier menubar/popover work
+> (`BrowseView`, `ApprovalQueueView`, `SettingsView`, `RunsView`, `DropZoneView`,
+> `GunkListView`) and the menubar + Dock controllers are in place. What's missing
+> is the unified **windowed** shell that ties them together (no
+> `NavigationSplitView`/`WindowGroup` yet), so the items below stay unchecked.
 
 - [ ] Main window shell with navigation: Sources, Modules, Runs, Approval,
       Settings
@@ -234,6 +263,15 @@ post, landing page. The launch.
 
 These are ideas, not promises. Each one will get its own ADR if it advances:
 
+- **Live, graded LLM-quality evals.** Today's eval gate is *deterministic
+  replay* (key-free, CI-safe): it replays recorded model responses and so tests
+  the engine *around* the model, not the model's actual answers. A follow-up
+  harness should run the pipeline against a live provider and grade real
+  decomposition quality (golden-label scoring and/or an LLM judge), track
+  quality drift across prompt and model changes, and gate on quality
+  thresholds — run on a cadence/nightly rather than per-PR so CI stays key-free.
+  See T-6.8 for the near-term first step (re-recording tapes against the current
+  schema). Gets its own ADR.
 - Cross-platform UI (Tauri or SwiftUI on Linux/Windows)
 - Multi-language extraction beyond JS/TS (Python, Go, Rust)
 - Opt-in per-folder file watching (per ADR-0004's "future revisit" path)

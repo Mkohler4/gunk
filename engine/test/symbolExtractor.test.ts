@@ -76,17 +76,21 @@ export async function authCallback(user: User) {
     });
   });
 
-  it("extracts Python imports and declarations", () => {
+  it("extracts Python imports, declarations, and public top-level exports", () => {
     const symbols = extractor.extract({
       path: "worker/task.py",
       contents: `import os, sys
 from flask import Blueprint
 
 class InviteSender:
-    pass
+    def deliver(self):
+        return True
 
 def send_invite(email):
-    return email`,
+    return email
+
+def _private_helper():
+    return None`,
     });
 
     expect(symbols.language).toBe("python");
@@ -102,7 +106,18 @@ def send_invite(email):
       line: 2,
     });
     expect(symbols.symbols).toContainEqual({ name: "InviteSender", kind: "class", line: 4 });
-    expect(symbols.symbols).toContainEqual({ name: "send_invite", kind: "function", line: 7 });
+    expect(symbols.symbols).toContainEqual({ name: "send_invite", kind: "function", line: 8 });
+
+    // Python has no `export` keyword: public top-level defs/classes are exported,
+    // while nested methods and underscore-prefixed names are not.
+    expect(symbols.exports).toContainEqual({ name: "InviteSender", kind: "class", line: 4 });
+    expect(symbols.exports).toContainEqual({ name: "send_invite", kind: "function", line: 8 });
+    expect(symbols.exports).not.toContainEqual({ name: "deliver", kind: "function", line: 5 });
+    expect(symbols.exports).not.toContainEqual({
+      name: "_private_helper",
+      kind: "function",
+      line: 11,
+    });
   });
 
   it("extracts Swift imports and declarations", () => {

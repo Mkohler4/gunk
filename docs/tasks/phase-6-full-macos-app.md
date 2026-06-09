@@ -157,6 +157,13 @@ brushed aside.
   `tag_accuracy` reflects dynamic tags. Today replay evals only prove
   determinism, not dynamic-tag recall, because the tapes were recorded under the
   old `enum`-constrained schema.
+- **Live answer-quality eval (engine):** beyond re-recording tapes, stand up a
+  graded harness that runs the pipeline against a *live* provider and scores the
+  model's actual decomposition quality (golden-label scoring and/or an LLM
+  judge), kept separate from the key-free deterministic replay gate and run on a
+  cadence (e.g. nightly) so per-PR CI stays key-free. This is what makes
+  prompt/model changes measurable against quality, not just determinism. Tracked
+  at the roadmap level under "Beyond Phase 10"; this bullet is the engine hook.
 - **Discovery (MCP):** add a `list_tags` MCP tool (and/or surface the live tag
   vocabulary in tool descriptions) so AI clients can see the growing tag set
   instead of inferring it from individual gunks. `search_gunks` already matches
