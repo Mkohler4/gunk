@@ -6,6 +6,9 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
+
 ### Added
 - `gunk-engine` now derives module tags dynamically (hybrid): the refine pass treats the seeded taxonomy as a suggested vocabulary but lets the model mint new domain tags, which are normalized to lowercase kebab-case (deduped, capped at 6) and auto-created in the `tags` table on persist instead of being silently dropped. No schema change; MCP and the app Browse view pick up the richer tags automatically.
 - `gunk-engine`: a cross-platform (macOS/Windows/Linux) TypeScript/Bun decomposition engine that owns the entire AI pipeline (scan, web-tree-sitter symbol extraction, code graph, fingerprints, repo map, capability survey/expansion/refinement, quality gates, dedupe, extraction, embeddings), writes the shared `~/.gunk` SQLite store, and emits NDJSON progress events plus per-run JSON traces to `~/.gunk/runs/<runId>/trace.json`.

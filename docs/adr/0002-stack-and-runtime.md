@@ -28,8 +28,6 @@ context. This is the standard MCP architecture and it removes a whole class of
 
 ### For `gunk-mcp` (the MCP server)
 
-#### Option A: TypeScript on Bun
-
 - **Pros:** Most mature MCP SDK in any language (`@modelcontextprotocol/sdk`);
   best LLM-provider SDK ecosystem; largest contributor pool for OSS; Bun gives
   fast startup (essential — this process is spawned every time an AI tool
@@ -38,22 +36,21 @@ context. This is the standard MCP architecture and it removes a whole class of
 - **Cons:** Compiled binary is ~50MB; we ship it inside the macOS app bundle
   rather than via `npm`, which sidesteps the size complaint.
 
-#### Option B: Rust
+#### Not yet evaluated (deliberately deferred)
 
-- **Pros:** Smallest, fastest binary; native tree-sitter; strongest refactoring
-  safety.
-- **Cons:** ~2x time-to-MVP; less mature MCP SDK; smaller contributor pool.
+We did **not** assess these for v0. They are parked, not rejected — each has a
+trigger for when it would earn a real spike:
 
-#### Option C: Go
-
-- **Pros:** Fast startup, single binary, gentle ramp.
-- **Cons:** MCP SDK and LLM SDKs less mature than TS.
-
-#### Option D: Swift (everything in one language)
-
-- **Pros:** One language across app and MCP server; possible code sharing.
-- **Cons:** MCP Swift SDK is far less battle-tested; cross-platform Swift
-  outside Apple is rough; we lose the largest contributor pool.
+- **Node.js (vs. Bun)** — largest ecosystem, but slower cold start and no
+  built-in single-binary compile. Revisit if Bun blocks us on a dependency or
+  target platform.
+- **Deno** — first-class TS and a permissions model; not evaluated for MCP SDK
+  maturity or single-binary distribution. Revisit if Bun's tooling regresses.
+- **Python engine/MCP** — strongest tree-sitter/LLM familiarity, but heavier
+  distribution. Revisit only if the TS engine hits a real capability wall.
+- **Alternative local stores** (DuckDB, embedded Postgres, plain JSON/Parquet)
+  vs. SQLite — not evaluated. SQLite stays the default until a query or
+  concurrency need forces the question.
 
 ### For `gunk.app` (the menubar app)
 
@@ -148,6 +145,12 @@ This ADR should be reopened if:
   At that point, *that* feature gets its own ADR proposing a daemon.
 - We need to ship a Windows-native UI; we'd evaluate Tauri vs. SwiftUI port
   vs. Electron at that point.
+
+**Plan to revisit the deferred options.** At the start of each phase, spend ~15
+minutes scanning the "Not yet evaluated" list above. Promote an item to a full
+spike + superseding ADR only when a concrete need appears — a blocker, a new
+target platform, or a measured performance ceiling. No such need exists today,
+so all deferred options remain parked.
 
 ## Related
 
