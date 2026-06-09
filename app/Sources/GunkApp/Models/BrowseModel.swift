@@ -5,6 +5,7 @@ struct BrowseItem: Equatable, Identifiable, Sendable {
   let gunk: Gunk
   let source: Source
   let tags: [String]
+  let files: [GunkFile]
 
   var id: Int64 {
     gunk.id
@@ -18,6 +19,62 @@ struct BrowseSection: Equatable, Identifiable, Sendable {
   var id: String {
     tag
   }
+}
+
+struct BrowseEntrypoint: Equatable, Identifiable, Sendable {
+  let path: String
+  let symbol: String?
+
+  var id: String {
+    if let symbol {
+      return "\(path)#\(symbol)"
+    }
+
+    return path
+  }
+
+  var label: String {
+    if let symbol {
+      return "\(path) · \(symbol)"
+    }
+
+    return path
+  }
+}
+
+struct BrowseSelfContainmentResult: Equatable, Sendable {
+  let imports: String
+  let entrypoint: String
+  let danglingImports: [RunTrace.DanglingImport]
+  let missingEntrypoints: [RunTrace.MissingEntrypoint]
+
+  var passed: Bool {
+    imports == "pass" && entrypoint == "pass"
+  }
+}
+
+struct BrowseBuildVerificationResult: Equatable, Sendable {
+  let language: String
+  let built: Bool
+  let skipped: Bool
+  let command: String?
+  let log: String
+}
+
+struct BrowseModuleDetail: Equatable, Sendable {
+  let item: BrowseItem
+  let ownedFiles: [String]
+  let sharedDependencies: [String]
+  let entrypoints: [BrowseEntrypoint]
+  let bundlePath: String?
+  let selfContainment: BrowseSelfContainmentResult?
+  let buildVerification: BrowseBuildVerificationResult?
+}
+
+private struct BrowseTraceModuleRecord: Equatable {
+  let ownedFiles: [String]
+  let sharedDependencies: [String]
+  let entrypoints: [BrowseEntrypoint]
 }
 
 enum BrowseGroup: String, CaseIterable, Identifiable, Sendable {
@@ -81,6 +138,7 @@ struct BrowseFilters: Equatable, Sendable {
 final class BrowseModel {
   typealias ExtractGunk = @MainActor (Gunk) throws -> Void
   typealias ReclassifySource = @MainActor (Int64) throws -> Void
+  typealias LoadRunTraces = @MainActor () -> [RunTrace]
 
   static let untaggedSection = "untagged"
 
@@ -88,6 +146,7 @@ final class BrowseModel {
   private let confidenceThreshold: Double
   private let extractGunk: ExtractGunk
   private let reclassifySource: ReclassifySource
+  private let loadRunTraces: LoadRunTraces
 
   private(set) var sections: [BrowseSection] = []
   private(set) var approvalQueue: [BrowseItem] = []
@@ -102,12 +161,18 @@ final class BrowseModel {
   }
 
   private var items: [BrowseItem] = []
+  private var traceModuleRecords: [Int64: BrowseTraceModuleRecord] = [:]
+  private var selfContainmentByGunkId: [Int64: BrowseSelfContainmentResult] = [:]
+  private var buildVerificationByBundlePath: [String: BrowseBuildVerificationResult] = [:]
 
   init(
     store: Store,
     confidenceThreshold: Double = Extractor.defaultConfidenceThreshold,
     extractGunk: ExtractGunk? = nil,
-    reclassifySource: @escaping ReclassifySource = { _ in }
+    reclassifySource: @escaping ReclassifySource = { _ in },
+    loadRunTraces: @escaping LoadRunTraces = {
+      RunTraceStore().recentTraces(limit: 250)
+    }
   ) {
     self.store = store
     self.confidenceThreshold = confidenceThreshold
@@ -118,12 +183,14 @@ final class BrowseModel {
       ).extract(gunk: gunk)
     }
     self.reclassifySource = reclassifySource
+    self.loadRunTraces = loadRunTraces
   }
 
   func refresh() {
     do {
       let items = try loadItems()
       self.items = items
+      indexTraces(loadRunTraces(), items: items)
       approvalQueue = items
         .filter(isPendingApproval)
         .sorted(by: itemSort)
@@ -174,6 +241,32 @@ final class BrowseModel {
     }
   }
 
+  func detail(for gunkId: Int64) -> BrowseModuleDetail? {
+    guard let item = items.first(where: { $0.gunk.id == gunkId }) else {
+      return nil
+    }
+
+    let traceRecord = traceModuleRecords[gunkId]
+    let ownedFiles = nonEmpty(
+      traceRecord?.ownedFiles,
+      fallback: item.files.map(\.relpath)
+    )
+    let entrypoints = nonEmpty(
+      traceRecord?.entrypoints,
+      fallback: manifestEntrypoints(for: item.gunk)
+    )
+
+    return BrowseModuleDetail(
+      item: item,
+      ownedFiles: ownedFiles,
+      sharedDependencies: traceRecord?.sharedDependencies ?? [],
+      entrypoints: entrypoints,
+      bundlePath: item.gunk.bundlePath,
+      selfContainment: selfContainmentByGunkId[gunkId],
+      buildVerification: buildVerification(for: item.gunk)
+    )
+  }
+
   private func loadItems() throws -> [BrowseItem] {
     let sourcesById = Dictionary(uniqueKeysWithValues: try store.listSources().map { ($0.id, $0) })
 
@@ -191,9 +284,162 @@ final class BrowseModel {
       return BrowseItem(
         gunk: gunk,
         source: source,
-        tags: try store.listGunkTags(gunkId: gunk.id).map(\.tag)
+        tags: try store.listGunkTags(gunkId: gunk.id).map(\.tag),
+        files: try store.filesForGunk(gunkId: gunk.id)
       )
     }
+  }
+
+  private func indexTraces(_ traces: [RunTrace], items: [BrowseItem]) {
+    traceModuleRecords = [:]
+    selfContainmentByGunkId = [:]
+    buildVerificationByBundlePath = [:]
+
+    for trace in traces {
+      indexBuildVerification(trace)
+
+      let traceGunkIds = Set(trace.summary.gunkIds)
+      let traceItems: [BrowseItem]
+      if traceGunkIds.isEmpty, let sourceId = trace.sourceId {
+        traceItems = items.filter { $0.source.id == sourceId }
+      } else {
+        traceItems = items.filter { traceGunkIds.contains($0.gunk.id) }
+      }
+      guard !traceItems.isEmpty else {
+        continue
+      }
+
+      let refinementsByName = Dictionary(grouping: trace.refinements ?? []) { refinement in
+        refinement.module?.name ?? refinement.capability
+      }
+      let selfContainmentByName = Dictionary(
+        grouping: trace.verification?.selfContainment ?? [],
+        by: \.moduleName
+      )
+
+      for item in traceItems {
+        if traceModuleRecords[item.gunk.id] == nil,
+           let module = refinementsByName[item.gunk.name]?.compactMap(\.module).first {
+          traceModuleRecords[item.gunk.id] = BrowseTraceModuleRecord(
+            ownedFiles: module.ownedFiles ?? [],
+            sharedDependencies: module.sharedDeps ?? [],
+            entrypoints: (module.surface ?? []).map {
+              BrowseEntrypoint(path: $0.path, symbol: $0.symbol)
+            }
+          )
+        }
+
+        if selfContainmentByGunkId[item.gunk.id] == nil,
+           let result = selfContainmentByName[item.gunk.name]?.first {
+          selfContainmentByGunkId[item.gunk.id] = BrowseSelfContainmentResult(
+            imports: result.imports,
+            entrypoint: result.entrypoint,
+            danglingImports: result.danglingImports,
+            missingEntrypoints: result.missingEntrypoints
+          )
+        }
+      }
+    }
+  }
+
+  private func indexBuildVerification(_ trace: RunTrace) {
+    for result in trace.verification?.build ?? [] {
+      let key = normalizedPath(result.bundlePath)
+      guard buildVerificationByBundlePath[key] == nil else {
+        continue
+      }
+
+      buildVerificationByBundlePath[key] = BrowseBuildVerificationResult(
+        language: result.language,
+        built: result.built,
+        skipped: result.skipped,
+        command: result.command,
+        log: result.log
+      )
+    }
+  }
+
+  private func buildVerification(for gunk: Gunk) -> BrowseBuildVerificationResult? {
+    guard let bundlePath = gunk.bundlePath else {
+      return nil
+    }
+
+    return buildVerificationByBundlePath[normalizedPath(bundlePath)]
+  }
+
+  private func manifestEntrypoints(for gunk: Gunk) -> [BrowseEntrypoint] {
+    guard let manifestPath = gunk.manifestPath,
+          let contents = try? String(contentsOfFile: manifestPath, encoding: .utf8) else {
+      return []
+    }
+
+    var entrypoints: [BrowseEntrypoint] = []
+    var inEntrypoints = false
+    var pendingPath: String?
+
+    for line in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+      if line == "entrypoints:" {
+        inEntrypoints = true
+        continue
+      }
+
+      if inEntrypoints && !line.hasPrefix(" ") {
+        break
+      }
+
+      guard inEntrypoints else {
+        continue
+      }
+
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+      if trimmed.hasPrefix("- path:") {
+        if let pendingPath {
+          entrypoints.append(BrowseEntrypoint(path: pendingPath, symbol: nil))
+        }
+        pendingPath = yamlValue(after: "- path:", in: trimmed)
+      } else if trimmed.hasPrefix("symbol:"),
+                let path = pendingPath {
+        entrypoints.append(
+          BrowseEntrypoint(path: path, symbol: yamlValue(after: "symbol:", in: trimmed))
+        )
+        pendingPath = nil
+      }
+    }
+
+    if let pendingPath {
+      entrypoints.append(BrowseEntrypoint(path: pendingPath, symbol: nil))
+    }
+
+    return entrypoints
+  }
+
+  private func yamlValue(after prefix: String, in line: String) -> String? {
+    let value = line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces)
+    if value == "null" || value.isEmpty {
+      return nil
+    }
+
+    guard value.hasPrefix("\""), value.hasSuffix("\""), value.count >= 2 else {
+      return value
+    }
+
+    let body = value.dropFirst().dropLast()
+    return body
+      .replacingOccurrences(of: "\\n", with: "\n")
+      .replacingOccurrences(of: "\\\"", with: "\"")
+      .replacingOccurrences(of: "\\\\", with: "\\")
+  }
+
+  private func normalizedPath(_ path: String) -> String {
+    URL(fileURLWithPath: path).standardizedFileURL.path
+  }
+
+  private func nonEmpty<Value>(_ values: [Value]?, fallback: [Value]) -> [Value] {
+    guard let values, !values.isEmpty else {
+      return fallback
+    }
+
+    return values
   }
 
   private func groupedSections(from items: [BrowseItem]) -> [BrowseSection] {
