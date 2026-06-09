@@ -21,6 +21,7 @@ markdown file per decision, numbered sequentially, never deleted (only supersede
 | 0012  | Capability-centric decomposition                     | Accepted |
 | 0013  | AI pipeline moves to a TS/Bun engine                 | Accepted |
 | 0014  | Multi-language coverage and verification             | Accepted |
+| 0015  | Full macOS app first                                 | Accepted |
 
 ## Format
 

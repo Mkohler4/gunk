@@ -2,6 +2,9 @@ name: CI
 
 on:
   pull_request:
+    # `edited` so the PR-title Conventional Commits check re-runs when the
+    # title is fixed (default types omit it, leaving a stale failing check).
+    types: [opened, synchronize, reopened, edited]
   push:
     branches:
       - main

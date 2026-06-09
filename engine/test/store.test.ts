@@ -17,6 +17,7 @@ import {
   recordLLMRun,
   runMigrations,
   upsertGunkEmbedding,
+  upsertTag,
 } from "../src/store/index.js";
 
 describe("engine store", () => {
@@ -63,6 +64,32 @@ describe("engine store", () => {
       startedAt: 1,
       finishedAt: 2,
     });
+  });
+
+  it("upsertTag creates a new tag and is idempotent", () => {
+    const before = listTags(db).length;
+    const created = upsertTag(db, "orders");
+    expect(created.name).toBe("orders");
+    expect(listTags(db).map((t) => t.name)).toContain("orders");
+    expect(listTags(db).length).toBe(before + 1);
+
+    const again = upsertTag(db, "orders");
+    expect(again.id).toBe(created.id);
+    expect(listTags(db).length).toBe(before + 1);
+  });
+
+  it("links a novel AI-created tag to a gunk", () => {
+    const source = insertSource(db, "demo", "/tmp/demo-novel", 1000);
+    const gunk = insertGunk(db, {
+      sourceId: source.id,
+      name: "report-export",
+      purpose: "CSV report export",
+      language: "java",
+      confidence: 0.8,
+    });
+    const tag = upsertTag(db, "reports");
+    addGunkTag(db, gunk.id, tag.id, 0.8);
+    expect(listGunkTags(db, gunk.id).map((t) => t.tag)).toEqual(["reports"]);
   });
 
   it("round-trips embedding vectors as little-endian float32", () => {

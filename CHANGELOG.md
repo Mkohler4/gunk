@@ -7,6 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `gunk-engine` now derives module tags dynamically (hybrid): the refine pass treats the seeded taxonomy as a suggested vocabulary but lets the model mint new domain tags, which are normalized to lowercase kebab-case (deduped, capped at 6) and auto-created in the `tags` table on persist instead of being silently dropped. No schema change; MCP and the app Browse view pick up the richer tags automatically.
 - `gunk-engine`: a cross-platform (macOS/Windows/Linux) TypeScript/Bun decomposition engine that owns the entire AI pipeline (scan, web-tree-sitter symbol extraction, code graph, fingerprints, repo map, capability survey/expansion/refinement, quality gates, dedupe, extraction, embeddings), writes the shared `~/.gunk` SQLite store, and emits NDJSON progress events plus per-run JSON traces to `~/.gunk/runs/<runId>/trace.json`.
 - Engine eval gate ported to `bun test`, holding the capability-centric pipeline at or above the Phase 4 baseline scorecard (perfect file precision/recall and zero trivial-module false positives on both fixtures).
 - Multi-language engine eval fixtures for Phase 5: Flutter/Dart, Kotlin/Android, Java service, mixed monorepo, and a large repo fixture with golden labels and negative traps.
@@ -22,9 +23,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - Engine eval reports now show cohesion, surface, and classification proxy agreement against deterministic self-containment, and the surface gate rejects claimed entrypoints that verification proves are not real.
 - Large-repo eval coverage now uses deterministic repo-map chunking with map-reduce survey, preserving capabilities that were previously hidden by repo-map truncation.
 - Survey prompting now calls out JVM/Android feature-package patterns, lifting the Kotlin Android replay fixture to accepted mobile modules without new trap false positives.
-- Deterministic self-containment verification in `gunk-engine` traces and eval reports, checking module imports and exported entrypoints observe-only.
+- Phase 5 eval gate closure: Java service and mixed-monorepo replay fixtures now have enforced score floors, all multi-language fixtures assert zero trap false positives, and `docs/retros/phase-5.md` records the final scorecards.
+- Deterministic self-containment verification in `gunk-engine` traces and eval reports, checking module imports and exported entrypoints before quality-gate decisions.
 - Optional `gunk-engine` build verification for extracted bundles in eval and CLI trace runs, reporting best-effort pass/skipped metrics without failing decomposition.
 - `engine/docs/ARCHITECTURE.md`: stage-by-stage walkthrough of the engine with the verbatim LLM prompts/schemas, survey/refine post-processing filters, quality-gate rules, the `trace.json` schema, and a symptom→fix debugging playbook for analyzing AI output.
+- ADR-0015 and Phase 6 task plan: `gunk.app` is now documented as a full macOS app first, with menubar controls secondary and one-click AI-tool wiring moved behind the app shell.
 - `gunk.app` Runs debug panel that reads `~/.gunk/runs`, surfacing per-run stages, timings, counts, and accept/approve/reject summaries.
 - ADR-0013 (the AI pipeline moves to a TS/Bun engine; the SwiftUI app becomes a thin macOS shell).
 - ADR-0014 (multi-language coverage and verification feedback for Phase 5).

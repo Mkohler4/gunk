@@ -36,8 +36,13 @@ This format is opinionated:
 | `phase-N-<slug>.md`           | Task list for one phase of the roadmap.             |
 
 We add a new `phase-N-<slug>.md` file when the previous phase is merged.
-We don't write task specs for phases we haven't reached yet — they will
-inevitably be wrong by the time we get to them.
+Older task files are historical execution plans. If code has moved ahead of
+them, do not blindly resume their unchecked boxes; first reconcile the task
+against the current roadmap, ADRs, and implementation.
+
+As of ADR-0015, the current product priority is a full windowed macOS app. Task
+files that describe a menubar-first product or AI-tool wiring as the next phase
+are superseded unless a newer roadmap entry says otherwise.
 
 ## Task structure
 

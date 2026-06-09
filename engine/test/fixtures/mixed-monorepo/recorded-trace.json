@@ -71,7 +71,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "hypotheses": 0
+        "hypotheses": 3
       },
       "status": "ok"
     },
@@ -81,7 +81,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "expansions": 0
+        "expansions": 3
       },
       "status": "ok"
     },
@@ -91,7 +91,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "modules": 0
+        "modules": 3
       },
       "status": "ok"
     },
@@ -101,7 +101,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "accepted": 0,
+        "accepted": 3,
         "needsApproval": 0,
         "rejected": 0
       },
@@ -113,7 +113,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "persisted": 0
+        "persisted": 3
       },
       "status": "ok"
     },
@@ -123,7 +123,7 @@
       "finishedAtMs": 100,
       "durationMs": 0,
       "counts": {
-        "extracted": 0
+        "extracted": 3
       },
       "status": "ok"
     }
@@ -144,24 +144,654 @@
         }
       ],
       "responseJson": {
-        "hypotheses": []
+        "hypotheses": [
+          {
+            "name": "Web subscription checkout",
+            "rationale": "Web subscription checkout is anchored by controller, route, service, repository, client, config, or store collaborators.",
+            "anchors": [
+              "POST",
+              "stripe",
+              "STRIPE_SECRET_KEY"
+            ],
+            "seedFiles": [
+              "apps/web/src/billing/checkoutRoute.ts",
+              "apps/web/src/billing/stripeClient.ts",
+              "apps/web/src/billing/billingConfig.ts"
+            ],
+            "expectedCollaborators": [],
+            "granularity": "feature"
+          },
+          {
+            "name": "Mobile token login",
+            "rationale": "Mobile token login is anchored by controller, route, service, repository, client, config, or store collaborators.",
+            "anchors": [
+              "AuthController",
+              "TokenStore"
+            ],
+            "seedFiles": [
+              "apps/mobile/lib/auth/auth_controller.dart",
+              "apps/mobile/lib/auth/token_store.dart"
+            ],
+            "expectedCollaborators": [],
+            "granularity": "feature"
+          },
+          {
+            "name": "CSV report export",
+            "rationale": "CSV report export is anchored by controller, route, service, repository, client, config, or store collaborators.",
+            "anchors": [
+              "ReportController",
+              "ReportExporter"
+            ],
+            "seedFiles": [
+              "services/api/src/main/java/com/gunk/reports/ReportController.java",
+              "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+            ],
+            "expectedCollaborators": [],
+            "granularity": "feature"
+          }
+        ]
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.\n- Use only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: mixed-monorepo\nSuggested tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Web subscription checkout\nrationale: Web subscription checkout is anchored by controller, route, service, repository, client, config, or store collaborators.\nanchors: POST, stripe, STRIPE_SECRET_KEY\nexpected collaborators: \n\nClosure:\nowned candidates: apps/web/src/billing/billingConfig.ts, apps/web/src/billing/checkoutRoute.ts, apps/web/src/billing/stripeClient.ts\nshared dependency candidates: services/api/src/main/java/com/gunk/reports/ReportController.java, services/api/src/main/java/com/gunk/reports/ReportExporter.java\nexcluded files: \n\nEdge evidence:\n- apps/web/src/billing/billingConfig.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportController.java depth=1\n- apps/web/src/billing/billingConfig.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=1\n- apps/web/src/billing/checkoutRoute.ts --call--> apps/web/src/billing/stripeClient.ts depth=1\n- apps/web/src/billing/checkoutRoute.ts --import--> apps/web/src/billing/stripeClient.ts depth=1\n- apps/web/src/billing/checkoutRoute.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportController.java depth=1\n- apps/web/src/billing/checkoutRoute.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=1\n- apps/web/src/billing/stripeClient.ts --import--> apps/web/src/billing/billingConfig.ts depth=1\n- apps/web/src/billing/stripeClient.ts --reference--> apps/web/src/billing/billingConfig.ts depth=1\n- apps/web/src/billing/stripeClient.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportController.java depth=1\n- apps/web/src/billing/stripeClient.ts --reference--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=1\n- services/api/src/main/java/com/gunk/reports/ReportController.java --call--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=2\n- services/api/src/main/java/com/gunk/reports/ReportController.java --reference--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=2\n- services/api/src/main/java/com/gunk/reports/ReportExporter.java --call--> services/api/src/main/java/com/gunk/reports/ReportController.java depth=2\n\nClosure file contents:\n### apps/web/src/billing/billingConfig.ts\nexport const billingConfig = {\n  secretKey: process.env.STRIPE_SECRET_KEY ?? \"test\",\n};\n\n\n### apps/web/src/billing/checkoutRoute.ts\nimport { createCheckoutSession } from \"./stripeClient\";\nexport async function POST(request: Request) {\n  const body = await request.json();\n  return Response.json(await createCheckoutSession(body.planId));\n}\n\n\n### apps/web/src/billing/stripeClient.ts\nimport Stripe from \"stripe\";\nimport { billingConfig } from \"./billingConfig\";\nexport async function createCheckoutSession(planId: string) {\n  const stripe = new Stripe(billingConfig.secretKey);\n  return stripe.checkout.sessions.create({\n    mode: \"subscription\",\n    line_items: [{ price: planId, quantity: 1 }],\n  });\n}\n\n\n### services/api/src/main/java/com/gunk/reports/ReportController.java\npackage com.gunk.reports;\nclass ReportController { private final ReportExporter exporter = new ReportExporter(); ReportFile export(String accountId) { return exporter.export(accountId); } }\n\n\n### services/api/src/main/java/com/gunk/reports/ReportExporter.java\npackage com.gunk.reports;\nclass ReportExporter { ReportFile export(String accountId) { return new ReportFile(accountId + \".csv\"); } }\nrecord ReportFile(String path) {}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Web subscription checkout",
+          "purpose": "Creates Stripe subscription checkout sessions for web billing.",
+          "tags": [
+            "payments",
+            "api"
+          ],
+          "language": "TypeScript",
+          "ownedFiles": [
+            "apps/web/src/billing/checkoutRoute.ts",
+            "apps/web/src/billing/stripeClient.ts",
+            "apps/web/src/billing/billingConfig.ts"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "apps/web/src/billing/checkoutRoute.ts",
+              "symbol": "POST"
+            }
+          ],
+          "anchors": [
+            "POST",
+            "stripe",
+            "STRIPE_SECRET_KEY"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.\n- Use only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: mixed-monorepo\nSuggested tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: Mobile token login\nrationale: Mobile token login is anchored by controller, route, service, repository, client, config, or store collaborators.\nanchors: AuthController, TokenStore\nexpected collaborators: \n\nClosure:\nowned candidates: apps/mobile/lib/auth/auth_controller.dart, apps/mobile/lib/auth/token_store.dart\nshared dependency candidates: \nexcluded files: \n\nEdge evidence:\n- apps/mobile/lib/auth/auth_controller.dart --call--> apps/mobile/lib/auth/token_store.dart depth=1\n- apps/mobile/lib/auth/auth_controller.dart --import--> apps/mobile/lib/auth/token_store.dart depth=1\n\nClosure file contents:\n### apps/mobile/lib/auth/auth_controller.dart\nimport 'token_store.dart';\nclass AuthController { final TokenStore tokens = TokenStore(); Future<void> signInWithToken(String token) => tokens.save(token); }\n\n\n### apps/mobile/lib/auth/token_store.dart\nclass TokenStore { Future<void> save(String token) async {} Future<String?> read() async => null; }\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "Mobile token login",
+          "purpose": "Stores mobile login tokens through the auth controller.",
+          "tags": [
+            "auth",
+            "mobile"
+          ],
+          "language": "Dart",
+          "ownedFiles": [
+            "apps/mobile/lib/auth/auth_controller.dart",
+            "apps/mobile/lib/auth/token_store.dart"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "apps/mobile/lib/auth/auth_controller.dart",
+              "symbol": "AuthController"
+            }
+          ],
+          "anchors": [
+            "AuthController",
+            "TokenStore"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
+      },
+      "inputTokens": null,
+      "outputTokens": null,
+      "durationMs": 0
+    },
+    {
+      "stage": "refine",
+      "provider": "OpenAI",
+      "model": "phase-5-replay-fixture",
+      "requestMessages": [
+        {
+          "role": "system",
+          "content": "You are Pass 2 of gunk's capability-centric decomposition pipeline.\nDeep-read one expanded capability closure and return structured JSON only.\n\nReal-module rubric:\n- Keep only files needed for the reusable capability.\n- Separate owned files from shared dependencies.\n- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.\n- Use only files present in the closure.\n- Return module null with a reject reason if this is not a real module."
+        },
+        {
+          "role": "user",
+          "content": "Source: mixed-monorepo\nSuggested tags: api, auth, cli, dashboard, db-layer, email, mobile, payments, scraper, search, ui-kit\n\nCandidate:\nname: CSV report export\nrationale: CSV report export is anchored by controller, route, service, repository, client, config, or store collaborators.\nanchors: ReportController, ReportExporter\nexpected collaborators: \n\nClosure:\nowned candidates: \nshared dependency candidates: services/api/src/main/java/com/gunk/reports/ReportController.java, services/api/src/main/java/com/gunk/reports/ReportExporter.java\nexcluded files: \n\nEdge evidence:\n- services/api/src/main/java/com/gunk/reports/ReportController.java --call--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=1\n- services/api/src/main/java/com/gunk/reports/ReportController.java --reference--> services/api/src/main/java/com/gunk/reports/ReportExporter.java depth=1\n- services/api/src/main/java/com/gunk/reports/ReportExporter.java --call--> services/api/src/main/java/com/gunk/reports/ReportController.java depth=1\n\nClosure file contents:\n### services/api/src/main/java/com/gunk/reports/ReportController.java\npackage com.gunk.reports;\nclass ReportController { private final ReportExporter exporter = new ReportExporter(); ReportFile export(String accountId) { return exporter.export(accountId); } }\n\n\n### services/api/src/main/java/com/gunk/reports/ReportExporter.java\npackage com.gunk.reports;\nclass ReportExporter { ReportFile export(String accountId) { return new ReportFile(accountId + \".csv\"); } }\nrecord ReportFile(String path) {}\n"
+        }
+      ],
+      "responseJson": {
+        "module": {
+          "name": "CSV report export",
+          "purpose": "Exports CSV report files from the Java API service.",
+          "tags": [
+            "api"
+          ],
+          "language": "Java",
+          "ownedFiles": [
+            "services/api/src/main/java/com/gunk/reports/ReportController.java",
+            "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+          ],
+          "sharedDependencies": [],
+          "entrypoints": [
+            {
+              "path": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+              "symbol": "ReportController"
+            }
+          ],
+          "anchors": [
+            "ReportController",
+            "ReportExporter"
+          ],
+          "confidence": 0.92
+        },
+        "qualityGateHints": {
+          "externalFacingCapability": true,
+          "multiFileCohesion": true,
+          "anchorPresent": true,
+          "rightGranularity": true
+        },
+        "reject": null
       },
       "inputTokens": null,
       "outputTokens": null,
       "durationMs": 0
     }
   ],
-  "hypotheses": [],
-  "expansions": [],
-  "refinements": [],
-  "gateEvaluations": [],
+  "hypotheses": [
+    {
+      "name": "Web subscription checkout",
+      "rationale": "Web subscription checkout is anchored by controller, route, service, repository, client, config, or store collaborators.",
+      "anchors": [
+        "POST",
+        "stripe",
+        "STRIPE_SECRET_KEY"
+      ],
+      "seedFiles": [
+        "apps/web/src/billing/checkoutRoute.ts",
+        "apps/web/src/billing/stripeClient.ts",
+        "apps/web/src/billing/billingConfig.ts"
+      ],
+      "expectedCollaborators": [],
+      "granularity": "feature",
+      "priority": "normal"
+    },
+    {
+      "name": "Mobile token login",
+      "rationale": "Mobile token login is anchored by controller, route, service, repository, client, config, or store collaborators.",
+      "anchors": [
+        "AuthController",
+        "TokenStore"
+      ],
+      "seedFiles": [
+        "apps/mobile/lib/auth/auth_controller.dart",
+        "apps/mobile/lib/auth/token_store.dart"
+      ],
+      "expectedCollaborators": [],
+      "granularity": "feature",
+      "priority": "normal"
+    },
+    {
+      "name": "CSV report export",
+      "rationale": "CSV report export is anchored by controller, route, service, repository, client, config, or store collaborators.",
+      "anchors": [
+        "ReportController",
+        "ReportExporter"
+      ],
+      "seedFiles": [
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ],
+      "expectedCollaborators": [],
+      "granularity": "feature",
+      "priority": "normal"
+    }
+  ],
+  "expansions": [
+    {
+      "hypothesis": {
+        "name": "Web subscription checkout",
+        "rationale": "Web subscription checkout is anchored by controller, route, service, repository, client, config, or store collaborators.",
+        "anchors": [
+          "POST",
+          "stripe",
+          "STRIPE_SECRET_KEY"
+        ],
+        "seedFiles": [
+          "apps/web/src/billing/checkoutRoute.ts",
+          "apps/web/src/billing/stripeClient.ts",
+          "apps/web/src/billing/billingConfig.ts"
+        ],
+        "expectedCollaborators": [],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "apps/web/src/billing/billingConfig.ts",
+        "apps/web/src/billing/checkoutRoute.ts",
+        "apps/web/src/billing/stripeClient.ts",
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ],
+      "ownedFiles": [
+        "apps/web/src/billing/billingConfig.ts",
+        "apps/web/src/billing/checkoutRoute.ts",
+        "apps/web/src/billing/stripeClient.ts"
+      ],
+      "sharedDependencyFiles": [
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "apps/web/src/billing/billingConfig.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/billingConfig.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/checkoutRoute.ts",
+          "toPath": "apps/web/src/billing/stripeClient.ts",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/checkoutRoute.ts",
+          "toPath": "apps/web/src/billing/stripeClient.ts",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/checkoutRoute.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/checkoutRoute.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/stripeClient.ts",
+          "toPath": "apps/web/src/billing/billingConfig.ts",
+          "kind": "import",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/stripeClient.ts",
+          "toPath": "apps/web/src/billing/billingConfig.ts",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/stripeClient.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/web/src/billing/stripeClient.ts",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "call",
+          "depth": 2
+        },
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "reference",
+          "depth": 2
+        },
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "kind": "call",
+          "depth": 2
+        }
+      ]
+    },
+    {
+      "hypothesis": {
+        "name": "Mobile token login",
+        "rationale": "Mobile token login is anchored by controller, route, service, repository, client, config, or store collaborators.",
+        "anchors": [
+          "AuthController",
+          "TokenStore"
+        ],
+        "seedFiles": [
+          "apps/mobile/lib/auth/auth_controller.dart",
+          "apps/mobile/lib/auth/token_store.dart"
+        ],
+        "expectedCollaborators": [],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "apps/mobile/lib/auth/auth_controller.dart",
+        "apps/mobile/lib/auth/token_store.dart"
+      ],
+      "ownedFiles": [
+        "apps/mobile/lib/auth/auth_controller.dart",
+        "apps/mobile/lib/auth/token_store.dart"
+      ],
+      "sharedDependencyFiles": [],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "apps/mobile/lib/auth/auth_controller.dart",
+          "toPath": "apps/mobile/lib/auth/token_store.dart",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "apps/mobile/lib/auth/auth_controller.dart",
+          "toPath": "apps/mobile/lib/auth/token_store.dart",
+          "kind": "import",
+          "depth": 1
+        }
+      ]
+    },
+    {
+      "hypothesis": {
+        "name": "CSV report export",
+        "rationale": "CSV report export is anchored by controller, route, service, repository, client, config, or store collaborators.",
+        "anchors": [
+          "ReportController",
+          "ReportExporter"
+        ],
+        "seedFiles": [
+          "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+        ],
+        "expectedCollaborators": [],
+        "granularity": "feature",
+        "priority": "normal"
+      },
+      "closureFiles": [
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ],
+      "ownedFiles": [],
+      "sharedDependencyFiles": [
+        "services/api/src/main/java/com/gunk/reports/ReportController.java",
+        "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+      ],
+      "excludedFiles": [],
+      "edgeEvidence": [
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "call",
+          "depth": 1
+        },
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "kind": "reference",
+          "depth": 1
+        },
+        {
+          "fromPath": "services/api/src/main/java/com/gunk/reports/ReportExporter.java",
+          "toPath": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "kind": "call",
+          "depth": 1
+        }
+      ]
+    }
+  ],
+  "refinements": [
+    {
+      "capability": "Web subscription checkout",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Web subscription checkout",
+        "purpose": "Creates Stripe subscription checkout sessions for web billing.",
+        "tags": [
+          "payments",
+          "api"
+        ],
+        "files": [
+          "apps/web/src/billing/checkoutRoute.ts",
+          "apps/web/src/billing/stripeClient.ts",
+          "apps/web/src/billing/billingConfig.ts"
+        ],
+        "language": "TypeScript",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "apps/web/src/billing/checkoutRoute.ts",
+          "apps/web/src/billing/stripeClient.ts",
+          "apps/web/src/billing/billingConfig.ts"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "apps/web/src/billing/checkoutRoute.ts",
+            "symbol": "POST"
+          }
+        ],
+        "anchors": [
+          "POST",
+          "stripe",
+          "STRIPE_SECRET_KEY"
+        ]
+      }
+    },
+    {
+      "capability": "Mobile token login",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "Mobile token login",
+        "purpose": "Stores mobile login tokens through the auth controller.",
+        "tags": [
+          "auth",
+          "mobile"
+        ],
+        "files": [
+          "apps/mobile/lib/auth/auth_controller.dart",
+          "apps/mobile/lib/auth/token_store.dart"
+        ],
+        "language": "Dart",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "apps/mobile/lib/auth/auth_controller.dart",
+          "apps/mobile/lib/auth/token_store.dart"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "apps/mobile/lib/auth/auth_controller.dart",
+            "symbol": "AuthController"
+          }
+        ],
+        "anchors": [
+          "AuthController",
+          "TokenStore"
+        ]
+      }
+    },
+    {
+      "capability": "CSV report export",
+      "accepted": true,
+      "rejectReason": null,
+      "module": {
+        "name": "CSV report export",
+        "purpose": "Exports CSV report files from the Java API service.",
+        "tags": [
+          "api"
+        ],
+        "files": [
+          "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+        ],
+        "language": "Java",
+        "confidence": 0.92,
+        "ownedFiles": [
+          "services/api/src/main/java/com/gunk/reports/ReportController.java",
+          "services/api/src/main/java/com/gunk/reports/ReportExporter.java"
+        ],
+        "sharedDeps": [],
+        "surface": [
+          {
+            "path": "services/api/src/main/java/com/gunk/reports/ReportController.java",
+            "symbol": "ReportController"
+          }
+        ],
+        "anchors": [
+          "ReportController",
+          "ReportExporter"
+        ]
+      }
+    }
+  ],
+  "gateEvaluations": [
+    {
+      "name": "Web subscription checkout",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.36363636363636365
+    },
+    {
+      "name": "Mobile token login",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 1
+    },
+    {
+      "name": "CSV report export",
+      "decision": "accepted",
+      "reasons": [],
+      "cohesionScore": 0.2
+    }
+  ],
   "verification": {
-    "build": [],
-    "selfContainment": []
+    "build": [
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-home-NB7nXv/modules/1",
+        "language": "typeScript",
+        "built": false,
+        "skipped": false,
+        "command": "tsc --noEmit apps/web/src/billing/billingConfig.ts apps/web/src/billing/checkoutRoute.ts apps/web/src/billing/stripeClient.ts",
+        "log": "$ tsc --noEmit apps/web/src/billing/billingConfig.ts apps/web/src/billing/checkoutRoute.ts apps/web/src/billing/stripeClient.ts\napps/web/src/billing/billingConfig.ts(2,14): error TS2591: Cannot find name 'process'. Do you need to install type definitions for node? Try `npm i --save-dev @types/node` and then add 'node' to the types field in your tsconfig.\napps/web/src/billing/stripeClient.ts(1,20): error TS2307: Cannot find module 'stripe' or its corresponding type declarations."
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-home-NB7nXv/modules/2",
+        "language": "dart",
+        "built": true,
+        "skipped": false,
+        "command": "dart analyze .",
+        "log": "$ dart analyze .\nAnalyzing ....\nNo issues found!"
+      },
+      {
+        "bundlePath": "/var/folders/qy/dtzdmxf53gqgbf76n58444hw0000gn/T/gunk-record-home-NB7nXv/modules/3",
+        "language": "java",
+        "built": false,
+        "skipped": true,
+        "command": null,
+        "log": "Build tool not available."
+      }
+    ],
+    "selfContainment": [
+      {
+        "moduleName": "Web subscription checkout",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      },
+      {
+        "moduleName": "Mobile token login",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      },
+      {
+        "moduleName": "CSV report export",
+        "imports": "pass",
+        "entrypoint": "pass",
+        "danglingImports": [],
+        "missingEntrypoints": []
+      }
+    ]
   },
   "summary": {
-    "gunkIds": [],
-    "accepted": 0,
+    "gunkIds": [
+      1,
+      2,
+      3
+    ],
+    "accepted": 3,
     "needsApproval": 0,
     "rejected": 0
   }

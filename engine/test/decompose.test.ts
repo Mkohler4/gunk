@@ -451,13 +451,57 @@ describe("CapabilityRefiner", () => {
       sourceName: "demo",
       expansions: [expansion],
       contentsByPath: { "login.ts": "x", "session.ts": "y" },
-      allowedTags: ["auth", "payments"],
+      suggestedTags: ["auth", "payments"],
     });
     expect(modules).toHaveLength(1);
     expect(modules[0].confidence).toBe(1);
     expect(modules[0].files).toEqual(["login.ts", "session.ts"]);
     expect(modules[0].tags).toEqual(["auth"]);
     expect(refinements[0].accepted).toBe(true);
+  });
+
+  it("keeps novel AI tags and normalizes them to kebab-case", async () => {
+    const expansion = {
+      hypothesis: {
+        name: "Orders",
+        rationale: "order intake",
+        anchors: ["route:/orders"],
+        seedFiles: ["OrderController.java"],
+        expectedCollaborators: [],
+        granularity: "feature",
+        priority: "normal" as const,
+      },
+      closureFiles: ["OrderController.java", "OrderService.java"],
+      ownedFiles: ["OrderController.java"],
+      sharedDependencyFiles: ["OrderService.java"],
+      excludedFiles: [],
+      edgeEvidence: [],
+    };
+    const client = new FakeClient({
+      module: {
+        name: "Order intake API",
+        purpose: "Handles order intake",
+        tags: ["Orders", "Order Intake", "api", "orders"],
+        language: "java",
+        ownedFiles: ["OrderController.java"],
+        sharedDependencies: ["OrderService.java"],
+        entrypoints: [{ path: "OrderController.java", symbol: "OrderController" }],
+        anchors: ["route:/orders"],
+        confidence: 0.9,
+      },
+      qualityGateHints: { externalFacingCapability: true, multiFileCohesion: true, anchorPresent: true, rightGranularity: true },
+      reject: null,
+    });
+    const refiner = new CapabilityRefiner();
+    const modules = await refiner.refine(client, {
+      model: "gpt",
+      sourceName: "demo",
+      expansions: [expansion],
+      contentsByPath: { "OrderController.java": "x", "OrderService.java": "y" },
+      suggestedTags: ["auth", "payments", "api"],
+    });
+    expect(modules).toHaveLength(1);
+    expect(modules[0].tags).toEqual(["orders", "order-intake", "api"]);
   });
 
   it("returns no module and surfaces a reject reason", async () => {
@@ -493,7 +537,7 @@ describe("CapabilityRefiner", () => {
       sourceName: "demo",
       expansions: [expansion],
       contentsByPath: { "types.ts": "export interface A {}" },
-      allowedTags: ["auth"],
+      suggestedTags: ["auth"],
     });
     expect(modules).toHaveLength(0);
     expect(refinements).toEqual(["type-only file, not a capability"]);

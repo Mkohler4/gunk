@@ -16,8 +16,8 @@ If you only read one section, read [Debugging playbook](#debugging-playbook) and
 The engine is a deterministic, headless batch job:
 
 ```
-folder ──► [11 stages] ──► SQLite rows (gunks/tags/files) + extracted bundles
-                      └──► NDJSON events (stdout)  + trace.json (~/.gunk/runs/<runId>)
+folder ──► [11 stages + verification hooks] ──► SQLite rows (gunks/tags/files) + extracted bundles
+                                          └──► NDJSON events (stdout)  + trace.json (~/.gunk/runs/<runId>)
 ```
 
 - **Only two stages call the LLM**: `survey` (pass 1) and `refine` (pass 2).
@@ -45,9 +45,11 @@ flowchart TD
   E --> F["survey (LLM pass 1): repo map → capability hypotheses"]
   F --> G["expansion: BFS each hypothesis over the graph → file closure"]
   G --> H["refine (LLM pass 2): read closure files → Module or reject"]
-  H --> I["qualityGates: accept / needsApproval / reject"]
-  I --> J["persist: write accepted + needsApproval gunks to SQLite"]
-  J --> K["extract: copy bundle + manifest + embeddings (accepted only)"]
+  H --> I["verification: deterministic self-containment per module"]
+  I --> J["qualityGates: accept / needsApproval / reject"]
+  J --> K["persist: write accepted + needsApproval gunks to SQLite"]
+  K --> L["extract: copy bundle + manifest + embeddings (accepted only)"]
+  L -. optional eval/trace .-> M["build verification: best-effort extracted-bundle build check"]
 ```
 
 Progress fractions emitted per stage (useful to see where a run stalls):
@@ -73,11 +75,11 @@ Source of truth: `src/decompose/pipeline.ts`.
 ### 2. symbols — `src/analyze/symbolExtractor.ts`
 - **In:** each file's contents.
 - **Does:** parses with the embedded tree-sitter grammar (JS/TS/TSX, Python,
-  Swift, Go) into symbols, imports, exports. Unknown languages or parse failures
-  fall back to a regex extractor.
+  Swift, Go, Dart, Kotlin, Java) into symbols, imports, exports. Unknown
+  languages or parse failures fall back to a regex extractor.
 - **Out:** `FileSymbols[]`.
-- **Goes wrong when:** a language has no grammar (only the 5 above are real;
-  everything else is regex-only) → weak imports/exports → weak graph edges →
+- **Goes wrong when:** a language has no grammar (only the listed languages use
+  embedded parsers; everything else is regex-only) → weak imports/exports → weak graph edges →
   weak closures. **Check:** is the project mostly an unsupported language?
 
 ### 3. graph — `src/analyze/codeGraph.ts` + `importResolver.ts`
@@ -104,16 +106,19 @@ Source of truth: `src/decompose/pipeline.ts`.
 ### 5. repoMap — `src/ingest/contextBuilder.ts` + `repoMap.ts`
 - **In:** everything above.
 - **Does:** serializes a **text** structural summary into a token budget
-  (`--context-budget`, default 20,000 tokens; ~chars/4). Per file it includes:
+  (`--context-budget`, default 20,000 tokens; ~chars/4). Large maps are split
+  into deterministic chunks and surveyed map-reduce style so capabilities below
+  the first chunk are still visible. Per file it includes:
   cluster id, up to 8 key symbols, sorted exports, resolved imports, routes,
   env/config keys, capability hints, and a few route/manifest snippets. Plus
   graph clusters with cohesion scores and bridge files.
-- **Out:** one big string — **this is the only thing pass 1 sees.** It does *not*
-  see file bodies.
+- **Out:** one budgeted string plus full chunk strings — **this is the only
+  thing pass 1 sees.** It does *not* see file bodies.
 - **Goes wrong when:** the repo is large and the budget truncates the map →
-  capabilities below the cut line are invisible to survey. **Check:**
-  `trace.stages[repoMap].counts.chars`; if it's near `budget*4`, you're
-  truncating. Raise `--context-budget`.
+  capabilities depend on chunking. **Check:**
+  `trace.stages[repoMap].counts.chunks` and `chunkChars`; if chunks are > 1,
+  survey should have one LLM call per chunk plus a merge call. If a capability is
+  still missing, inspect `trace.llmCalls[stage=survey]` by chunk.
 
 ### 6. survey (LLM pass 1) — `src/decompose/survey.ts`
 See [The two LLM passes](#the-two-llm-passes). Produces `CapabilityHypothesis[]`.
@@ -137,9 +142,17 @@ See [The two LLM passes](#the-two-llm-passes). Produces `CapabilityHypothesis[]`
 ### 8. refine (LLM pass 2) — `src/decompose/refiner.ts`
 See [The two LLM passes](#the-two-llm-passes). Produces `Module[]` (or rejects).
 
-### 9. qualityGates — `src/decompose/qualityGate.ts`
+### 9. verification + qualityGates — `src/decompose/selfContainment.ts`, `qualityGate.ts`
 See [Quality gates](#quality-gates). Classifies each module as
 `accepted` / `needsApproval` / `rejected`.
+
+Before the gate decides, deterministic self-containment checks that every
+module-owned internal import stays inside the module and every claimed
+entrypoint is an exported symbol on an owned file. Declared package dependencies
+come from `package.json`, `pubspec.yaml`, Gradle, Maven `pom.xml`, and the other
+supported manifests. Failures add `failsSelfContainment` and downgrade or reject
+the module. Strongly self-contained modules with real entrypoints can survive
+borderline/weak graph cohesion, but trivial traps still fail.
 
 ### 10. persist — `pipeline.ts`
 - **Does:** writes `accepted` and `needsApproval` modules to SQLite as gunks
@@ -210,9 +223,13 @@ Deep-read one expanded capability closure and return structured JSON only.
 Real-module rubric:
 - Keep only files needed for the reusable capability.
 - Separate owned files from shared dependencies.
-- Use only allowed tags and only files present in the closure.
+- Tag the module with 2-5 short labels naming what it does. Prefer the suggested tags when they fit; otherwise mint a concise lowercase kebab-case tag for the capability or domain.
+- Use only files present in the closure.
 - Return module null with a reject reason if this is not a real module.
 ```
+
+The user prompt lists the seeded taxonomy as `Suggested tags:` (guidance, not a
+hard constraint).
 
 **Output schema:** `{ module: {name, purpose, tags[], language, ownedFiles[],
 sharedDependencies[], entrypoints[{path,symbol}], anchors[], confidence} | null,
@@ -225,10 +242,13 @@ qualityGateHints{...}, reject{reason} | null }`.
 - `ownedFiles`/`sharedDependencies` are **filtered to the closure** — paths
   outside the closure are dropped. Shared files are removed from owned. If
   nothing survives, the module becomes `null` (dropped).
-- `tags` are **filtered to `allowedTags`** (the taxonomy from the `tags` table).
-  ⚠️ **If the store has no tags seeded, every tag is stripped** and the schema's
-  `enum` is empty — modules come back tagless and may look broken. Verify the
-  taxonomy is seeded.
+- `tags` are **AI-discovered (hybrid)**: the seeded taxonomy is passed to the
+  model as a *suggested* vocabulary (preferred when it fits), but the model may
+  mint new domain tags. Returned tags are run through `normalizeTag`
+  (`src/analyze/tagNormalizer.ts`) — lowercased, kebab-cased, deduped, and capped
+  at 6 — then persisted with `upsertTag` (new names auto-create a `tags` row).
+  The refiner output schema no longer constrains tags to an `enum`, so an empty
+  taxonomy no longer strips tags. The 11 seed tags remain as suggestions only.
 - `anchors` fall back to the hypothesis anchors if the model returns none.
 - `confidence` is clamped to `[0,1]` and drives the quality-gate decision.
 
@@ -249,13 +269,16 @@ matching `trace.llmCalls[stage=refine]` entry for the full prompt + raw response
 | `missingSurface` | no surface/anchors and no fingerprint signal (routes, exports, deps, env, config, hints) on any file |
 | `singleFileWithoutOwnedSurface` | exactly 1 file and that file owns no route/public export/surface |
 | `lowCohesion` | > 1 file and internal/total edge ratio < `0.35` |
+| `failsSelfContainment` | deterministic import or entrypoint verification failed |
 | `generatedOnly` / `typeOnly` / `utilityOnly` / `configOnly` | all files classify as that trivial kind |
 | `typeOnly`+`utilityOnly`, `configOnly`+`typeOnly` | files are only those trivial kinds combined |
 | `duplicateOverlap` | ≥ `0.85` file overlap with another kept module (lower-confidence/smaller/later-named one loses) |
 | `belowConfidenceThreshold` | no rejection reasons, but `confidence` < `--confidence` (default `0.7`) → `needsApproval` |
 
 - **Cohesion** = internal edges / (internal + external) edges over the module's
-  files (single-file modules score 1.0).
+  files (single-file modules score 1.0). Verified self-contained modules with a
+  real entrypoint can survive low cohesion; this protects sparse JVM/mobile
+  feature packages without opening the door to generated/type/config traps.
 - **File classification** (`classify`) keys off path components and contents:
   `generated` (markers like `@generated`, `do not edit`), `config`, `utility`,
   `typeOnly` (`types.*`, `.d.ts`, or only import/type/interface/enum lines), else
@@ -263,9 +286,10 @@ matching `trace.llmCalls[stage=refine]` entry for the full prompt + raw response
 
 **Goes wrong when:** good modules get rejected because (a) the graph was too
 sparse → `lowCohesion`, (b) fingerprints missed the surface → `missingSurface`,
-or (c) file classification is too aggressive → `typeOnly`/`utilityOnly`. The
-`trace.gateEvaluations[].fileKinds` map shows exactly how each file was
-classified.
+(c) self-containment found an owned import or claimed entrypoint gap →
+`failsSelfContainment`, or (d) file classification is too aggressive →
+`typeOnly`/`utilityOnly`. The `trace.gateEvaluations[].fileKinds` map shows
+exactly how each file was classified.
 
 ---
 
@@ -296,12 +320,15 @@ This is the debugging gold mine. Top-level fields:
 | `expansions[]` | per hypothesis: `closureFiles`, `ownedFiles`, `sharedDependencyFiles`, `excludedFiles` (+reasons), `edgeEvidence` |
 | `refinements[]` | per candidate: `accepted`, `rejectReason`, resulting `module` |
 | `gateEvaluations[]` | per module: `decision`, `reasons`, `cohesionScore` |
+| `verification.selfContainment[]` | per refined module: `imports`, `entrypoint`, `danglingImports[]`, `missingEntrypoints[]`; this is gate-enforcing |
+| `verification.build[]` | per extracted bundle: optional build command outcome; eval/trace only, never gate-enforcing |
 | `summary` | `accepted`, `needsApproval`, `rejected`, `gunkIds` |
 
 Because `llmCalls` carries the verbatim prompt **and** the raw response, you can
 always answer "what did we ask, and what did it actually say?" without re-running.
 
-The Swift app's **Runs** tab reads these files; you can also open them directly.
+The Swift app's **Runs** tab reads these files; `verification` is additive and
+backward-compatible, so older traces without it still decode.
 
 ---
 
@@ -316,8 +343,9 @@ Start from the symptom, jump to the stage, open the trace field.
 | Modules missing collaborator files | graph / expansion | `stages[graph].counts.edges`, `expansions[].closureFiles`/`excludedFiles` | import resolution gaps (aliases/monorepo); raise `maxDepth`/`maxFiles` |
 | Model proposed a capability but it's gone | survey post-filter | `llmCalls[survey].responseJson` vs `hypotheses` | hallucinated/mismatched paths; tighten repo map paths |
 | Capabilities never proposed at all | repoMap budget | `stages[repoMap].counts.chars` | truncation; raise `--context-budget` |
-| Modules come back with no tags | refine | `gateEvaluations[].module.tags`, `tags` table | seed the tag taxonomy |
+| Modules come back with no tags | refine | `refinements[].module.tags` | model returned none; tags are AI-minted + normalized, not taxonomy-gated |
 | Good module rejected as low cohesion | graph / gates | `gateEvaluations[].cohesionScore`, edges | sparse graph; check importResolver |
+| Module downgraded/rejected for self-containment | verification / gates | `verification.selfContainment[]`, `gateEvaluations[].reasons` | include missing internal collaborators, fix manifest dependency parsing, or remove fake entrypoints |
 | Good module rejected as trivial | gates | `gateEvaluations[].fileKinds` | over-aggressive `classify`; inspect paths |
 | Everything is `needsApproval` | refine confidence | `refinements[].module.confidence` | model under-confident; lower `--confidence` or improve context |
 | Output not reproducible | provider | `llmCalls[].responseJson` across runs | ensure `temperature: 0` honored; some providers are non-deterministic |
@@ -335,6 +363,7 @@ cat /tmp/gunk-home/runs/*/trace.json | jq '.stages, .summary'
 cat /tmp/gunk-home/runs/*/trace.json | jq '.hypotheses'
 cat /tmp/gunk-home/runs/*/trace.json | jq '.llmCalls[] | select(.stage=="survey") | .responseJson'
 cat /tmp/gunk-home/runs/*/trace.json | jq '.gateEvaluations[] | {name: .module.name, decision, reasons}'
+cat /tmp/gunk-home/runs/*/trace.json | jq '.verification'
 ```
 
 `--json` (stdout) is the live progress; `--trace` is the post-mortem. stderr
@@ -355,6 +384,10 @@ carries human-readable `[decompose]` log lines.
 | `duplicateOverlapThreshold` | `qualityGate.ts` | 0.85 | dedupe sensitivity |
 | refiner `maxContextCharacters` / `maxFileCharacters` | `refiner.ts` | 32k / 8k | how much code pass 2 reads |
 
-The eval gate (`test/evalGate.test.ts`) runs the whole pipeline against fixtures
-with canned LLM responses and asserts the scorecard stays at/above baseline —
-run it after any change to these knobs or prompts.
+The eval gate (`test/evalGate.test.ts`) runs the whole pipeline against
+multi-language fixtures with recorded LLM responses. It keeps express/next at
+the Phase 4 baseline, requires Flutter/Dart, Kotlin/Android, Java service,
+mixed monorepo, and large-repo fixtures to meet their floors, asserts zero trap
+false positives, and requires persisted modules to pass deterministic
+self-containment. Run it after any change to these knobs, prompts, manifest
+parsing, import resolution, or gate rules.
