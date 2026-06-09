@@ -61,12 +61,22 @@ struct ApprovalQueueView: View {
 
       HStack(spacing: 6) {
         Button {
+          model.reclassify(sourceId: item.source.id)
+        } label: {
+          Image(systemName: "arrow.triangle.2.circlepath")
+        }
+        .buttonStyle(.borderless)
+        .help("Re-run decomposition for \(item.source.name)")
+        .accessibilityLabel("Re-run decomposition for \(item.source.name)")
+
+        Button {
           model.approve(gunkId: item.gunk.id)
         } label: {
           Image(systemName: "checkmark.circle")
         }
         .buttonStyle(.borderless)
         .help("Approve module")
+        .accessibilityLabel("Approve \(item.gunk.name)")
 
         Button(role: .destructive) {
           model.reject(gunkId: item.gunk.id)
@@ -74,9 +84,10 @@ struct ApprovalQueueView: View {
           Image(systemName: "xmark.circle")
         }
         .buttonStyle(.borderless)
-        .help("Reject module")
+        .help("Reject and remove module")
+        .accessibilityLabel("Reject and remove \(item.gunk.name)")
       }
-      .frame(width: 48, alignment: .trailing)
+      .frame(width: 78, alignment: .trailing)
     }
     .padding(.vertical, 9)
   }

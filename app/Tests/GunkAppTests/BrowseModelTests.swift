@@ -206,6 +206,29 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertEqual(reclassifiedSourceIds, [source.id])
   }
 
+  func testReclassifyRefreshesModulesAfterSourceRun() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let model = BrowseModel(
+      store: store,
+      reclassifySource: { sourceId in
+        _ = try store.insertGunk(
+          sourceId: sourceId,
+          name: "rerun-module",
+          purpose: "created by re-run",
+          confidence: 0.91
+        )
+      }
+    )
+
+    model.refresh()
+    XCTAssertTrue(model.sections.isEmpty)
+
+    model.reclassify(sourceId: source.id)
+
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.name), ["rerun-module"])
+  }
+
   func testDetailUsesTraceForRunabilityAndSharedDependencies() throws {
     let store = try makeStore()
     let source = try store.insertSource(name: "source", path: "/tmp/source")

@@ -76,7 +76,18 @@ final class AppRuntime: ObservableObject {
         store: store,
         processingModel: processingModel
       )
-      let browseModel = BrowseModel(store: store)
+      let browseModel = BrowseModel(
+        store: store,
+        reclassifySource: { sourceId in
+          guard let source = try store.source(id: sourceId) else {
+            return
+          }
+
+          Task {
+            await sourceProcessingRunner.process(source: source)
+          }
+        }
+      )
       let sourceListModel = GunkListModel(store: store)
       let dropZoneHandler = DropZoneHandler(store: store) { [weak self] source in
         self?.process(source: source)

@@ -179,10 +179,12 @@ their source information for provenance, reads live tag/language/source filter
 options from the store, and lets the Modules view group by tag, source,
 language, or approval state. Module rows show name, purpose, tags, source,
 language, confidence, approval state, extraction status, and actions to open an
-extracted bundle, re-classify the source, or delete the module. Selecting a row
-shows the module detail pane without leaving the app shell.
+extracted bundle, re-run decomposition for the source, or delete the module.
+Selecting a row shows the module detail pane without leaving the app shell.
 
 Below-threshold modules that have not been approved or extracted appear in the
 approval queue. Approving a module marks `approved_at`, runs extraction through
 an injected extractor path, and refreshes the Browse list; rejecting a module
-soft-removes it from the store.
+soft-removes it from the store. Approval rows can also re-run decomposition for
+the source through the same engine runner used by drops, then refresh from the
+shared store when the runner posts completion.
