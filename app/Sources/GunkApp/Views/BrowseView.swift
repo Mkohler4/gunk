@@ -192,7 +192,8 @@ struct BrowseView: View {
           Image(systemName: "arrow.triangle.2.circlepath")
         }
         .buttonStyle(.borderless)
-        .help("Re-classify source")
+        .help("Re-run decomposition for \(item.source.name)")
+        .accessibilityLabel("Re-run decomposition for \(item.source.name)")
 
         Button(role: .destructive) {
           model.delete(gunkId: item.gunk.id)
@@ -201,6 +202,7 @@ struct BrowseView: View {
         }
         .buttonStyle(.borderless)
         .help("Delete module")
+        .accessibilityLabel("Delete \(item.gunk.name)")
       }
       .frame(width: 78, alignment: .trailing)
     }

@@ -100,7 +100,7 @@ Make it clear what a gunk bundle contains and whether it can run by itself.
 
 ## T-6.5 — Approval and re-run controls
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** Codex
 
 ### Goal
