@@ -216,11 +216,22 @@ export class DecompositionPipeline {
 
     // 9. quality gates
     const persistable = await this.stage("qualityGates", 0.84, () => {
+      const selfContainmentResults = modules.map((module) => {
+        const filePaths = new Set(module.files);
+        const aggregate = fingerprintBuilder.aggregate(fingerprints, filePaths);
+        return verifySelfContainment({
+          module,
+          graph,
+          files: fileSymbols,
+          declaredExternalDependencies: aggregate.importedDependencies,
+        });
+      });
+      this.observer.recordedSelfContainment(selfContainmentResults);
       const evaluations = new ModuleQualityGate({
         confidenceThreshold: this.confidenceThreshold,
         cohesionThreshold: 0.35,
         duplicateOverlapThreshold: 0.85,
-      }).evaluate(modules, fingerprints, graph, contentsByPath);
+      }).evaluate(modules, fingerprints, graph, contentsByPath, selfContainmentResults);
       this.observer.recordedGateEvaluations(evaluations);
       const keep = evaluations.filter((e) => e.decision === "accepted" || e.decision === "needsApproval");
       return {
@@ -234,18 +245,6 @@ export class DecompositionPipeline {
     });
 
     // 10. persist
-    const selfContainmentResults = persistable.keep.map((evaluation) => {
-      const filePaths = new Set(evaluation.module.files);
-      const aggregate = fingerprintBuilder.aggregate(fingerprints, filePaths);
-      return verifySelfContainment({
-        module: evaluation.module,
-        graph,
-        files: fileSymbols,
-        declaredExternalDependencies: aggregate.importedDependencies,
-      });
-    });
-    this.observer.recordedSelfContainment(selfContainmentResults);
-
     const persisted = await this.stage("persist", 0.92, () => {
       const rows = this.persist(persistable.keep, source);
       return { value: rows, counts: { persisted: rows.length } };

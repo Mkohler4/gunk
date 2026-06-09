@@ -4,6 +4,7 @@ import type { CodeGraph, Module } from "../src/models.js";
 import { fileNode } from "../src/models.js";
 import type { CapabilityFingerprint } from "../src/analyze/capabilityFingerprint.js";
 import { ModuleQualityGate } from "../src/decompose/qualityGate.js";
+import type { SelfContainmentResult } from "../src/decompose/selfContainment.js";
 import { CapabilityExpander } from "../src/decompose/expander.js";
 import { survey } from "../src/decompose/survey.js";
 import { CapabilityRefiner } from "../src/decompose/refiner.js";
@@ -30,6 +31,17 @@ class FakeClient implements LLMClient {
   async complete(): Promise<LLMResponse> {
     return { json: this.json, usage: { inputTokens: 1, outputTokens: 2 } };
   }
+}
+
+function selfContainment(partial: Partial<SelfContainmentResult> = {}): SelfContainmentResult {
+  return {
+    moduleName: "module",
+    imports: "pass",
+    entrypoint: "pass",
+    danglingImports: [],
+    missingEntrypoints: [],
+    ...partial,
+  };
 }
 
 describe("ModuleQualityGate", () => {
@@ -93,14 +105,79 @@ describe("ModuleQualityGate", () => {
     expect(evaluation.reasons).toEqual([]);
   });
 
-  it("still rejects lone types and utility traps with public-looking surface", () => {
+  it("downgrades a non-self-contained module", () => {
+    const evaluation = gate.evaluateModule(
+      module({ name: "auth", files: ["src/auth.ts"], surface: [{ path: "src/auth.ts", symbol: "login" }] }),
+      [],
+      null,
+      { "src/auth.ts": "export function login() { return 1 }" },
+      selfContainment({
+        imports: "fail",
+        danglingImports: [
+          {
+            fromPath: "src/auth.ts",
+            moduleSpecifier: "./session",
+            resolvedTarget: "src/session.ts",
+            reason: "internalImportOutsideModule",
+          },
+        ],
+      }),
+    );
+
+    expect(evaluation.decision).toBe("needsApproval");
+    expect(evaluation.reasons).toEqual(["failsSelfContainment"]);
+  });
+
+  it("allows a self-contained low-cohesion mobile module to survive", () => {
+    const graph: CodeGraph = {
+      nodes: [
+        fileNode("lib/features/payments/payment_sheet.dart"),
+        fileNode("lib/features/payments/payment_controller.dart"),
+        fileNode("lib/platform/native_payments.dart"),
+      ],
+      edges: [
+        {
+          from: fileNode("lib/features/payments/payment_sheet.dart"),
+          to: fileNode("lib/platform/native_payments.dart"),
+          kind: "reference",
+        },
+        {
+          from: fileNode("lib/features/payments/payment_controller.dart"),
+          to: fileNode("lib/platform/native_payments.dart"),
+          kind: "reference",
+        },
+      ],
+    };
+    const evaluation = gate.evaluateModule(
+      module({
+        name: "Mobile payments",
+        files: ["lib/features/payments/payment_sheet.dart", "lib/features/payments/payment_controller.dart"],
+        language: "Dart",
+        surface: [{ path: "lib/features/payments/payment_sheet.dart", symbol: "PaymentSheet" }],
+        anchors: [],
+      }),
+      [],
+      graph,
+      {
+        "lib/features/payments/payment_sheet.dart": "export class PaymentSheet {}",
+        "lib/features/payments/payment_controller.dart": "class PaymentController {}",
+      },
+      selfContainment({ moduleName: "Mobile payments" }),
+    );
+
+    expect(evaluation.cohesionScore).toBe(0);
+    expect(evaluation.decision).toBe("accepted");
+    expect(evaluation.reasons).toEqual([]);
+  });
+
+  it("still rejects self-contained types and utility traps with public-looking surface", () => {
     const evaluations = gate.evaluate(
       [
         module({
           name: "types",
           files: ["src/types.ts"],
-          surface: [],
-          anchors: [],
+          surface: [{ path: "src/types.ts", symbol: "SharedEnvelope" }],
+          anchors: ["public-api:SharedEnvelope"],
         }),
         module({
           name: "date util",
@@ -126,6 +203,7 @@ describe("ModuleQualityGate", () => {
         "src/types.ts": "export interface SharedEnvelope { id: string }",
         "src/utils/date.ts": "export function compactDate(value: Date) { return value.toISOString(); }",
       },
+      [selfContainment({ moduleName: "types" }), selfContainment({ moduleName: "date util" })],
     );
 
     const types = evaluations.find((evaluation) => evaluation.module.name === "types")!;
