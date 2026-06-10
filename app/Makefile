@@ -6,8 +6,10 @@ APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 EXECUTABLE := .build/$(CONFIGURATION)/$(PRODUCT_NAME)
 ENGINE_DIR := ../engine
 ENGINE_BINARY := $(ENGINE_DIR)/dist/gunk-engine
+SIGN_IDENTITY ?= -
+CODESIGN_FLAGS ?=
 
-.PHONY: build test app rebuild clean engine
+.PHONY: build test app verify-app rebuild clean engine
 
 build:
 	swift build
@@ -58,7 +60,15 @@ app: build engine
 		'  <false/>' \
 		'</dict>' \
 		'</plist>' > "$(APP_BUNDLE)/Contents/Info.plist"
-	codesign --force --sign - "$(APP_BUNDLE)"
+	codesign --force --sign "$(SIGN_IDENTITY)" $(CODESIGN_FLAGS) "$(APP_BUNDLE)"
+	$(MAKE) verify-app
+
+verify-app:
+	test -x "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
+	test -x "$(APP_BUNDLE)/Contents/Resources/gunk-engine"
+	test -s "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
+	plutil -lint "$(APP_BUNDLE)/Contents/Info.plist"
+	codesign --verify --strict "$(APP_BUNDLE)"
 
 rebuild: clean app
 
