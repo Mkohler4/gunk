@@ -19,6 +19,7 @@ opening controls, not the primary workspace.
 | `swift build` | Build the `GunkApp` executable. |
 | `swift test` | Run the XCTest suite. |
 | `make app` | Build and ad-hoc sign `build/gunk.app` for local development. |
+| `make verify-app` | Check the built app bundle executable, bundled engine, icon, Info.plist, and code signature. |
 | `make rebuild` | Remove build output and recreate `build/gunk.app`. |
 | `make clean` | Remove SwiftPM and app bundle build output. |
 
@@ -197,3 +198,46 @@ binary or development runner, and Cursor MCP configuration status. Missing
 items are shown in-app with the next setup step: save a hosted provider key,
 build the app or set `GUNK_ENGINE_BIN`, use an on-disk store, or follow
 `docs/integration/cursor.md` to add the `gunk` MCP server.
+
+## Packaging And Release
+
+`make app` creates `app/build/gunk.app`, bundles `gunk-engine` into
+`Contents/Resources/gunk-engine`, copies `AppIcon.icns`, writes `Info.plist`,
+ad-hoc signs the app, and runs `make verify-app`. The verification step checks
+that the app executable and engine binary are executable, the icon exists, the
+plist is valid, and the bundle signature verifies.
+
+Manual polish checks for each packaging pass:
+
+- Launch `build/gunk.app` from Finder and confirm the Dock icon appears.
+- Confirm the main window opens to the sidebar shell and the status item can
+  bring the window forward.
+- Confirm the main menu includes app, file, edit, and window commands.
+- Quit and reopen the app; window restoration should not resurrect stale window
+  state.
+- Temporarily move or unset the local store/engine configuration to inspect the
+  launch and Settings failure/status states.
+
+Local development uses ad-hoc signing by default. For a Developer ID build,
+pass a signing identity and hardened-runtime flags:
+
+```bash
+make -C app app \
+  SIGN_IDENTITY="Developer ID Application: Example, Inc. (TEAMID)" \
+  CODESIGN_FLAGS="--options runtime --timestamp"
+```
+
+Notarization is not automated yet. The expected release path is to zip the
+signed app, submit it with `xcrun notarytool`, staple the ticket after
+acceptance, then re-run `spctl` before distribution:
+
+```bash
+ditto -c -k --keepParent app/build/gunk.app app/build/gunk.zip
+xcrun notarytool submit app/build/gunk.zip --keychain-profile gunk --wait
+xcrun stapler staple app/build/gunk.app
+spctl --assess --type execute --verbose app/build/gunk.app
+```
+
+Automatic updates are deferred. Until an updater is chosen, releases should be
+published as manually downloaded signed/notarized app archives with release
+notes that call out any required MCP binary or config refresh.

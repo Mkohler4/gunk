@@ -126,7 +126,7 @@ Make engine/provider configuration visible and debuggable.
 
 ## T-6.7 — Packaging and Mac polish
 
-**Status:** Not started
+**Status:** Complete
 **Owner:** Codex
 
 ### Goal

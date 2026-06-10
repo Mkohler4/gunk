@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import GunkApp
 
@@ -7,5 +8,12 @@ final class SmokeTests: XCTestCase {
     let delegate = AppDelegate()
 
     XCTAssertNotNil(delegate)
+  }
+
+  func testAppDelegateDisablesWindowRestoration() {
+    let delegate = AppDelegate()
+
+    XCTAssertFalse(delegate.application(NSApplication.shared, shouldSaveApplicationState: NSCoder()))
+    XCTAssertFalse(delegate.application(NSApplication.shared, shouldRestoreApplicationState: NSCoder()))
   }
 }
