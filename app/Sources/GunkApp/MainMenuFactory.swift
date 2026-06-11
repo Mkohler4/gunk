@@ -23,6 +23,15 @@ enum MainMenuFactory {
     windowMenuItem.submenu = windowMenu
     NSApplication.shared.windowsMenu = windowMenu
 
+    // Dev-only (T-7.4): the Debug menu exists only when launched with
+    // GUNK_DESIGN_GALLERY=1, so the component gallery is never part of the
+    // shipping UI.
+    if ComponentGalleryLauncher.isEnabled {
+      let debugMenuItem = NSMenuItem()
+      mainMenu.addItem(debugMenuItem)
+      debugMenuItem.submenu = makeDebugMenu()
+    }
+
     return mainMenu
   }
 
@@ -96,6 +105,18 @@ enum MainMenuFactory {
     )
 
     return editMenu
+  }
+
+  private static func makeDebugMenu() -> NSMenu {
+    let debugMenu = NSMenu(title: "Debug")
+    let galleryItem = debugMenu.addItem(
+      withTitle: "Component Gallery",
+      action: #selector(ComponentGalleryLauncher.showGallery(_:)),
+      keyEquivalent: "g"
+    )
+    galleryItem.keyEquivalentModifierMask = [.command, .shift]
+    galleryItem.target = ComponentGalleryLauncher.shared
+    return debugMenu
   }
 
   private static func makeWindowMenu() -> NSMenu {

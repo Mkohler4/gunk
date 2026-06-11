@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- `gunk.app` component gallery (`Design/ComponentGalleryView.swift`): a dev-only,
+  glass-backed CP2 review surface rendering every brand token (palette, type
+  scale, spacing/radius, motion, mark) and every T-7.3 component on one
+  scrollable screen with an in-window Light/Dark toggle. Gated behind
+  `GUNK_DESIGN_GALLERY=1` (Debug menu + auto-open), so it is absent from
+  normal launches and packaged builds.
 - `gunk.app` Liquid Glass component library (`Design/Components/`): `GlassCard`,
   `GlassSidebar`, `BrandButton` (primary / secondary / destructive / icon styles
   with hover and press motion), `TagChip`, `StatusBadge`, `SectionHeader`, and a

@@ -249,7 +249,12 @@ duplicated capsule/pill code.
 
 ## T-7.4 — Component gallery (CP2)
 
-**Status:** Not started
+**Status:** In review — `ComponentGalleryView` renders every token and
+component on one scrollable glass screen, gated behind
+`GUNK_DESIGN_GALLERY=1` (env-flag Debug menu + auto-open; an `#if DEBUG`
+gate would still ship because `make app` builds the debug configuration).
+Full-window screenshots captured live in light + dark (real `glassEffect`
+composites verified). Awaiting CP2 sign-off — the design-system freeze gate.
 **Owner:** Codex
 **Checkpoint:** CP2
 
