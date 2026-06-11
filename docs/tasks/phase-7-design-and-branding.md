@@ -317,6 +317,13 @@ only: no onboarding flow, no engine/store/MCP behavior changes.
 > 2. Walk the core journey end-to-end (drop folder → processing → browse →
 >    approve → consume via MCP) and list every dead-end, invisible state, and
 >    "why am I here" moment.
+>    **Known gap to address:** the "consume via MCP" leg happens outside the
+>    app (in Cursor), so the in-app journey can only be audited as far as
+>    "module is approved and visible to `gunk-mcp`". That approval moment is
+>    the product's actual payoff and today it is completely silent — propose
+>    whether/how the app surfaces "this module is now available to your
+>    agent" feedback (and what, if anything, links the user onward to MCP
+>    setup when it isn't configured).
 > 3. Propose, per surface: purpose, primary action, content hierarchy,
 >    empty/loading/error state placement, and what navigates here when.
 > 4. Propose cross-cutting rules: default/landing section (first-run vs
@@ -333,6 +340,8 @@ only: no onboarding flow, no engine/store/MCP behavior changes.
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME] CP2.5` — I approve the UX architecture doc. It becomes the
   contract every CP3 re-skin task implements alongside the visual system.
+- I decide the MCP payoff-feedback question (see the known gap in step 2):
+  whether the app surfaces approved-module availability, and where.
 
 ### Acceptance
 - `ux-architecture.md` covers every surface + cross-cutting rules.
