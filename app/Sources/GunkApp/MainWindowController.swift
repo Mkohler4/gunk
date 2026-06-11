@@ -12,7 +12,11 @@ final class MainWindowController: NSObject {
   func register(window: NSWindow) {
     mainWindow = window
     window.identifier = NSUserInterfaceItemIdentifier(Self.mainWindowID)
+    // D13: the window title is always the product, never the section. The
+    // text is visually hidden because the sidebar wordmark already reads
+    // "gunk"; the title still names the window for Mission Control/⌘-Tab.
     window.title = "gunk"
+    window.titleVisibility = .hidden
     window.isRestorable = false
     window.setFrameAutosaveName("gunk-main-window")
   }
@@ -56,8 +60,10 @@ final class MainWindowController: NSObject {
     let hostingController = NSHostingController(
       rootView: AppLaunchView(runtime: AppRuntime.shared)
     )
+    // Default first-launch frame per ux §4.6; the autosave name set in
+    // `register` keeps the user's last size on subsequent launches.
     let window = NSWindow(
-      contentRect: NSRect(x: 0, y: 0, width: 1040, height: 680),
+      contentRect: NSRect(x: 0, y: 0, width: 1120, height: 720),
       styleMask: [.titled, .closable, .miniaturizable, .resizable],
       backing: .buffered,
       defer: false
