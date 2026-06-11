@@ -122,8 +122,8 @@ available.
 
 ## T-7.2 — Brand and design-system foundation (CP1)
 
-**Status:** In review — implemented from the approved Ooze concept boards
-(palette, type faces, mark geometry, and motion spec); awaiting CP1 sign-off.
+**Status:** Done — CP1 signed off; implemented from the approved Ooze concept
+boards (palette, type faces, mark geometry, and motion spec). Merged in #123.
 **Owner:** Codex
 **Checkpoint:** CP1
 
@@ -199,9 +199,10 @@ should hardcode design values after this.
 
 ## T-7.3 — Liquid Glass component library
 
-**Status:** In review — all seven components built on the T-7.2 `Design/`
-tokens (plus new `BrandMetrics.Control` tokens for hover/press/tinted-fill
-states), each with light + dark previews; no existing view touched. Offscreen
+**Status:** Done — CP2 signed off, merged in #124. All seven components built
+on the T-7.2 `Design/` tokens (plus new `BrandMetrics.Control` tokens for
+hover/press/tinted-fill states), each with light + dark previews; no existing
+view touched. Offscreen
 `ImageRenderer` cannot composite the real `glassEffect`, so the glass look of
 `GlassCard`/`GlassSidebar` is verified live at CP2.
 **Owner:** Codex
@@ -360,7 +361,7 @@ only: no onboarding flow, no engine/store/MCP behavior changes.
 
 ## T-7.5 — App icon and brand identity
 
-**Status:** In review — `AppIcon.appiconset` + regenerated `AppIcon.icns`
+**Status:** Done — merged in #140. `AppIcon.appiconset` + regenerated `AppIcon.icns`
 rendered from the shared `BrandMark` (Ooze centered on a dark glass tile) via
 a new `make icon` target; the runtime Dock states drop the trash-can metaphor
 and reuse the same tile (muted mark when empty, accent glow while processing,
@@ -409,7 +410,10 @@ Apply the logo to the app icon, sidebar header, and launch screen.
 
 ## T-7.6 — Re-skin: app shell, sidebar, toolbar (CP3)
 
-**Status:** Not started
+**Status:** Done — CP3 shell gate approved, merged in #142. Note:
+`NavigationSplitView` was replaced with a fixed two-pane layout because it
+collapsed the sidebar into an overlay whenever the Modules browser's ideal
+width didn't fit (the D10 failure); a fixed 192pt sidebar can never collapse.
 **Owner:** Codex
 **Checkpoint:** CP3
 
@@ -470,7 +474,9 @@ Make the primary window frame feel like a designed Liquid Glass app.
 
 ## T-7.7 — Re-skin: Sources and drop zone (CP3)
 
-**Status:** Not started
+**Status:** Done — CP3 Sources gate approved (#143; landed on main via #146
+after the stacked merge missed it). Adds an app-model-only
+`ProcessingModel.errorsBySource` map so failures disclose on the affected row.
 **Owner:** Codex
 **Checkpoint:** CP3
 
@@ -527,7 +533,7 @@ Make adding sources feel like the signature gesture of a premium app.
 
 ## T-7.8 — Re-skin: Modules browser and detail (CP3)
 
-**Status:** Not started
+**Status:** In progress
 **Owner:** Codex
 **Checkpoint:** CP3
 
