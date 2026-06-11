@@ -165,8 +165,7 @@ struct SettingsView: View {
     testConnection: @escaping (LLMProvider, String, String) async throws -> Void = SettingsView.liveTestConnection,
     storePath: String? = Store.defaultURL.path,
     resolveEngine: @escaping () -> ResolvedEngine? = { EngineBinary.resolve() },
-    mcpConfigURL: URL = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".cursor/mcp.json"),
+    mcpConfigURL: URL = MCPStatusProvider.defaultConfigURL,
     fileManager: FileManager = .default
   ) {
     self._providerRawValue = AppStorage(

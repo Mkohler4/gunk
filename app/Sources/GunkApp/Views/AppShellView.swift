@@ -317,7 +317,15 @@ struct AppShellView: View {
         }
       )
     case .modules:
-      ModulesSectionView(model: services.browseModel)
+      ModulesSectionView(
+        model: services.browseModel,
+        // The shell's MCP snapshot drives the Agent-ready needs-setup copy
+        // (ux §4.5, D8) so the detail line and the status strip can't
+        // disagree.
+        mcpNeedsSetup: (mcpStatus ?? mcpStatusProvider.status()).state == .needsSetup,
+        onShowSources: { selection = .sources },
+        onShowSettings: { selection = .settings }
+      )
     case .approval:
       ApprovalSectionView(model: services.browseModel)
     case .runs:
@@ -701,17 +709,25 @@ private struct SourcesSectionView: View {
 @MainActor
 private struct ModulesSectionView: View {
   let model: BrowseModel
+  let mcpNeedsSetup: Bool
+  let onShowSources: () -> Void
+  let onShowSettings: () -> Void
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 12) {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
       if let errorMessage = model.errorMessage {
         Text(errorMessage)
-          .font(.caption)
-          .foregroundStyle(.red)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.danger)
           .textSelection(.enabled)
       }
 
-      BrowseView(model: model)
+      BrowseView(
+        model: model,
+        mcpNeedsSetup: mcpNeedsSetup,
+        onShowSources: onShowSources,
+        onShowSettings: onShowSettings
+      )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
   }
