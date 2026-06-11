@@ -1,0 +1,47 @@
+import SwiftUI
+
+/// Spacing, radius, and glass constants for the gunk brand. Views must use
+/// these tokens — never magic numbers.
+enum BrandMetrics {
+  /// Spacing scale, derived from the concept boards' rhythm.
+  enum Spacing {
+    static let xs: CGFloat = 4
+    static let sm: CGFloat = 8
+    static let md: CGFloat = 12
+    static let lg: CGFloat = 20
+    static let xl: CGFloat = 32
+  }
+
+  /// Corner radii. Concept boards use 11px controls, 18px cards, 24px shells.
+  enum Radius {
+    static let small: CGFloat = 6
+    static let medium: CGFloat = 11
+    static let large: CGFloat = 18
+    static let pill: CGFloat = 999
+  }
+
+  /// Constants for the adaptive glass material (see `GlassMaterial`).
+  enum Glass {
+    /// Opacity of the `surfaceGlass` tint laid over the blur.
+    static let tintOpacity: Double = 0.55
+    /// Inner hairline stroke, from the concept's `inset 0 0 0 1px` highlight.
+    static let strokeOpacity: Double = 0.07
+    /// Top-edge sheen gradient strength, from the concept's overlay.
+    static let sheenOpacity: Double = 0.16
+    /// Drop shadow under floating glass surfaces.
+    static let shadowOpacity: Double = 0.35
+    static let shadowRadius: CGFloat = 24
+    static let shadowYOffset: CGFloat = 12
+  }
+
+  /// Brand-mark sizing (see `BrandMark`). The face stays legible down to
+  /// 16pt; below that the mark reads as a solid blob, which is intended.
+  enum Mark {
+    static let small: CGFloat = 16
+    static let medium: CGFloat = 32
+    static let large: CGFloat = 64
+    static let hero: CGFloat = 128
+    /// Outline width at the mark's native 100pt design size.
+    static let outlineWidth: CGFloat = 3
+  }
+}

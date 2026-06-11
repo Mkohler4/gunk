@@ -9,8 +9,9 @@ opening controls, not the primary workspace.
 
 ## Requirements
 
-- macOS 14+
-- Xcode-bundled Swift toolchain
+- macOS 26+
+- Xcode 26 toolchain (swift-tools 6.2; required for the Liquid Glass
+  `glassEffect` APIs)
 
 ## Commands
 

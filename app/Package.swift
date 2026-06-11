@@ -1,11 +1,11 @@
-// swift-tools-version: 5.10
+// swift-tools-version: 6.2
 
 import PackageDescription
 
 let package = Package(
   name: "GunkApp",
   platforms: [
-    .macOS(.v14)
+    .macOS(.v26)
   ],
   products: [
     .executable(
@@ -37,5 +37,9 @@ let package = Package(
         .product(name: "GRDB", package: "GRDB.swift")
       ]
     )
-  ]
+  ],
+  // Keep the Swift 5 language mode for now: tools 6.x would otherwise turn on
+  // Swift 6 strict concurrency, a migration that is out of scope for the
+  // macOS 26 platform bump (T-7.1).
+  swiftLanguageModes: [.v5]
 )
