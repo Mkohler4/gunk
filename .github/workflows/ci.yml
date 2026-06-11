@@ -289,7 +289,9 @@ jobs:
 
   app:
     name: App
-    runs-on: macos-14
+    # The Swift package targets macOS 26 (swift-tools 6.2), which needs the
+    # Xcode 26 toolchain — only available on the macos-26 image.
+    runs-on: macos-26
     needs: changes
     if: needs.changes.outputs.code == 'true'
     defaults:
@@ -315,7 +317,8 @@ jobs:
 
   llm-live-smoke:
     name: LLM live smoke
-    runs-on: macos-14
+    # Runs `swift test`, so it needs the same Xcode 26 toolchain as `app`.
+    runs-on: macos-26
     needs: changes
     if: needs.changes.outputs.code == 'true' && (github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository)
     defaults:

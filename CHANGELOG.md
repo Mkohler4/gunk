@@ -10,6 +10,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` now requires macOS 26: the package builds with the Xcode 26
+  toolchain (swift-tools 6.2, `.macOS(.v26)`), the app bundle declares
+  `LSMinimumSystemVersion` 26.0, and the App CI job runs on the `macos-26`
+  image so real Liquid Glass `glassEffect` APIs are available.
 - `gunk.app` packaging now verifies the built app bundle after `make app`,
   keeps ad-hoc signing as the default, and documents the Developer ID,
   notarization, and manual update path.
@@ -26,6 +30,11 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- `gunk.app` brand and design-system foundation (`Design/`): semantic color
+  tokens with Light + Dark color sets, the Space Grotesk / JetBrains Mono type
+  scale, spacing/radius/glass metrics, an adaptive Liquid Glass material, named
+  motion tokens from the brand animation spec, and the Ooze brand mark as a
+  native SwiftUI view with its breathe/blink idle loop.
 - `gunk.app` Settings now surfaces provider/model, API-key, local store, engine
   binary, and Cursor MCP config status with setup guidance when something is
   missing.
