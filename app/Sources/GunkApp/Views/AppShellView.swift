@@ -176,7 +176,8 @@ struct AppShellView: View {
     let processingModel = services.processingModel
 
     if processingModel.isProcessing {
-      return .processing(label: processingLabel)
+      let (subject, detail) = processingStatus
+      return .processing(subject: subject, detail: detail)
     }
 
     if let completedSummary {
@@ -190,7 +191,7 @@ struct AppShellView: View {
     return .idle(mcp: mcpStatus ?? mcpStatusProvider.status())
   }
 
-  private var processingLabel: String {
+  private var processingStatus: (subject: String, detail: String) {
     let model = services.processingModel
     let progress = model.progressBySource
 
@@ -208,7 +209,7 @@ struct AppShellView: View {
       ? 0
       : Int((progress.values.reduce(0, +) / Double(progress.count)) * 100)
 
-    return "\(subject) · \(percent)% · \(model.modulesFound) found"
+    return (subject, "\(percent)% · \(model.modulesFound) found")
   }
 
   private func handleStripTap() {
@@ -484,7 +485,7 @@ private struct RunCompletionSummary: Equatable {
 
 private enum ShellStripState: Equatable {
   case idle(mcp: SettingsStatusItem)
-  case processing(label: String)
+  case processing(subject: String, detail: String)
   case completed(RunCompletionSummary)
   case runFailed
 }
@@ -564,8 +565,8 @@ private struct ShellStatusStrip: View {
     switch state {
     case .idle(let mcp):
       return mcp.state == .ready ? "Agent connected" : "MCP not set up"
-    case .processing(let label):
-      return label
+    case .processing(let subject, _):
+      return subject
     case .completed(let summary):
       var text = "\(summary.modulesAdded) module\(summary.modulesAdded == 1 ? "" : "s") added"
       if summary.needsReview > 0 {
@@ -581,8 +582,8 @@ private struct ShellStatusStrip: View {
     switch state {
     case .idle(let mcp):
       return mcp.state == .ready ? nil : "Connect Cursor → Settings"
-    case .processing:
-      return nil
+    case .processing(_, let detail):
+      return detail
     case .completed(let summary):
       return summary.needsReview > 0 ? "Review → Approval" : "View → Modules"
     case .runFailed:
