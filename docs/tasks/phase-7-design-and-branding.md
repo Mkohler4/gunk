@@ -357,7 +357,13 @@ only: no onboarding flow, no engine/store/MCP behavior changes.
 
 ## T-7.5 — App icon and brand identity
 
-**Status:** Not started
+**Status:** In review — `AppIcon.appiconset` + regenerated `AppIcon.icns`
+rendered from the shared `BrandMark` (Ooze on the brand tile gradient) via a
+new `make icon` target; `BrandWordmark` (sidebar + hero styles, settle-in
+reveal from `BrandMotion`) wired into the sidebar header and launch-failure
+view. Awaiting icon/wordmark approval at the gate. Note: at runtime the Dock
+tile still shows the `DockIconController` bin override by design; the static
+app icon shows in Finder/Launchpad and pre-launch Dock.
 **Owner:** Codex
 **Checkpoint:** CP1 values, CP4 final
 

@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- `gunk.app` app icon and brand wordmark (T-7.5): a complete
+  `AppIcon.appiconset` plus a regenerated `app/AppIcon.icns`, both rendered
+  from the shared `BrandMark` Ooze view on the brand icon tile via a new
+  `make icon` target (dev-only `GUNK_RENDER_APPICON` export mode — no new
+  shipping UI); and `BrandWordmark` (mark + "gunk" lockup, sidebar and hero
+  styles with a `BrandMotion`-driven reveal), now shown in the sidebar header
+  and the launch-failure view.
 - UX architecture doc (`docs/design/ux-architecture.md`, T-7.4b): the CP2.5
   contract for the phase-7 re-skins — surface inventory of every screen plus
   menubar item, Dock bin, and window chrome; core-journey audit findings
