@@ -1,36 +1,81 @@
 import AppKit
 import SwiftUI
 
-/// The app icon: the static, export-sized form of `BrandMark` on the brand
-/// icon tile (T-7.5). The mark is not re-drawn here — `BrandMark` stays the
-/// single source; this view only composes it onto the macOS icon-grid tile
-/// using the `BrandColors.Mark.tile*` art tokens.
+/// The app icon: the Ooze (`BrandMark`) centered on a dark glass tile —
+/// nothing else. The mark is not re-drawn here; `BrandMark` stays the single
+/// source. The tile uses the `BrandColors.Mark.darkTile*` art tokens with the
+/// `BrandMetrics.Glass` sheen/stroke treatment.
+///
+/// The Dock runtime states reuse the same tile (no trash-can metaphor):
+/// - `.empty` — muted mark.
+/// - `.full` — the mark at full strength (the count badge carries the number).
+/// - `.processing` — a soft accent glow behind the mark.
 struct AppIconTile: View {
+  enum TileState {
+    case empty
+    case full
+    case processing
+  }
+
   /// Canvas edge in pixels. macOS icon grid: a 824/1024 squircle centered on
   /// the canvas with ~185/1024 continuous corner radius.
   var size: CGFloat = 1024
+  var state: TileState = .full
 
   private var tileEdge: CGFloat { size * 824 / 1024 }
   private var cornerRadius: CGFloat { size * 185 / 1024 }
 
   var body: some View {
     ZStack {
-      RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-        .fill(
-          LinearGradient(
-            colors: [BrandColors.Mark.tileTop, BrandColors.Mark.tileBottom],
-            startPoint: .top,
-            endPoint: .bottom
-          )
-        )
-        .frame(width: tileEdge, height: tileEdge)
+      tile
 
-      BrandMark(size: size * 0.62)
-        // The mark's visual mass sits high on its 100pt canvas (body spans
-        // y 8–85); nudge down so it reads centered on the tile.
-        .offset(y: size * 0.015)
+      if state == .processing {
+        Circle()
+          .fill(BrandColors.accent)
+          .frame(width: size * 0.6, height: size * 0.6)
+          .blur(radius: size * 0.07)
+          .opacity(0.5)
+      }
+
+      BrandMark(size: size * 0.58)
+        // The mark's visual mass sits high on its 100pt canvas; nudge down
+        // so it reads centered on the tile.
+        .offset(y: size * 0.02)
+        .opacity(state == .empty ? 0.55 : 1)
     }
     .frame(width: size, height: size)
+  }
+
+  private var tile: some View {
+    let shape = RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+    return shape
+      .fill(
+        LinearGradient(
+          colors: [BrandColors.Mark.darkTileTop, BrandColors.Mark.darkTileBottom],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      )
+      // Glass treatment: top sheen + inner hairline, from the Glass tokens.
+      .overlay(
+        shape.fill(
+          LinearGradient(
+            colors: [
+              .white.opacity(BrandMetrics.Glass.sheenOpacity),
+              .clear,
+            ],
+            startPoint: .top,
+            endPoint: .center
+          )
+        )
+      )
+      .overlay(
+        shape.strokeBorder(
+          .white.opacity(BrandMetrics.Glass.strokeOpacity * 2),
+          lineWidth: max(1, size / 256)
+        )
+      )
+      .frame(width: tileEdge, height: tileEdge)
   }
 }
 
@@ -85,20 +130,82 @@ enum AppIconExporter {
     )
 
     for variant in variants {
-      let renderer = ImageRenderer(content: AppIconTile(size: variant.pixels))
-      renderer.scale = 1
+      try write(
+        AppIconTile(size: variant.pixels),
+        to: directory.appendingPathComponent("\(variant.filename).png"),
+        name: variant.filename
+      )
+    }
+  }
 
-      guard let cgImage = renderer.cgImage else {
-        throw AppIconExportError.renderFailed(variant.filename)
-      }
+  static func write(
+    _ content: AppIconTile,
+    to url: URL,
+    name: String
+  ) throws {
+    let renderer = ImageRenderer(content: content)
+    renderer.scale = 1
 
-      let bitmap = NSBitmapImageRep(cgImage: cgImage)
-      guard let png = bitmap.representation(using: .png, properties: [:]) else {
-        throw AppIconExportError.encodeFailed(variant.filename)
-      }
+    guard let cgImage = renderer.cgImage else {
+      throw AppIconExportError.renderFailed(name)
+    }
 
-      let url = directory.appendingPathComponent("\(variant.filename).png")
-      try png.write(to: url)
+    let bitmap = NSBitmapImageRep(cgImage: cgImage)
+    guard let png = bitmap.representation(using: .png, properties: [:]) else {
+      throw AppIconExportError.encodeFailed(name)
+    }
+
+    try png.write(to: url)
+  }
+}
+
+/// Dev-only export of the Dock-state PNGs, mirroring `AppIconExporter`. When
+/// the app is launched with `GUNK_RENDER_DOCKBIN=<directory>` it writes the
+/// three state assets and exits (see `make icon`). The `DockBin*` asset and
+/// file names are kept so `DockIconController` is untouched.
+@MainActor
+enum DockBinExporter {
+  static let environmentFlag = "GUNK_RENDER_DOCKBIN"
+
+  static let variants: [(filename: String, state: AppIconTile.TileState)] = [
+    ("dock-bin-empty", .empty),
+    ("dock-bin-full", .full),
+    ("dock-bin-processing", .processing),
+  ]
+
+  /// Returns true when the export ran (the caller must not start the app).
+  static func runIfRequested() -> Bool {
+    guard
+      let path = ProcessInfo.processInfo.environment[environmentFlag],
+      !path.isEmpty
+    else {
+      return false
+    }
+
+    do {
+      let directory = URL(fileURLWithPath: path, isDirectory: true)
+      try export(to: directory)
+      print("DockBin: wrote \(variants.count) PNGs to \(directory.path)")
+    } catch {
+      FileHandle.standardError.write(Data("DockBin export failed: \(error)\n".utf8))
+      exit(1)
+    }
+
+    return true
+  }
+
+  static func export(to directory: URL) throws {
+    try FileManager.default.createDirectory(
+      at: directory,
+      withIntermediateDirectories: true
+    )
+
+    for variant in variants {
+      try AppIconExporter.write(
+        AppIconTile(size: 1024, state: variant.state),
+        to: directory.appendingPathComponent("\(variant.filename).png"),
+        name: variant.filename
+      )
     }
   }
 }
@@ -117,13 +224,33 @@ enum AppIconExportError: Error, CustomStringConvertible {
   }
 }
 
-#Preview("App icon tile") {
+#Preview("App icon — sizes") {
   HStack(alignment: .bottom, spacing: BrandMetrics.Spacing.xl) {
     AppIconTile(size: 256)
     AppIconTile(size: 128)
     AppIconTile(size: 64)
     AppIconTile(size: 32)
     AppIconTile(size: 16)
+  }
+  .padding(BrandMetrics.Spacing.xl)
+  .background(BrandColors.backgroundPrimary)
+  .preferredColorScheme(.dark)
+}
+
+#Preview("Dock states") {
+  HStack(spacing: BrandMetrics.Spacing.xl) {
+    VStack(spacing: BrandMetrics.Spacing.sm) {
+      AppIconTile(size: 128, state: .empty)
+      Text("empty").font(BrandTypography.caption)
+    }
+    VStack(spacing: BrandMetrics.Spacing.sm) {
+      AppIconTile(size: 128, state: .full)
+      Text("full").font(BrandTypography.caption)
+    }
+    VStack(spacing: BrandMetrics.Spacing.sm) {
+      AppIconTile(size: 128, state: .processing)
+      Text("processing").font(BrandTypography.caption)
+    }
   }
   .padding(BrandMetrics.Spacing.xl)
   .background(BrandColors.backgroundPrimary)

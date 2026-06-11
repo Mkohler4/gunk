@@ -4,9 +4,12 @@ import AppKit
 enum GunkAppMain {
   @MainActor
   static func main() {
-    // Dev-only (T-7.5): GUNK_RENDER_APPICON=<dir> renders the app-icon PNGs
-    // and exits without starting the UI (see `make icon`).
-    if AppIconExporter.runIfRequested() {
+    // Dev-only (T-7.5): GUNK_RENDER_APPICON=<dir> / GUNK_RENDER_DOCKBIN=<dir>
+    // render the icon and Dock-bin PNGs and exit without starting the UI
+    // (see `make icon`).
+    let renderedAppIcon = AppIconExporter.runIfRequested()
+    let renderedDockBins = DockBinExporter.runIfRequested()
+    if renderedAppIcon || renderedDockBins {
       return
     }
 
