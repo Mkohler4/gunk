@@ -9,13 +9,31 @@ ENGINE_BINARY := $(ENGINE_DIR)/dist/gunk-engine
 SIGN_IDENTITY ?= -
 CODESIGN_FLAGS ?=
 
-.PHONY: build test app verify-app rebuild clean engine
+.PHONY: build test app verify-app rebuild clean engine icon
 
 build:
 	swift build
 
 test:
 	swift test
+
+# Regenerates the brand icon artwork (T-7.5): renders the iconutil PNG set
+# and the Dock-bin state assets via the dev-only GUNK_RENDER_* modes,
+# rebuilds AppIcon.icns, and refreshes the asset-catalog copies.
+ICONSET_DIR := $(BUILD_DIR)/AppIcon.iconset
+DOCKBIN_DIR := $(BUILD_DIR)/DockBins
+ASSETS_DIR := Sources/GunkApp/Resources/Assets.xcassets
+APPICONSET_DIR := $(ASSETS_DIR)/AppIcon.appiconset
+
+icon: build
+	rm -rf "$(ICONSET_DIR)" "$(DOCKBIN_DIR)"
+	mkdir -p "$(ICONSET_DIR)" "$(DOCKBIN_DIR)"
+	GUNK_RENDER_APPICON="$(ICONSET_DIR)" GUNK_RENDER_DOCKBIN="$(DOCKBIN_DIR)" "$(EXECUTABLE)"
+	iconutil -c icns "$(ICONSET_DIR)" -o AppIcon.icns
+	cp "$(ICONSET_DIR)"/icon_*.png "$(APPICONSET_DIR)/"
+	cp "$(DOCKBIN_DIR)/dock-bin-empty.png" "$(ASSETS_DIR)/DockBinEmpty.imageset/"
+	cp "$(DOCKBIN_DIR)/dock-bin-full.png" "$(ASSETS_DIR)/DockBinFull.imageset/"
+	cp "$(DOCKBIN_DIR)/dock-bin-processing.png" "$(ASSETS_DIR)/DockBinProcessing.imageset/"
 
 # Builds the cross-platform decomposition engine as a self-contained Bun binary.
 engine:

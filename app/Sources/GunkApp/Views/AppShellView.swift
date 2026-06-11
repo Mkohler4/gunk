@@ -16,10 +16,9 @@ struct AppLaunchView: View {
   }
 
   private var launchFailureView: some View {
-    VStack(spacing: 12) {
-      Image(systemName: "exclamationmark.triangle")
-        .font(.system(size: 34))
-        .foregroundStyle(.orange)
+    VStack(spacing: BrandMetrics.Spacing.md) {
+      BrandWordmark(style: .hero, revealOnAppear: true)
+        .padding(.bottom, BrandMetrics.Spacing.sm)
 
       Text("gunk could not open")
         .font(.title3.bold())
@@ -29,7 +28,7 @@ struct AppLaunchView: View {
         .multilineTextAlignment(.center)
         .textSelection(.enabled)
     }
-    .padding(32)
+    .padding(BrandMetrics.Spacing.xl)
     .frame(maxWidth: .infinity, maxHeight: .infinity)
   }
 }
@@ -48,6 +47,12 @@ struct AppShellView: View {
       }
       .navigationTitle("gunk")
       .frame(minWidth: 180)
+      .safeAreaInset(edge: .top, spacing: BrandMetrics.Spacing.sm) {
+        BrandWordmark(style: .sidebar)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(.horizontal, BrandMetrics.Spacing.md)
+          .padding(.top, BrandMetrics.Spacing.sm)
+      }
     } detail: {
       detailView(for: selection ?? .sources)
         .navigationTitle((selection ?? .sources).title)

@@ -357,7 +357,14 @@ only: no onboarding flow, no engine/store/MCP behavior changes.
 
 ## T-7.5 — App icon and brand identity
 
-**Status:** Not started
+**Status:** In review — `AppIcon.appiconset` + regenerated `AppIcon.icns`
+rendered from the shared `BrandMark` (Ooze centered on a dark glass tile) via
+a new `make icon` target; the runtime Dock states drop the trash-can metaphor
+and reuse the same tile (muted mark when empty, accent glow while processing,
+count badge unchanged), so the Dock always shows the app logo;
+`BrandWordmark` (sidebar + hero styles, settle-in reveal from `BrandMotion`)
+wired into the sidebar header and launch-failure view. Awaiting icon/wordmark
+approval at the gate.
 **Owner:** Codex
 **Checkpoint:** CP1 values, CP4 final
 
