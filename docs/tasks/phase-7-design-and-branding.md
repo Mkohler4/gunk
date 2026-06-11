@@ -75,11 +75,12 @@ in the loop at every step**. Each task is structured the same way:
 
 ## T-7.1 — Platform bump to macOS 26
 
-**Status:** Blocked — Xcode 26 is not installed (machine runs macOS 26.5 but
-only Xcode 16.4 / macOS 15.5 SDK is present). Bumping now would break the
-build. `GlassMaterial` (T-7.2) gates the real `glassEffect` path behind
-`#if compiler(>=6.2)`, so it starts compiling automatically once Xcode 26
-lands; revisit this task then.
+**Status:** Done — built with Xcode 26.5 (macOS 26.5 SDK, Swift 6.3.2).
+`swift-tools-version` is 6.2 with `swiftLanguageModes: [.v5]` so the platform
+bump does not also force the Swift 6 strict-concurrency migration. The real
+`glassEffect` path in `GlassMaterial` (T-7.2) now compiles; note that
+offscreen `ImageRenderer` cannot composite Liquid Glass, so its visual check
+happens in a real window at the CP2 component gallery.
 **Owner:** Codex
 **Checkpoint:** none (mechanical)
 
