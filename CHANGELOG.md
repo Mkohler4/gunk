@@ -35,6 +35,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- UX architecture doc (`docs/design/ux-architecture.md`, T-7.4b): the CP2.5
+  contract for the phase-7 re-skins — surface inventory of every screen plus
+  menubar item, Dock bin, and window chrome; core-journey audit findings
+  (silent processing/completion, invisible approval queue, unsurfaced MCP
+  payoff, Dock-bin state assets that are byte-identical); per-surface
+  placement proposals; and cross-cutting rules for landing, sidebar
+  order/badges, global status, drop-gesture feedback, and window sizing.
 - `gunk.app` component gallery (`Design/ComponentGalleryView.swift`): a dev-only,
   glass-backed CP2 review surface rendering every brand token (palette, type
   scale, spacing/radius, motion, mark) and every T-7.3 component on one

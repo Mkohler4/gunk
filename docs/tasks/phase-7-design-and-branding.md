@@ -296,7 +296,12 @@ screen is touched.
 
 ## T-7.4b — Product UX pass: information architecture and placement (CP2.5)
 
-**Status:** Not started
+**Status:** In review — audit complete (code + live journey run through the
+Dock-drop path); `docs/design/ux-architecture.md` drafted with the surface
+inventory, journey findings (D1–D15, bugs B1–B3), per-surface proposals, and
+cross-cutting rules. Open `[DECISION: me]` items: landing section split
+(first-run vs returning) and the MCP payoff-feedback placement (§4.5).
+Awaiting surface-by-surface review and CP2.5 sign-off.
 **Owner:** Codex (decisions: me)
 **Checkpoint:** CP2.5 — blocks all CP3 re-skin tasks
 
