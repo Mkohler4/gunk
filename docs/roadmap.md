@@ -19,14 +19,21 @@ not file-watch.
 
 ## Current focus
 
-The next product milestone is **a legit macOS app you can open**. Engine quality
-is now good enough to build around. The priority is a full windowed app with
-clear source import, module browsing, module detail, approval, runs/debugging,
-and settings. One-click AI-tool wiring is still useful, but it moves behind the
-core app experience.
+The windowed app exists and works end-to-end, and Phase 7 gave it a real
+design system (brand tokens, glass components, wordmark, Dock tile) with the
+shell, Sources, and Modules pages re-skinned. But the layout is still
+confusing to use, two pages (Approval, Runs) never got re-skinned, and the
+product's actual selling point — modules as capabilities your agent uses
+through MCP — is buried.
 
-The roadmap below builds toward that, **walking-skeleton-first**: Phase 2 is
-the dumbest possible end-to-end loop, and every later phase deepens it.
+The next milestone is **the redesign arc (Phases 8–13)**: restructure the IA
+around a Library, put the model switcher and MCP status front and center,
+make folder processing feel alive, let users run and test modules, surface
+token/cost spend, stub the marketplace UI, and finish with an onboarding
+walkthrough. Ground truth for the redesign lives in
+[docs/design/feature-report/](design/feature-report/README.md) (a per-page
+audit of every front-end feature) and
+[docs/design/ux-architecture.md](design/ux-architecture.md).
 
 ## How we actually got here (non-linear path)
 
@@ -35,9 +42,10 @@ them in that order. Engine quality was the riskiest, highest-leverage part of th
 product, so we front-loaded it: the classification, extraction, and
 multi-language eval work (the heart of Phases 3–5) was built first as a
 cross-platform TypeScript engine (`gunk-engine`, per ADR-0013/0014). The macOS
-app shell (Phase 6) is mid-build, and the product glue and launch work (cost
-meter UI, in-app reclassify, `list_tags`, AI-tool auto-wiring, packaging,
-alpha/launch) still trails.
+app shell (Phase 6) and the design system + re-skin (Phase 7) are built, and
+the product glue and launch work (cost meter UI, in-app reclassify,
+`list_tags`, AI-tool auto-wiring, packaging, alpha/launch) still trails — it
+is folded into the redesign phases below.
 
 So the checkboxes below reflect **real status, not the original week order**: an
 item is checked if it actually exists today, wherever it was built. Note that
@@ -176,65 +184,199 @@ process, browse extracted modules, inspect a module's owned files and
 self-containment status, approve/reject borderline modules, and open settings
 without touching a menu-bar popover.
 
-> Status: several component views already exist from earlier menubar/popover work
-> (`BrowseView`, `ApprovalQueueView`, `SettingsView`, `RunsView`, `DropZoneView`,
-> `GunkListView`) and the menubar + Dock controllers are in place. What's missing
-> is the unified **windowed** shell that ties them together (no
-> `NavigationSplitView`/`WindowGroup` yet), so the items below stay unchecked.
-
-- [ ] Main window shell with navigation: Sources, Modules, Runs, Approval,
+- [x] Main window shell with navigation: Sources, Modules, Runs, Approval,
       Settings
-- [ ] Dock/window source import flow with visible processing state
-- [ ] Modules browser with source/tag/language/status filtering
-- [ ] Module detail view: owned files, shared deps, entrypoints,
+- [x] Dock/window source import flow with visible processing state
+- [x] Modules browser with source/tag/language/status filtering
+- [x] Module detail view: owned files, shared deps, entrypoints,
       self-containment, optional build verification, bundle path
-- [ ] Approval queue and re-run controls
-- [ ] Provider/model/store/engine status in Settings
+- [x] Approval queue and re-run controls
+- [x] Provider/model/store/engine status in Settings
 - [ ] Packaging notes for signing, notarization, and update path
 
 ---
 
-## Phase 7 — AI-tool wiring (Weeks 7–8)
+## Phase 7 — Design & branding (Weeks 8–10) — done
 
-**Demo:** The finished app sees Cursor + Claude Code + Codex + OpenCode
-installed and offers one-click MCP setup from Settings or onboarding.
+**Demo:** The app has an identity: brand tokens, glass components, wordmark,
+and Dock tile — and the shell, Sources, and Modules pages wear them.
 
-- [ ] AI tool detectors:
-  - Cursor: writes `.cursor/rules/gunk.mdc` and global MCP config
-  - Claude Code: writes `~/.claude/mcp_servers.json`
-  - Codex: writes `~/.codex/config.toml`
-  - OpenCode: writes the appropriate config file
-  - Claude Desktop: writes `claude_desktop_config.json`
-- [ ] One-click "wire all" button after app onboarding is coherent
-- [ ] Per-tool toggle in settings
-- [ ] Idempotent: re-running detection doesn't duplicate config entries
-- [ ] Usage telemetry: every time an AI tool calls gunk, log it locally
+> Note: this phase replaced the originally planned "AI-tool wiring" phase —
+> the design debt was blocking everything else. AI-tool wiring (multi-client
+> MCP config writers, one-click setup) moves into Phase 8 and the Phase 13
+> onboarding. The originally planned "Polish" phase dissolved into Phases
+> 8–13 below.
 
----
-
-## Phase 8 — Polish (Weeks 8–9)
-
-**Demo:** App feels finished. Browse view shows your gunks grouped by tag.
-Approval queue handles low-confidence classifications. Menu bar shows "Cursor
-used gunk 14× today." Settings let you tune classification cost vs. quality.
-
-- [ ] Browse view: list of gunks grouped by tag, search, filter
-- [ ] Approval view: classifications below confidence threshold land here
-- [ ] Usage counter: "Your AI used gunk N times today / this week"
-- [ ] Settings: classification provider, cost cap, watched paths (none, by
-      design — but a "remove all" affordance)
-- [ ] Notarized + codesigned `.app` build (reuse AICockpit's `make app`
-      pipeline)
-- [ ] Auto-update via Sparkle or similar
+- [x] Design tokens (colors, typography, metrics, motion) + component kit
+      (glass cards, status badges, tag chips, brand buttons, empty states,
+      wordmark)
+- [x] UX architecture audit and placement contract
+      ([docs/design/ux-architecture.md](design/ux-architecture.md))
+- [x] Shell re-skin: fixed sidebar, journey ordering, badges, status strip,
+      landing rules
+- [x] Sources re-skin: hero drop zone, per-row status/outcome, arrival
+      highlight
+- [x] Modules re-skin: pinned filter bar, module rows, detail pane,
+      Agent-ready line
+- [x] Brand Dock tile (empty / full / processing) + branded launch-failure
+      view
+- [ ] Approval and Runs re-skins (deferred — absorbed by Phases 8–9)
+- [ ] Dock badge render bug (B2) and threshold bug (B1) (carried to Phases 9
+      and 11)
 
 ---
 
-## Phase 9 — Friend alpha (Week 10)
+## Phase 8 — Shell & IA restructure (Weeks 11–12)
+
+**Demo:** Open the app and the layout makes sense without explanation. The
+model switcher and MCP status are the first things you see, not buried in
+Settings.
+
+> Task breakdown:
+> [docs/tasks/phase-8-shell-and-ia-restructure.md](tasks/phase-8-shell-and-ia-restructure.md)
+> (T-8.1 – T-8.11, with checkpoints CP-A/B/C).
+
+- [ ] New top-level IA: **Library**, **Marketplace** (placeholder tab),
+      **Settings**. Sources merges into Library (the drop zone lives there);
+      Approval folds into Library as a review state/filter; Runs demotes to a
+      run inspector opened from a source or module, not a tab. The
+      [toolbox-v1 exploration](design/explorations/toolbox-v1.md) validated
+      this shell IA (sidebar: Toolbox / Runs / Settings + MCP chip)
+- [ ] The entire app is a drop target: dragging a folder anywhere over the
+      window raises a full-window drop overlay, and **nothing in the layout
+      moves** — the overlay floats above the current view, drops are
+      accepted regardless of which section is showing, and it dismisses
+      cleanly on drag-exit/drop (extends the existing no-layout-shift rule,
+      D15, to the drag gesture itself)
+- [ ] Model switcher in the shell chrome (not behind Settings) — per-provider
+      keys already coexist in Keychain, so this is placement + a picker, not
+      new storage
+- [ ] MCP status front and center when not configured. (Reality check: this
+      is *not* hardcoded today — `MCPStatusProvider` genuinely inspects
+      `~/.cursor/mcp.json` for a `gunk-mcp` server entry. The work is
+      surfacing it prominently and adding one-click setup, not inventing the
+      check)
+- [ ] Multi-client MCP wiring pulled in from the old AI-tool-wiring phase:
+      Cursor, Claude Code, Claude Desktop, Codex, OpenCode — idempotent
+      config writers, per-tool toggle
+- [ ] Decompose the overloaded sidebar status strip (today it is MCP health +
+      live progress + completion toast + failure alert in one chip with a
+      different click target per state)
+- [ ] Design-first: feed [docs/design/feature-report/](design/feature-report/README.md)
+      and the library-view prompt to design before implementing. Iterations
+      land in [docs/design/explorations/](design/explorations/) with an
+      approved/rejected verdict per iteration (see
+      [toolbox-v1](design/explorations/toolbox-v1.md))
+
+---
+
+## Phase 9 — Library v2 + processing states (Weeks 12–14)
+
+**Demo:** Drop a folder, watch it process with a real animation while you
+keep browsing, then scan the library and instantly spot the one module that
+needs attention.
+
+- [ ] Module cell redesign (per
+      [library-view-prompt.md](design/feature-report/library-view-prompt.md)):
+      purpose line, distinct trust states (confidence / self-containment /
+      build / approval), agent-ready axis — not one ambiguous checkmark.
+      Status: the cell *content* is solved —
+      [toolbox-v1](design/explorations/toolbox-v1.md) locked the IA but its
+      "robotic futuristic" styling was rejected; the next iteration restyles
+      to native macOS Tahoe per the five constraints in that doc (no mono
+      outside paths, neutral surfaces, one trust verdict per cell, no HUD
+      glyphs, glass on the controls layer only)
+- [ ] Model attribution: each module states which model created it, with the
+      provider's logo (OpenAI / Anthropic / Ollama). Store wiring needed:
+      `gunks` carries no provider/model today — only the run record does —
+      so this adds a module→run link (closing audit finding D9) or a
+      denormalized provider/model field on the module
+- [ ] Grid + list view toggle, module search
+- [ ] Single-folder processing rule: enforce a one-at-a-time queue (the
+      processing model technically allows concurrency today), with a global
+      animated processing state; the app stays fully browsable during a run
+- [ ] Dependencies + versions panel in module detail (parsed from bundle
+      manifests)
+- [ ] Fix the Dock badge render bug (B2) while in the processing/feedback
+      area
+- [ ] Stretch (looks-good-only, explicitly low value): graph view of module
+      relationships — same-repo modules cluster as one entity, click-through
+      morphs the graph into the module's files
+
+---
+
+## Phase 10 — Run & test modules (Weeks 14–15)
+
+**Demo:** Click "Test module", a terminal opens with generated instructions,
+and the module earns a "Tested" badge.
+
+- [ ] "Test in terminal" flow: generate per-module run/test instructions and
+      open Terminal.app pre-seeded with them
+- [ ] Tested badge: new store field + leveling rule (badge tier scales with
+      how much the module was tested) — this becomes the marketplace ranking
+      signal in Phase 12
+- [ ] UI-module runner: detect UI modules and launch/preview them from the
+      app
+
+---
+
+## Phase 11 — Settings v2 (Weeks 15–16)
+
+**Demo:** See exactly what you've spent, across every key and model.
+
+- [ ] Token + cost meter — presentation only: per-run `input_tokens` /
+      `output_tokens` / `cost_usd` already land in the store (this closes the
+      Phase 3 "LLM cost meter" leftover)
+- [ ] Multi-provider API key management UI (per-provider Keychain storage
+      already exists; the management UI doesn't)
+- [ ] Local model (Ollama) configuration UX
+- [ ] Label the confidence threshold slider and fix bug B1 (the approval
+      queue gates on a hard-coded 0.7 instead of the user's setting)
+- [ ] Stretch: cost cap setting (from the old Polish phase)
+
+---
+
+## Phase 12 — Marketplace, UI-first (Weeks 16–18)
+
+**Demo:** Browse other people's modules, "install" one, and it appears in
+your library as agent-ready.
+
+- [ ] Browse / search / module detail UX built against static or mock data
+- [ ] Install flow: bring a marketplace module into the local store and MCP
+- [ ] Publish flow designed but stubbed (no real upload)
+- [ ] Tested-badge-drives-ranking expressed in the UI
+- [ ] Backend (hosting, accounts, real publishing, ranking service) is
+      explicitly **out of scope** — gated on the local product being loved
+      first, consistent with ADR-0001's no-registry-in-v0 stance. This phase
+      is UI against mocks only
+
+---
+
+## Phase 13 — Walkthrough / onboarding (Weeks 18–19)
+
+**Demo:** First launch is a branded, animated intro that ends on a plain
+screen with exactly two choices: drop a folder, or browse the marketplace.
+
+- [ ] Animation-heavy brand intro → simple one-line explanation → two-action
+      landing
+- [ ] Marketplace modules shown during onboarding as the MCP-value marketing
+      moment (the MCP is the main value of the app)
+- [ ] One-click MCP wiring offered during onboarding (reusing the Phase 8
+      config writers)
+- [ ] Built last on purpose: it needs marketplace content and the final IA to
+      point at
+
+---
+
+## Phase 14 — Friend alpha (Week 20)
 
 **Demo:** Five real users from the Twitter circle have gunk installed, have
 seen their AI use a module from gunk at least once, and have one piece of
 feedback that we shipped in response.
 
+- [ ] Notarized + codesigned `.app` build (reuse AICockpit's `make app`
+      pipeline; from the old Polish phase)
+- [ ] Auto-update via Sparkle or similar (from the old Polish phase)
 - [ ] Hand-onboard 5 alpha testers individually (screen-share install)
 - [ ] Bug bash — fix every "this is annoying" report, mercilessly
 - [ ] Opt-in telemetry: which AI tools called gunk, which tags get used, where
@@ -244,7 +386,7 @@ feedback that we shipped in response.
 
 ---
 
-## Phase 10 — Public alpha (Week 11)
+## Phase 15 — Public alpha (Week 21)
 
 **Demo:** Public download of `gunk.app`, public roadmap, demo video, Show HN
 post, landing page. The launch.
@@ -259,7 +401,7 @@ post, landing page. The launch.
 
 ---
 
-## Beyond Phase 10 (speculative — not committed)
+## Beyond Phase 15 (speculative — not committed)
 
 These are ideas, not promises. Each one will get its own ADR if it advances:
 
@@ -277,8 +419,12 @@ These are ideas, not promises. Each one will get its own ADR if it advances:
 - Opt-in per-folder file watching (per ADR-0004's "future revisit" path)
 - Smarter incremental re-classification (only diff what changed)
 - An "AI agent diff view" — visual approval of what gunk is about to inject
-- A possible shared/social layer (the rejected v0 marketplace) **if and only
-  if** the local product is loved first
+- Agent usage telemetry surfaced in the Library ("your agent pulled this
+  module 14× this week") — the data doesn't exist yet; library cell designs
+  must work without it (absorbs the old Polish phase's usage counter)
+- The **marketplace backend** (hosting, accounts, real publishing,
+  test-based ranking service) — Phase 12 ships the UI against mocks; the
+  backend happens **if and only if** the local product is loved first
 
 Things explicitly **not** on this list, per ADR-0001:
 
