@@ -68,7 +68,8 @@ in the loop at every step**. Each task is structured the same way:
 | --- | --- | --- |
 | CP1 | Brand tokens: palette hex values, typography scale, spacing/radius, brand mark, motion | T-7.2 |
 | CP2 | Component gallery: every primitive on one screen | T-7.5+ |
-| CP3 | Per-surface re-skin, screenshot-by-screenshot | each re-skin task |
+| CP2.5 | UX architecture: what shows up where (landing, navigation, status, placement rules) | all CP3 re-skin tasks |
+| CP3 | Per-surface re-skin (structure + skin per the approved UX architecture), screenshot-by-screenshot | each re-skin task |
 | CP4 | Packaged `.app`: icon, window chrome, first-run feel | T-7.9 |
 
 ---
@@ -249,12 +250,13 @@ duplicated capsule/pill code.
 
 ## T-7.4 — Component gallery (CP2)
 
-**Status:** In review — `ComponentGalleryView` renders every token and
-component on one scrollable glass screen, gated behind
+**Status:** Done — CP2 signed off. `ComponentGalleryView` renders every token
+and component on one scrollable glass screen, gated behind
 `GUNK_DESIGN_GALLERY=1` (env-flag Debug menu + auto-open; an `#if DEBUG`
 gate would still ship because `make app` builds the debug configuration).
 Full-window screenshots captured live in light + dark (real `glassEffect`
-composites verified). Awaiting CP2 sign-off — the design-system freeze gate.
+composites verified). The design system is frozen; changes now go through
+the gallery refining loop.
 **Owner:** Codex
 **Checkpoint:** CP2
 
@@ -289,6 +291,53 @@ screen is touched.
 ### Acceptance
 - Gallery shows every token + component, light and dark.
 - I have signed off on CP2.
+
+---
+
+## T-7.4b — Product UX pass: information architecture and placement (CP2.5)
+
+**Status:** Not started
+**Owner:** Codex (decisions: me)
+**Checkpoint:** CP2.5 — blocks all CP3 re-skin tasks
+
+### Goal
+Decide what shows up where — landing logic, navigation hierarchy, status and
+feedback placement, primary actions, and state patterns — before any surface
+is re-skinned, so CP3 tasks implement structure and skin together. Basic UX
+only: no onboarding flow, no engine/store/MCP behavior changes.
+
+### Files
+- `docs/design/ux-architecture.md` (new — wireframe-level, no code)
+
+### Task execution (Codex prompt)
+
+> 1. Audit the running app: inventory every surface, every piece of
+>    information and action on it, and where it currently lives. Include the
+>    menubar item, Dock bin, and window chrome.
+> 2. Walk the core journey end-to-end (drop folder → processing → browse →
+>    approve → consume via MCP) and list every dead-end, invisible state, and
+>    "why am I here" moment.
+> 3. Propose, per surface: purpose, primary action, content hierarchy,
+>    empty/loading/error state placement, and what navigates here when.
+> 4. Propose cross-cutting rules: default/landing section (first-run vs
+>    returning), sidebar order/grouping/badges (approval count, processing
+>    indicator), global status placement (processing, cost), drop-gesture
+>    feedback (what the window does when the Dock bin is fed), window sizing.
+> 5. Write it all into `docs/design/ux-architecture.md` with text/ASCII
+>    wireframes. No code changes in this task.
+
+### Refining loop
+1. I react to the audit + proposals surface-by-surface.
+2. You revise the doc until placements feel right.
+
+### Human-in-the-loop (me)
+- `[HOLD FOR ME] CP2.5` — I approve the UX architecture doc. It becomes the
+  contract every CP3 re-skin task implements alongside the visual system.
+
+### Acceptance
+- `ux-architecture.md` covers every surface + cross-cutting rules.
+- T-7.6–T-7.9 are amended to reference it (structure + skin, not visual-only).
+- I have signed off on CP2.5.
 
 ---
 
@@ -349,13 +398,16 @@ Make the primary window frame feel like a designed Liquid Glass app.
 
 ### Task execution (Codex prompt)
 
-> Re-skin `AppShellView` using the approved components.
+> Re-skin `AppShellView` using the approved components, implementing the
+> approved `docs/design/ux-architecture.md` decisions for the shell (landing
+> section, sidebar order/grouping/badges, global status placement).
 > 1. Replace the default sidebar `List` with the glass sidebar treatment
 >    (`GlassSidebar` + branded row styling) and put `BrandWordmark` in the
 >    sidebar header.
 > 2. Apply a unified, glass toolbar; align with macOS 26 conventions.
 > 3. Apply `backgroundPrimary` and glass layering to the detail container.
-> 4. Keep all navigation behavior and the `AppSection` enum intact — visual only.
+> 4. Structural changes only where `ux-architecture.md` calls for them; no
+>    engine/store behavior changes.
 > 5. Build and capture full-window screenshots, each section selected, light +
 >    dark.
 
@@ -390,6 +442,8 @@ Make adding sources feel like the signature gesture of a premium app.
 
 ### Task execution (Codex prompt)
 
+> Implement the approved `docs/design/ux-architecture.md` decisions for this
+> surface (incl. the drop-gesture feedback loop) alongside the re-skin.
 > 1. Rebuild the drop zone as a `BrandDropZone` (glass surface, branded
 >    targeted/idle states, animated highlight) — keep the existing `onDrop`
 >    handler and `DropZoneHandler` logic untouched.
@@ -427,7 +481,9 @@ Make the modules browser — the product's core object view — look first-class
 
 ### Task execution (Codex prompt)
 
-> Re-skin `BrowseView` and its `ModuleDetailView` using brand components only.
+> Re-skin `BrowseView` and its `ModuleDetailView` using brand components only,
+> implementing the approved `docs/design/ux-architecture.md` decisions for the
+> browser (hierarchy, primary action, empty/detail placement).
 > 1. Replace inline capsules (`tagRow`, `pill`, `statusRow`) with `TagChip` and
 >    `StatusBadge`.
 > 2. Wrap module rows and detail sections in `GlassCard`; restyle the filter bar
@@ -435,7 +491,8 @@ Make the modules browser — the product's core object view — look first-class
 > 3. Replace `ContentUnavailableView` usages with `EmptyStateView`.
 > 4. Restyle the runability section so "self-contained for AI reuse" vs.
 >    "standalone runnable" reads clearly with branded status badges.
-> 5. Keep all `BrowseModel` bindings and behavior intact — visual only.
+> 5. Keep all `BrowseModel` bindings intact; structural changes only where
+>    `ux-architecture.md` calls for them.
 > 6. Build and screenshot: empty, list-with-modules, and detail-selected, light +
 >    dark.
 
@@ -471,8 +528,9 @@ Bring the remaining surfaces up to the same standard and ship a packaged app.
 
 ### Task execution (Codex prompt)
 
-> Re-skin each remaining surface with brand components (visual only, behavior
-> intact):
+> Re-skin each remaining surface with brand components, implementing the
+> approved `docs/design/ux-architecture.md` decisions per surface (behavior
+> intact; structural changes only where the UX doc calls for them):
 > 1. Approval queue: branded cards, `StatusBadge` for confidence, `BrandButton`
 >    for approve/reject.
 > 2. Runs: branded list/timeline using cards and badges.
@@ -539,5 +597,5 @@ Record the design system and the platform decision so they are not lost.
 2. Schema-parity check still passes (no store/MCP/schema changes).
 3. `make app` produces a branded, runnable `.app`.
 4. Every surface uses the `Design/` system; no hardcoded design values remain.
-5. I have signed off on CP1, CP2, all CP3 surfaces, and CP4.
+5. I have signed off on CP1, CP2, CP2.5, all CP3 surfaces, and CP4.
 6. ADR-0016 documents the decisions.
