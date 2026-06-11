@@ -58,39 +58,55 @@ final class DropZoneHandler {
   }
 }
 
-struct DropZoneView: View {
+/// The Sources hero: a glass drop target with branded idle/targeted states
+/// (ux §3.1, D15 — constant position, no layout shift). Visual-only rebuild
+/// of the old `DropZoneView`; the drop handling is unchanged.
+struct BrandDropZone: View {
   let handler: DropZoneHandler
 
   @State private var isTargeted = false
   @State private var errorMessage: String?
 
   var body: some View {
-    VStack(spacing: 10) {
+    VStack(spacing: BrandMetrics.Spacing.sm) {
       Image(systemName: "folder.badge.plus")
-        .font(.system(size: 28))
-        .foregroundStyle(isTargeted ? .green : .secondary)
+        .font(BrandTypography.title)
+        .foregroundStyle(isTargeted ? BrandColors.accent : BrandColors.textSecondary)
 
       Text("Drag folders here")
-        .font(.headline)
+        .font(BrandTypography.headline)
+        .foregroundStyle(isTargeted ? BrandColors.textPrimary : BrandColors.textSecondary)
 
       if let errorMessage {
         Text(errorMessage)
-          .font(.caption)
-          .foregroundStyle(.red)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.danger)
           .multilineTextAlignment(.center)
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
-    .padding(20)
-    .background(isTargeted ? Color.green.opacity(0.12) : Color.clear)
+    .padding(BrandMetrics.Spacing.lg)
+    .brandGlass(cornerRadius: BrandMetrics.Radius.large, elevated: false)
     .overlay {
-      RoundedRectangle(cornerRadius: 12)
-        .stroke(
-          isTargeted ? Color.green : Color.secondary.opacity(0.6),
-          style: StrokeStyle(lineWidth: 2, dash: [7, 5])
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+        .strokeBorder(
+          isTargeted ? BrandColors.accent : BrandColors.separator,
+          style: StrokeStyle(
+            lineWidth: BrandMetrics.Spacing.xs / 2,
+            dash: [BrandMetrics.Spacing.sm, BrandMetrics.Spacing.xs]
+          )
         )
     }
-    .contentShape(Rectangle())
+    .overlay {
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+        .fill(BrandColors.accent.opacity(
+          isTargeted ? BrandMetrics.Control.tintedFillOpacity : 0
+        ))
+        .allowsHitTesting(false)
+    }
+    .scaleEffect(isTargeted ? 2 - BrandMetrics.Control.pressedScale : 1)
+    .animation(BrandMotion.settle, value: isTargeted)
+    .contentShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous))
     .onDrop(
       of: [UTType.fileURL.identifier],
       isTargeted: $isTargeted,

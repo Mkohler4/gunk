@@ -12,6 +12,10 @@ final class ProcessingModel {
   private(set) var progressBySource: [Int64: Double] = [:]
   private(set) var modulesFound = 0
   private(set) var errorMessage: String?
+  /// Source-level failures, kept per row so the Sources list can disclose
+  /// the error on the affected row (ux §3.1, D5). Cleared when that source
+  /// begins a new run; `errorMessage` stays the run-level signal (D4).
+  private(set) var errorsBySource: [Int64: String] = [:]
 
   init(
     dockIconController: DockIconController,
@@ -26,6 +30,7 @@ final class ProcessingModel {
     progressBySource[sourceId] = 0
     isProcessing = true
     errorMessage = nil
+    errorsBySource.removeValue(forKey: sourceId)
     dockIconController.setState(.processing)
     dockIconController.badge(count: modulesFound)
   }
@@ -74,6 +79,7 @@ final class ProcessingModel {
     activeSourceIds.remove(sourceId)
     progressBySource.removeValue(forKey: sourceId)
     errorMessage = error.localizedDescription
+    errorsBySource[sourceId] = error.localizedDescription
 
     guard activeSourceIds.isEmpty else {
       dockIconController.setState(.processing)
