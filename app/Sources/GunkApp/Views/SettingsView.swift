@@ -134,54 +134,8 @@ struct SettingsStatusSnapshot: Equatable {
   }
 
   private static func mcpStatus(configURL: URL, fileManager: FileManager) -> SettingsStatusItem {
-    let path = configURL.path
-    guard fileManager.fileExists(atPath: path) else {
-      return SettingsStatusItem(
-        title: "MCP config",
-        value: "Not configured",
-        message: "Cursor config was not found at \(path). Follow docs/integration/cursor.md to add gunk.",
-        state: .needsSetup
-      )
-    }
-
-    do {
-      let data = try Data(contentsOf: configURL)
-      let object = try JSONSerialization.jsonObject(with: data)
-      guard let root = object as? [String: Any],
-            let servers = root["mcpServers"] as? [String: Any],
-            let gunk = servers["gunk"] as? [String: Any] else {
-        return SettingsStatusItem(
-          title: "MCP config",
-          value: "Missing gunk server",
-          message: "Add a `gunk` server entry under `mcpServers` in \(path).",
-          state: .needsSetup
-        )
-      }
-
-      let command = gunk["command"] as? String ?? ""
-      if command.contains("gunk-mcp") {
-        return SettingsStatusItem(
-          title: "MCP config",
-          value: "Configured for Cursor",
-          message: "Cursor can spawn gunk through \(command).",
-          state: .ready
-        )
-      }
-
-      return SettingsStatusItem(
-        title: "MCP config",
-        value: "Check command",
-        message: "The `gunk` MCP server exists, but its command does not look like gunk-mcp.",
-        state: .needsSetup
-      )
-    } catch {
-      return SettingsStatusItem(
-        title: "MCP config",
-        value: "Unreadable",
-        message: error.localizedDescription,
-        state: .unavailable
-      )
-    }
+    // Shared with the shell's status strip (T-7.6); see MCPStatusProvider.
+    MCPStatusProvider.status(configURL: configURL, fileManager: fileManager)
   }
 }
 

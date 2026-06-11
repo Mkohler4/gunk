@@ -1,8 +1,9 @@
 # UX architecture — information architecture and placement (T-7.4b / CP2.5)
 
-Status: **draft — pending CP2.5 sign-off.** This document is the contract the
-CP3 re-skin tasks (T-7.6–T-7.9) implement alongside the frozen visual system
-(CP1 tokens + CP2 components). It decides *what shows up where*: landing
+Status: **approved — CP2.5 signed off.** The recommended defaults in §4.1
+(landing split) and §4.5 (MCP payoff layers) were accepted as written. This
+document is the contract the CP3 re-skin tasks (T-7.6–T-7.9) implement
+alongside the frozen visual system (CP1 tokens + CP2 components). It decides *what shows up where*: landing
 logic, navigation hierarchy, status and feedback placement, primary actions,
 and state patterns. It deliberately does not restyle anything — that is CP3 —
 and it does not invent features.
@@ -87,14 +88,16 @@ Every surface, the information and actions it carries, and where they live.
 
 - A literal text "G". One action: open the main window. No menu, no state.
 
-### 1.8 Dock bin (`DockIconController.swift`)
+### 1.8 Dock icon (`DockIconController.swift`)
 
-- Three states wired in code (empty / full / processing) — but the three
-  bundled assets are **byte-identical placeholder images**, so the states are
-  visually indistinguishable.
+- Three states wired in code (empty / full / processing). As of T-7.5 the
+  trash-can metaphor is retired: the Dock icon is the **brand tile** (the
+  Ooze mark on a dark glass tile) in three variants — muted mark when empty,
+  full-strength mark, and an accent processing glow. The original audit found
+  the three bundled assets byte-identical; T-7.5 fixed that half of D11.
 - The code sets a numeric `dockTile.badgeLabel` (idle: total module count;
   processing: modules found so far). In live testing **no badge ever
-  rendered** (flagged as bug B2 below).
+  rendered** (flagged as bug B2 below; still open for T-7.9).
 - Dropping a folder on the Dock icon inserts + processes it
   (`application(_:open:)` → `AppRuntime.handleOpenURLs`) and raises the
   window, but does not navigate or acknowledge the drop in-window.
@@ -154,7 +157,7 @@ non-Sources section.
 | D8 | MCP availability — the payoff — is surfaced only in Settings | `SettingsStatusSnapshot.mcpStatus` |
 | D9 | Runs and Modules are not cross-linked in either direction | `RunsView`; `BrowseView` |
 | D10 | Window min-size (760×520) breaks Modules: sidebar overlays and clips the filter bar | `AppLaunchView.frame(minWidth:760)`; `BrowseView` pane minimums; observed at 852×600 |
-| D11 | Dock bin states are byte-identical; the count badge never renders | md5 of `DockBin*.imageset` assets; live observation |
+| D11 | Dock icon states were byte-identical (fixed by T-7.5's brand tile); the count badge never renders (open — B2, T-7.9) | md5 of `DockBin*.imageset` assets at audit time; live observation |
 | D12 | Modules/Approval go stale during a run — refresh fires on insert (`gunkInserted`) and section re-entry, never on completion | notification posted at insert only |
 | D13 | Window title shows the section, never the product | `AppShellView.navigationTitle`; `MainWindowController.register` sets "gunk" but it is overridden |
 | D14 | Settings slider is unlabeled; nothing connects it to the approval queue it gates | `SettingsView` body |
@@ -242,7 +245,7 @@ bottom of the sidebar (→ D2, D4, D8; see §4.3 for its rules).
   - failed: error state with the message disclosed on the row, not as a
     floating caption.
 - **Empty state:** branded `EmptyStateView` inside the list area ("No sources
-  yet — drop a folder above, or onto the Dock bin").
+  yet — drop a folder above, or onto the Dock icon").
 - **Loading/error:** per-row (above). The global spinner block is removed;
   global awareness lives in the sidebar (Sources row indicator + status
   strip).
@@ -363,18 +366,19 @@ end-to-end.
 - No menu, no popover (menubar stays secondary per the phase constraints;
   `PopoverView` stays dead and gets removed in CP3 cleanup).
 
-### 3.7 Dock bin
+### 3.7 Dock icon
 
 **Purpose:** the signature drop target; its state must be readable at a
 glance.
 **Primary action:** receive dropped folders (unchanged).
 
-- Three **visually distinct** artworks for empty / full / processing — today
-  they are the same file (→ D11). Real assets land with T-7.5/T-7.9.
+- The Dock icon is the **brand tile** from T-7.5 (muted / full / processing-
+  glow states); the trash-can metaphor is retired. T-7.5 fixed the
+  identical-assets half of D11 — the states are now visually distinct.
 - Badge semantics change from "total modules ever" to **pending-approval
-  count** — the only number on the Dock should be actionable (→ D6, D11; and
-  B2 fixed so it actually renders). While processing: badge = modules found
-  so far this run (unchanged intent).
+  count** — the only number on the Dock should be actionable (→ D6; B2 —
+  the badge never rendering — remains open for T-7.9). While processing:
+  badge = modules found so far this run (unchanged intent).
 - Window-side feedback on Dock-drop is defined in §4.4.
 
 ### 3.8 Window chrome + launch/error
@@ -396,11 +400,10 @@ glance.
 ### 4.1 Landing / default section
 
 - **First-run (no sources in the store):** land on **Sources** — the only
-  meaningful first action is feeding the bin.
+  meaningful first action is adding a folder.
 - **Returning (sources exist):** land on **Modules** — the product's core
   object; Sources is an intake surface, not a home.
-  - `[DECISION: me]` — alternative: always land on Sources for gesture
-    consistency. Doc recommends the split above.
+  - Approved at CP2.5: the first-run/returning split above is the rule.
 - Landing never overrides an explicit user position within a session; the
   rule applies at window creation only.
 
@@ -427,9 +430,9 @@ glance.
   duration in the Runs detail header, and (b) inside the transient completed
   state of the status strip. No engine changes — placement rule only.
 
-### 4.4 Drop-gesture feedback (Dock bin fed)
+### 4.4 Drop-gesture feedback (Dock icon fed)
 
-When folders hit the Dock bin (or the in-window drop zone) (→ D1):
+When folders hit the Dock icon (or the in-window drop zone) (→ D1):
 
 1. The window raises (existing behavior) **and navigates to Sources**.
 2. The new source row appears immediately in its processing state with inline
@@ -440,11 +443,11 @@ When folders hit the Dock bin (or the in-window drop zone) (→ D1):
    status strip shows the transient completed state (→ D4). No modal, no
    sheet — the journey stays inside the existing surfaces.
 
-### 4.5 The MCP payoff moment `[DECISION: me]`
+### 4.5 The MCP payoff moment
 
 The product's real payoff — "this module is now available to your agent" — is
-currently silent (→ D8). Proposal, layered so each piece is independently
-droppable:
+currently silent (→ D8). Approved at CP2.5 as proposed — all three layers
+below are in:
 
 1. **Per-module truth (recommended baseline):** an "Agent-ready" status line
    in the Modules detail (and a compact badge on rows), derived from existing
@@ -457,8 +460,8 @@ droppable:
    "MCP not set up — connect Cursor → Settings" and navigates to the Settings
    Health group. No new setup flow — it links to the existing guidance.
 
-Open for the CP2.5 gate: whether 2 is wanted, and whether the row-level badge
-in 1 is too noisy (detail-only is the fallback).
+Resolved at CP2.5: layer 2 is wanted, and the row-level badge in 1 stays
+(detail-only remains the fallback if it proves noisy in practice).
 
 ### 4.6 Window sizing
 

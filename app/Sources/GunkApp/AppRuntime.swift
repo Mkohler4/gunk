@@ -2,6 +2,13 @@ import AppKit
 import Combine
 import Foundation
 
+extension Notification.Name {
+  /// Posted when folders arrive through the Dock icon
+  /// (`application(_:open:)` → `handleOpenURLs`) so the shell can navigate
+  /// to Sources (ux §4.4, D1). The window raise stays in `AppDelegate`.
+  static let sourcesArrivedViaOpen = Notification.Name("gunkSourcesArrivedViaOpen")
+}
+
 @MainActor
 final class AppRuntime: ObservableObject {
   static let shared = AppRuntime()
@@ -36,6 +43,8 @@ final class AppRuntime: ObservableObject {
     guard !directories.isEmpty else {
       return
     }
+
+    notificationCenter.post(name: .sourcesArrivedViaOpen, object: nil)
 
     do {
       for directory in directories {
