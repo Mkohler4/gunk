@@ -308,7 +308,13 @@ struct AppShellView: View {
       SourcesSectionView(
         processingModel: services.processingModel,
         sourceListModel: services.sourceListModel,
-        dropZoneHandler: services.dropZoneHandler
+        dropZoneHandler: services.dropZoneHandler,
+        onShowModules: { sourceId in
+          // D3: "N modules" on a source row lands in Modules pre-filtered
+          // to that source — placement of the existing filter, not a new one.
+          services.browseModel.filters.sourceId = sourceId
+          selection = .modules
+        }
       )
     case .modules:
       ModulesSectionView(model: services.browseModel)
@@ -625,43 +631,69 @@ private struct SourcesSectionView: View {
   let processingModel: ProcessingModel
   let sourceListModel: GunkListModel
   let dropZoneHandler: DropZoneHandler
+  let onShowModules: (Int64) -> Void
+
+  @State private var arrivedSourceIds: Set<Int64> = []
+  @State private var arrivalDecayTasks: [Int64: Task<Void, Never>] = [:]
+
+  /// How long a freshly arrived row keeps its highlight (ux §4.4).
+  private static let arrivalHighlightLifetime: Duration = .seconds(2)
+
+  /// The drop zone is the hero and never moves (ux §3.1, D15). The global
+  /// status block that used to inject above it is gone — global awareness
+  /// lives in the shell (sidebar indicator + status strip, T-7.6).
+  private static let dropZoneHeight: CGFloat = 170
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 16) {
-      statusView
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
+      BrandDropZone(handler: dropZoneHandler)
+        .frame(height: Self.dropZoneHeight)
 
-      DropZoneView(handler: dropZoneHandler)
-        .frame(height: 170)
+      SectionHeader("Sources (\(sourceListModel.sources.count))")
 
-      GunkListView(model: sourceListModel)
+      if let errorMessage = sourceListModel.errorMessage {
+        Text(errorMessage)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.danger)
+          .textSelection(.enabled)
+      }
+
+      GunkListView(
+        model: sourceListModel,
+        processingModel: processingModel,
+        arrivedSourceIds: arrivedSourceIds,
+        onShowModules: onShowModules
+      )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .onAppear {
       sourceListModel.refresh()
     }
-    .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
+    .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { notification in
       sourceListModel.refresh()
+      if let source = notification.object as? Source {
+        markArrived(source.id)
+      }
     }
   }
 
-  @ViewBuilder
-  private var statusView: some View {
-    if processingModel.isProcessing {
-      ProgressView("Processing")
+  /// Arrival treatment (ux §4.4): the new row appears already highlighted,
+  /// then the highlight decays after a beat.
+  private func markArrived(_ sourceId: Int64) {
+    withAnimation(BrandMotion.settle) {
+      _ = arrivedSourceIds.insert(sourceId)
     }
 
-    if let errorMessage = processingModel.errorMessage {
-      Text(errorMessage)
-        .font(.caption)
-        .foregroundStyle(.red)
-        .textSelection(.enabled)
-    }
-
-    if let errorMessage = sourceListModel.errorMessage {
-      Text(errorMessage)
-        .font(.caption)
-        .foregroundStyle(.red)
-        .textSelection(.enabled)
+    arrivalDecayTasks[sourceId]?.cancel()
+    arrivalDecayTasks[sourceId] = Task {
+      try? await Task.sleep(for: Self.arrivalHighlightLifetime)
+      guard !Task.isCancelled else {
+        return
+      }
+      withAnimation(BrandMotion.smooth) {
+        _ = arrivedSourceIds.remove(sourceId)
+      }
+      arrivalDecayTasks.removeValue(forKey: sourceId)
     }
   }
 }
