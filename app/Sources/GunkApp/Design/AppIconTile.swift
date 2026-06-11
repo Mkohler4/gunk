@@ -37,7 +37,7 @@ struct AppIconTile: View {
           .opacity(0.5)
       }
 
-      BrandMark(size: size * 0.58)
+      BrandMark(size: size * 0.74)
         // The mark's visual mass sits high on its 100pt canvas; nudge down
         // so it reads centered on the tile.
         .offset(y: size * 0.02)
