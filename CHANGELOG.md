@@ -30,6 +30,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - ADR-0002 (stack and runtime): record the stack options not yet evaluated (Node.js, Deno, Python, alternative local stores) as deliberately deferred, each with a revisit trigger, plus a per-phase plan to reconsider them.
 
 ### Added
+- `gunk.app` Liquid Glass component library (`Design/Components/`): `GlassCard`,
+  `GlassSidebar`, `BrandButton` (primary / secondary / destructive / icon styles
+  with hover and press motion), `TagChip`, `StatusBadge`, `SectionHeader`, and a
+  branded `EmptyStateView` built on the Ooze mark — all token-driven with light
+  and dark previews, plus new `BrandMetrics.Control` tokens for hover, press,
+  tinted-fill, and disabled control states.
 - `gunk.app` brand and design-system foundation (`Design/`): semantic color
   tokens with Light + Dark color sets, the Space Grotesk / JetBrains Mono type
   scale, spacing/radius/glass metrics, an adaptive Liquid Glass material, named

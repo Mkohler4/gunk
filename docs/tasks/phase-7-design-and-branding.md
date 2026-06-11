@@ -196,7 +196,11 @@ should hardcode design values after this.
 
 ## T-7.3 — Liquid Glass component library
 
-**Status:** Not started
+**Status:** In review — all seven components built on the T-7.2 `Design/`
+tokens (plus new `BrandMetrics.Control` tokens for hover/press/tinted-fill
+states), each with light + dark previews; no existing view touched. Offscreen
+`ImageRenderer` cannot composite the real `glassEffect`, so the glass look of
+`GlassCard`/`GlassSidebar` is verified live at CP2.
 **Owner:** Codex
 **Checkpoint:** none yet (reviewed in CP2)
 
