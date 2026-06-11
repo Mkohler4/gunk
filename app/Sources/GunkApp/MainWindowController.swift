@@ -13,10 +13,9 @@ final class MainWindowController: NSObject {
     mainWindow = window
     window.identifier = NSUserInterfaceItemIdentifier(Self.mainWindowID)
     // D13: the window title is always the product, never the section. The
-    // text is visually hidden because the sidebar wordmark already reads
-    // "gunk"; the title still names the window for Mission Control/⌘-Tab.
+    // shell hides the in-toolbar title text (the sidebar wordmark already
+    // reads "gunk"); this still names the window for Mission Control/⌘-Tab.
     window.title = "gunk"
-    window.titleVisibility = .hidden
     window.isRestorable = false
     window.setFrameAutosaveName("gunk-main-window")
   }

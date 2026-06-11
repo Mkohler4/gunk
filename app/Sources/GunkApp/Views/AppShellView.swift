@@ -60,13 +60,25 @@ struct AppShellView: View {
     _selection = State(initialValue: hasSources ? .modules : .sources)
   }
 
+  /// Fixed sidebar width. 192 (not the ux doc's nominal 200) because the
+  /// Modules browser is 765pt wide at minimum, and 192 + 765 must fit the
+  /// 960pt minimum window without squeezing (ux §4.6, D10).
+  private static let sidebarWidth: CGFloat = 192
+
   var body: some View {
-    NavigationSplitView {
-      sidebar
-        .navigationTitle("gunk")
-        .navigationSplitViewColumnWidth(min: 180, ideal: 200, max: 240)
-    } detail: {
-      detailContainer
+    // A plain two-pane layout instead of NavigationSplitView: the split
+    // view collapses the sidebar into an overlay whenever the Modules
+    // browser's reported ideal width doesn't fit (observed even at 1120pt),
+    // which is exactly the D10 failure this task must fix. A fixed sidebar
+    // can never collapse, and GlassSidebar supplies its own chrome.
+    NavigationStack {
+      HStack(spacing: 0) {
+        sidebar
+          .frame(width: Self.sidebarWidth)
+
+        detailContainer
+      }
+      .navigationTitle("gunk")
     }
     .background(BrandColors.backgroundPrimary)
     .onAppear {
@@ -266,21 +278,26 @@ struct AppShellView: View {
           .brandGlass(cornerRadius: 0, elevated: false)
           .ignoresSafeArea()
       }
+      .toolbar(removing: .title)
       .toolbar {
-        // D13: the window title stays "gunk"; the section name lives here.
+        // D13: the window title stays "gunk" (its text is removed from the
+        // toolbar because the sidebar wordmark already reads "gunk"); the
+        // section name lives here instead.
         ToolbarItem(placement: .navigation) {
           Text(selection.title)
             .font(BrandTypography.headline)
             .foregroundStyle(BrandColors.textPrimary)
         }
+        .sharedBackgroundVisibility(.hidden)
       }
+      .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
   }
 
   /// The Modules browser needs 765pt internally (browser min 440 + detail
-  /// min 300 + its own spacing), so it gets the tightest padding to keep the
-  /// sidebar from collapsing at the 960pt minimum (ux §4.6, D10).
+  /// min 300 + its own spacing), so it gets no extra horizontal padding to
+  /// keep the sidebar from collapsing at the 960pt minimum (ux §4.6, D10).
   private var detailHorizontalPadding: CGFloat {
-    selection == .modules ? BrandMetrics.Spacing.xs : BrandMetrics.Spacing.lg
+    selection == .modules ? 0 : BrandMetrics.Spacing.lg
   }
 
   @ViewBuilder
@@ -401,6 +418,7 @@ private struct SidebarRow: View {
         isHovering = hovering
       }
     }
+    .accessibilityLabel(title)
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
