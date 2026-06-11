@@ -10,6 +10,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` shell re-skin (T-7.6): the sidebar is a fixed-width glass
+  surface (`GlassSidebar` + branded rows, wordmark header) ordered
+  Sources → Modules → Approval | Runs → Settings, with an Approval
+  pending-review badge and a Sources processing indicator; a persistent
+  status strip at the sidebar bottom shows MCP status, run progress, a
+  transient completion summary, or a run failure (the MCP config check
+  moved to a shared `MCPStatusProvider`, same behavior); windows land on
+  Sources when the store is empty and Modules otherwise, keep the title
+  "gunk" with the section name in the toolbar, enforce a 960×600 minimum
+  (sidebar can no longer collapse into an overlay), default to 1120×720,
+  and navigate to Sources when folders arrive via the Dock icon. The
+  unused `PopoverView` is removed.
 - Phase 7 CP3 task briefs (T-7.6–T-7.9) now carry the concrete structural
   spec from the approved UX architecture instead of a generic doc reference:
   sidebar order/badges + status strip + landing rule + window sizing and
