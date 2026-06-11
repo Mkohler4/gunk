@@ -10,6 +10,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` Sources re-skin (T-7.7): the drop zone is a branded glass
+  surface with accent targeted/idle states that holds a constant position
+  (the global status block above it is removed — global awareness lives in
+  the shell sidebar and status strip); source rows are glass cards that
+  carry their own outcome — inline progress and found count while
+  processing, an "N modules" affordance that opens Modules filtered to
+  that source, and failures disclosed on the affected row; newly dropped
+  sources appear immediately with a brief arrival highlight; the empty
+  state uses the branded mascot treatment.
 - `gunk.app` shell re-skin (T-7.6): the sidebar is a fixed-width glass
   surface (`GlassSidebar` + branded rows, wordmark header) ordered
   Sources → Modules → Approval | Runs → Settings, with an Approval
