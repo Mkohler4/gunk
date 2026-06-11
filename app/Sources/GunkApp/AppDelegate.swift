@@ -13,6 +13,12 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     MainWindowController.shared.showMainWindow()
+
+    // Dev-only (T-7.4): with GUNK_DESIGN_GALLERY=1 the gallery opens at
+    // launch so the CP2 surface is one step away. No-op in normal launches.
+    if ComponentGalleryLauncher.isEnabled {
+      ComponentGalleryLauncher.shared.showGallery()
+    }
   }
 
   func applicationShouldHandleReopen(
