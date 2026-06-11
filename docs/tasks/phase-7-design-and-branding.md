@@ -47,8 +47,10 @@ in the loop at every step**. Each task is structured the same way:
 ## Constraints (carried from Phase 6)
 
 - `gunk.app` is a regular Dock/window app first; the menubar item is secondary.
-- The Dock recycling-bin drop target remains a core gesture and must keep
-  working visually and functionally.
+- The Dock drop target remains a core gesture and must keep working visually
+  and functionally. As of T-7.5 the Dock icon is the brand tile
+  (muted / full / processing-glow states); the recycling-bin metaphor is
+  retired. The drop gesture and the badge plan (ux §3.7) are unchanged.
 - No filesystem watching, no Full Disk Access.
 
 ## Risks and prerequisites
