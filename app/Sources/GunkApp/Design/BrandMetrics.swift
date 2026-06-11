@@ -34,6 +34,21 @@ enum BrandMetrics {
     static let shadowYOffset: CGFloat = 12
   }
 
+  /// Constants for interactive controls and tinted fills (see `BrandButton`,
+  /// `TagChip`, `StatusBadge`).
+  enum Control {
+    /// Sheen laid over a control's fill on hover.
+    static let hoverHighlightOpacity: Double = 0.12
+    /// Scale applied while a control is pressed.
+    static let pressedScale: CGFloat = 0.97
+    /// Tinted fill behind chips, badges, and destructive controls.
+    static let tintedFillOpacity: Double = 0.14
+    /// Opacity of a disabled control.
+    static let disabledOpacity: Double = 0.45
+    /// Square hit target for icon-only buttons.
+    static let iconButtonSize: CGFloat = 28
+  }
+
   /// Brand-mark sizing (see `BrandMark`). The face stays legible down to
   /// 16pt; below that the mark reads as a solid blob, which is intended.
   enum Mark {
