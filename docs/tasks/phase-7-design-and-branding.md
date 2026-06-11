@@ -296,12 +296,13 @@ screen is touched.
 
 ## T-7.4b — Product UX pass: information architecture and placement (CP2.5)
 
-**Status:** In review — audit complete (code + live journey run through the
-Dock-drop path); `docs/design/ux-architecture.md` drafted with the surface
-inventory, journey findings (D1–D15, bugs B1–B3), per-surface proposals, and
-cross-cutting rules. Open `[DECISION: me]` items: landing section split
-(first-run vs returning) and the MCP payoff-feedback placement (§4.5).
-Awaiting surface-by-surface review and CP2.5 sign-off.
+**Status:** Done — CP2.5 signed off (PR #139). `docs/design/ux-architecture.md`
+is the contract for T-7.6–T-7.9: surface inventory, journey findings (D1–D15,
+bugs B1–B3), per-surface proposals, and cross-cutting rules. The recommended
+defaults were approved as written — landing split (first-run → Sources,
+returning → Modules) and the layered MCP payoff feedback (§4.5) — with the
+row-level Agent-ready badge left to confirm at the T-7.8 gate. The CP3 task
+briefs below carry the concrete structural spec per surface.
 **Owner:** Codex (decisions: me)
 **Checkpoint:** CP2.5 — blocks all CP3 re-skin tasks
 
@@ -420,29 +421,47 @@ Make the primary window frame feel like a designed Liquid Glass app.
 ### Task execution (Codex prompt)
 
 > Re-skin `AppShellView` using the approved components, implementing the
-> approved `docs/design/ux-architecture.md` decisions for the shell (landing
-> section, sidebar order/grouping/badges, global status placement).
-> 1. Replace the default sidebar `List` with the glass sidebar treatment
->    (`GlassSidebar` + branded row styling) and put `BrandWordmark` in the
->    sidebar header.
-> 2. Apply a unified, glass toolbar; align with macOS 26 conventions.
-> 3. Apply `backgroundPrimary` and glass layering to the detail container.
-> 4. Structural changes only where `ux-architecture.md` calls for them; no
->    engine/store behavior changes.
-> 5. Build and capture full-window screenshots, each section selected, light +
+> approved `docs/design/ux-architecture.md` (ux) decisions for the shell.
+> Structure first, then skin:
+> 1. **Sidebar order/grouping (ux §4.2, D6):** Sources → Modules → Approval,
+>    separator, Runs → Settings. Approval row gets a pending-review count
+>    badge (hidden at zero); Sources row gets a processing indicator while
+>    any source is processing (D2).
+> 2. **Status strip (ux §4.3, D2/D4/D8):** add the persistent strip at the
+>    bottom of the sidebar with its four states — idle MCP chip, processing
+>    (source · progress · modules found), transient completed summary with
+>    tap-through, and run-failed chip → Runs.
+> 3. **Landing (ux §4.1):** first-run (no sources) lands on Sources;
+>    returning (sources exist) lands on Modules. Applies at window creation
+>    only.
+> 4. **Window chrome (ux §4.6, D10/D13):** window title is "gunk" (section
+>    name moves into the toolbar/content); min size 960×600, default
+>    1120×720 (first launch), frame autosave kept.
+> 5. **Dock-drop navigation (ux §4.4, D1):** when sources arrive via
+>    `application(_:open:)`, the window raises *and navigates to Sources*
+>    (the row-level arrival treatment is T-7.7).
+> 6. Replace the default sidebar `List` with the glass sidebar treatment
+>    (`GlassSidebar` + branded row styling) and keep `BrandWordmark` in the
+>    sidebar header; apply a unified glass toolbar (macOS 26 conventions)
+>    and `backgroundPrimary` + glass layering to the detail container.
+> 7. Delete dead `PopoverView.swift` (B3). No engine/store behavior changes.
+> 8. Build and capture full-window screenshots, each section selected, light +
 >    dark.
 
 ### Refining loop
 1. Screenshot shell with each section selected.
 2. I react to sidebar width, row spacing, selection highlight, toolbar density,
-   window min-size.
+   window min-size, badge/status-strip placement.
 3. Repeat until approved.
 
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME] CP3` per surface — I approve the shell before moving on.
+- I confirm the landing split (ux §4.1) feels right in practice.
 
 ### Acceptance
-- Shell uses brand components throughout; navigation unchanged.
+- Sidebar order, badges, status strip, landing rule, window title/sizing, and
+  Dock-drop navigation match `ux-architecture.md` §§3.0, 4.1–4.4, 4.6.
+- Shell uses brand components throughout; `PopoverView.swift` removed.
 - Light + dark both approved.
 
 ---
@@ -463,28 +482,44 @@ Make adding sources feel like the signature gesture of a premium app.
 
 ### Task execution (Codex prompt)
 
-> Implement the approved `docs/design/ux-architecture.md` decisions for this
-> surface (incl. the drop-gesture feedback loop) alongside the re-skin.
-> 1. Rebuild the drop zone as a `BrandDropZone` (glass surface, branded
+> Implement the approved `docs/design/ux-architecture.md` (ux §3.1, §4.4)
+> decisions for this surface alongside the re-skin. Structure first:
+> 1. **No layout shift (D15):** the drop zone keeps a constant position;
+>    delete the status block that injects above it. Global processing
+>    awareness lives in the shell (T-7.6); run-level errors go to the status
+>    strip; source-level errors go on the affected row.
+> 2. **Source rows carry outcome (D3/D4/D5):** each row gains a status slot —
+>    processing (inline progress from `ProcessingModel.progressBySource` +
+>    modules-found), done ("N modules" affordance that navigates to Modules
+>    filtered to that source via the existing `filters.sourceId`), failed
+>    (error disclosed on the row).
+> 3. **Arrival treatment (ux §4.4):** a Dock-fed or window-dropped source's
+>    new row appears immediately in its processing state with a brief
+>    arrival highlight (`BrandMotion`).
+> 4. Rebuild the drop zone as a `BrandDropZone` (glass surface, branded
 >    targeted/idle states, animated highlight) — keep the existing `onDrop`
 >    handler and `DropZoneHandler` logic untouched.
-> 2. Re-skin the source list rows using `GlassCard`/`TagChip`/`StatusBadge`,
->    showing per-source processing state cleanly.
-> 3. Re-skin the processing/error status area.
-> 4. Build and screenshot idle, drag-targeted, processing, and error states.
+> 5. Re-skin the source list rows using `GlassCard`/`TagChip`/`StatusBadge`;
+>    branded `EmptyStateView` ("drop a folder above, or onto the Dock bin").
+> 6. Build and screenshot idle, drag-targeted, processing (with per-row
+>    progress), completed-with-outcome, and error states.
 
 ### Refining loop
-1. Screenshot each of the four states.
-2. I react to the drag affordance, animation, empty state copy/visuals.
+1. Screenshot each of the five states.
+2. I react to the drag affordance, animation, row status slot, empty state
+   copy/visuals.
 3. Repeat until approved.
 
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME] CP3` — approve Sources before moving on. Confirm the drop
-  gesture still works end-to-end with a real folder.
+  gesture still works end-to-end with a real folder, including the navigate-
+  to-Sources + arrival highlight loop from the Dock.
 
 ### Acceptance
+- Drop zone position is constant; per-source rows show progress/outcome/error
+  per ux §3.1; "N modules" navigates to filtered Modules.
 - Drop zone + source list re-skinned; drop behavior verified working.
-- All four states approved, light + dark.
+- All states approved, light + dark.
 
 ---
 
@@ -503,29 +538,42 @@ Make the modules browser — the product's core object view — look first-class
 ### Task execution (Codex prompt)
 
 > Re-skin `BrowseView` and its `ModuleDetailView` using brand components only,
-> implementing the approved `docs/design/ux-architecture.md` decisions for the
-> browser (hierarchy, primary action, empty/detail placement).
-> 1. Replace inline capsules (`tagRow`, `pill`, `statusRow`) with `TagChip` and
->    `StatusBadge`.
-> 2. Wrap module rows and detail sections in `GlassCard`; restyle the filter bar
->    (group/source/tag/language/approval pickers) to match.
-> 3. Replace `ContentUnavailableView` usages with `EmptyStateView`.
-> 4. Restyle the runability section so "self-contained for AI reuse" vs.
+> implementing the approved `docs/design/ux-architecture.md` (ux §3.2)
+> decisions for the browser. Structure first:
+> 1. **De-duplicate actions (ux §3.2):** rows keep *open bundle* only;
+>    re-run and delete live exclusively in the detail pane.
+> 2. **Selection (ux §3.2):** stop auto-snapping to the first item on filter
+>    changes; empty selection is valid and shows the detail-pane empty state.
+> 3. **Freshness (D12):** the browser refreshes when a run completes, not
+>    only on insert/section re-entry.
+> 4. **Agent-ready (ux §4.5, D8):** the detail gains an "Agent-ready" status
+>    line derived from `extractedAt` (plus the compact row badge unless I cut
+>    it at the gate); when Settings reports MCP needs-setup, the copy flips
+>    to "MCP not set up — connect Cursor → Settings" and navigates there.
+> 5. Replace inline capsules (`tagRow`, `pill`, `statusRow`) with `TagChip`
+>    and `StatusBadge`; wrap module rows and detail sections in `GlassCard`;
+>    restyle the filter bar (pinned, per ux §3.2) to match.
+> 6. Replace `ContentUnavailableView` usages with `EmptyStateView`; the
+>    browser empty state gets a "go to Sources" affordance.
+> 7. Restyle the runability section so "self-contained for AI reuse" vs.
 >    "standalone runnable" reads clearly with branded status badges.
-> 5. Keep all `BrowseModel` bindings intact; structural changes only where
->    `ux-architecture.md` calls for them.
-> 6. Build and screenshot: empty, list-with-modules, and detail-selected, light +
->    dark.
+> 8. Keep all `BrowseModel` bindings intact otherwise.
+> 9. Build and screenshot: empty, list-with-modules, detail-selected, and
+>    Agent-ready vs MCP-needs-setup detail states, light + dark.
 
 ### Refining loop
 1. Screenshot each state.
-2. I react to row density, chip wrapping, detail hierarchy, confidence display.
+2. I react to row density, chip wrapping, detail hierarchy, confidence
+   display, and the Agent-ready treatment.
 3. Repeat until approved.
 
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME] CP3` — approve Modules before moving on.
+- I confirm or cut the row-level Agent-ready badge (ux §4.5 open point).
 
 ### Acceptance
+- Row/detail action split, selection behavior, completion refresh, and
+  Agent-ready placement match ux §3.2 / §4.5.
 - Browser + detail re-skinned, no inline design values remain.
 - All states approved, light + dark.
 
@@ -550,16 +598,33 @@ Bring the remaining surfaces up to the same standard and ship a packaged app.
 ### Task execution (Codex prompt)
 
 > Re-skin each remaining surface with brand components, implementing the
-> approved `docs/design/ux-architecture.md` decisions per surface (behavior
-> intact; structural changes only where the UX doc calls for them):
-> 1. Approval queue: branded cards, `StatusBadge` for confidence, `BrandButton`
->    for approve/reject.
-> 2. Runs: branded list/timeline using cards and badges.
-> 3. Settings: re-skin the `Form`, provider picker, key field, slider, and
->    status messaging into a branded layout.
-> 4. Launch failure + empty states: use `EmptyStateView` / `BrandWordmark`.
-> 5. Run `make app`, launch `build/gunk.app`, and capture the Dock icon, launch,
->    and each section.
+> approved `docs/design/ux-architecture.md` (ux §§3.3–3.8) decisions per
+> surface. Structure first:
+> 1. **Approval queue (ux §3.3, D6/D7/D14):** header shows count + the user's
+>    auto-accept threshold for context; cards with confidence made meaningful
+>    ("62% — below your 70% threshold"); labeled `BrandButton`s with approve
+>    as primary; reject asks for confirmation (it permanently deletes);
+>    approve resolves into the §4.5 payoff feedback instead of a silent
+>    vanish; branded empty state explains the membership rule.
+> 2. **Runs (ux §3.4, D9):** run detail gains a "Modules produced" block
+>    linking to Modules; auto-refresh while a run is active; empty state
+>    navigates to Sources; cost renders next to duration when the trace
+>    carries it. Branded list/timeline using cards and badges.
+> 3. **Settings (ux §3.5, D14 + B1):** the slider is labeled "Auto-accept
+>    confidence threshold" with helper text tying it to Approval, and the
+>    `BrowseModel` wiring bug is fixed so the user's `llm.confidenceThreshold`
+>    actually gates the queue (B1). Regroup into Provider + Health; the MCP
+>    health row is the navigation target for every "MCP not set up"
+>    affordance. Re-skin the `Form`, pickers, key field, and status rows.
+> 4. **Dock bin + menubar (ux §§3.6–3.7, D11 + B2):** three visually distinct
+>    bin artworks (empty/full/processing) replace the identical placeholders;
+>    fix the badge so it renders, with new semantics — idle badge = pending-
+>    approval count, processing badge = modules found this run; the menubar
+>    "G" becomes the brand glyph (open-window action unchanged, no menu).
+> 5. **Launch failure + empty states (ux §3.8):** use `EmptyStateView` /
+>    `BrandWordmark`, selectable error text, store path shown.
+> 6. Run `make app`, launch `build/gunk.app`, and capture the Dock bin states,
+>    menubar item, launch, and each section.
 
 ### Refining loop
 1. Screenshot each surface; iterate per my notes.
@@ -568,10 +633,13 @@ Bring the remaining surfaces up to the same standard and ship a packaged app.
 
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME] CP3` for each of Approval / Runs / Settings.
+- I approve the new Dock bin artworks and badge semantics before they ship.
 - `[HOLD FOR ME] CP4` — I review the built `.app` as a whole and sign off on the
   rebrand.
 
 ### Acceptance
+- Approval context/confirmation, Runs cross-links, Settings threshold label +
+  B1 fix, Dock bin states + B2 fix, and menubar glyph match ux §§3.3–3.8.
 - All surfaces re-skinned; `make app` produces a runnable, branded `.app`.
 - I have signed off on CP4.
 
