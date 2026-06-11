@@ -54,10 +54,10 @@ struct AppShellView: View {
 
   init(services: AppServices) {
     self.services = services
-    // Landing rule (ux §4.1): applies at window creation only. No sources in
-    // the store → Sources; otherwise → Modules. Never re-routes in-session.
-    let hasSources = ((try? services.store.listSources())?.isEmpty == false)
-    _selection = State(initialValue: hasSources ? .modules : .sources)
+    // Landing rule (T-8.2): always land on Library. Its empty state covers
+    // first-run, so the old sources-vs-modules split dies with the Sources
+    // tab.
+    _selection = State(initialValue: .library)
   }
 
   /// Fixed sidebar width. 192 (not the ux doc's nominal 200) because the
@@ -110,8 +110,8 @@ struct AppShellView: View {
     }
     .onReceive(NotificationCenter.default.publisher(for: .sourcesArrivedViaOpen)) { _ in
       // Dock-drop feedback (ux §4.4, D1): the window raises (AppDelegate)
-      // and the shell navigates to Sources.
-      selection = .sources
+      // and the shell navigates to Library (sources fold in there).
+      selection = .library
     }
   }
 
@@ -123,17 +123,7 @@ struct AppShellView: View {
         .padding(.top, BrandMetrics.Spacing.xs)
     } content: {
       VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-        ForEach(AppSection.journeySections) { section in
-          sidebarRow(section)
-        }
-
-        Rectangle()
-          .fill(BrandColors.separator)
-          .frame(height: 1)
-          .padding(.vertical, BrandMetrics.Spacing.sm)
-          .padding(.horizontal, BrandMetrics.Spacing.sm)
-
-        ForEach(AppSection.utilitySections) { section in
+        ForEach(AppSection.allCases) { section in
           sidebarRow(section)
         }
       }
@@ -156,16 +146,18 @@ struct AppShellView: View {
 
   private func accessory(for section: AppSection) -> SidebarRow.Accessory? {
     switch section {
-    case .sources:
-      // Processing indicator while any source is processing (ux §4.2, D2).
-      return services.processingModel.isProcessing ? .processing : nil
-    case .approval:
-      // Pending-review count, hidden at zero (ux §4.2, D6). The queue is
-      // computed by BrowseModel with the same membership rule the Approval
-      // section renders, so badge and queue can never disagree.
+    case .library:
+      // Library now owns both shell signals (T-8.2): the processing dot
+      // wins while a run is active; otherwise the pending-review count,
+      // hidden at zero. The queue is computed by BrowseModel with the same
+      // membership rule the review surface renders, so badge and queue can
+      // never disagree.
+      if services.processingModel.isProcessing {
+        return .processing
+      }
       let count = services.browseModel.approvalQueue.count
       return count > 0 ? .count(count) : nil
-    case .modules, .runs, .settings:
+    case .marketplace, .settings:
       return nil
     }
   }
@@ -213,13 +205,13 @@ struct AppShellView: View {
   }
 
   private func handleStripTap() {
+    // The strip itself is rebuilt in T-8.7; for now its taps route to the
+    // surviving sections. Sources, review, and runs all fold into Library
+    // (runs becomes an inspector in T-8.6), so processing/completed/failed
+    // land there; the idle MCP chip still routes to Settings.
     switch stripState {
-    case .processing:
-      selection = .sources
-    case .completed(let summary):
-      selection = summary.needsReview > 0 ? .approval : .modules
-    case .runFailed:
-      selection = .runs
+    case .processing, .completed, .runFailed:
+      selection = .library
     case .idle:
       selection = .settings
     }
@@ -298,38 +290,29 @@ struct AppShellView: View {
   /// min 300 + its own spacing), so it gets no extra horizontal padding to
   /// keep the sidebar from collapsing at the 960pt minimum (ux §4.6, D10).
   private var detailHorizontalPadding: CGFloat {
-    selection == .modules ? 0 : BrandMetrics.Spacing.lg
+    selection == .library ? 0 : BrandMetrics.Spacing.lg
   }
 
   @ViewBuilder
   private func detailView(for section: AppSection) -> some View {
     switch section {
-    case .sources:
-      SourcesSectionView(
-        processingModel: services.processingModel,
-        sourceListModel: services.sourceListModel,
-        dropZoneHandler: services.dropZoneHandler,
-        onShowModules: { sourceId in
-          // D3: "N modules" on a source row lands in Modules pre-filtered
-          // to that source — placement of the existing filter, not a new one.
-          services.browseModel.filters.sourceId = sourceId
-          selection = .modules
-        }
-      )
-    case .modules:
+    case .library:
+      // T-8.2 renders the existing Modules browser as-is; the sources and
+      // review merges land in T-8.3/T-8.4.
       ModulesSectionView(
         model: services.browseModel,
         // The shell's MCP snapshot drives the Agent-ready needs-setup copy
         // (ux §4.5, D8) so the detail line and the status strip can't
         // disagree.
         mcpNeedsSetup: (mcpStatus ?? mcpStatusProvider.status()).state == .needsSetup,
-        onShowSources: { selection = .sources },
+        onShowSources: { selection = .library },
         onShowSettings: { selection = .settings }
       )
-    case .approval:
-      ApprovalSectionView(model: services.browseModel)
-    case .runs:
-      RunsView()
+    case .marketplace:
+      EmptyStateView(
+        "Marketplace — coming soon",
+        message: "Use other people's modules, and publish yours."
+      )
     case .settings:
       SettingsView(storePath: services.store.databasePath)
     }
@@ -339,15 +322,9 @@ struct AppShellView: View {
 // MARK: - Sections
 
 private enum AppSection: String, CaseIterable, Identifiable {
-  case sources
-  case modules
-  case approval
-  case runs
+  case library
+  case marketplace
   case settings
-
-  /// Journey order, separated from the utility pair (ux §4.2, D6).
-  static let journeySections: [AppSection] = [.sources, .modules, .approval]
-  static let utilitySections: [AppSection] = [.runs, .settings]
 
   var id: String {
     rawValue
@@ -355,14 +332,10 @@ private enum AppSection: String, CaseIterable, Identifiable {
 
   var title: String {
     switch self {
-    case .sources:
-      return "Sources"
-    case .modules:
-      return "Modules"
-    case .approval:
-      return "Approval"
-    case .runs:
-      return "Runs"
+    case .library:
+      return "Library"
+    case .marketplace:
+      return "Marketplace"
     case .settings:
       return "Settings"
     }
@@ -370,14 +343,10 @@ private enum AppSection: String, CaseIterable, Identifiable {
 
   var systemImage: String {
     switch self {
-    case .sources:
-      return "tray.and.arrow.down"
-    case .modules:
+    case .library:
       return "square.grid.2x2"
-    case .approval:
-      return "checkmark.seal"
-    case .runs:
-      return "clock.arrow.circlepath"
+    case .marketplace:
+      return "storefront"
     case .settings:
       return "gearshape"
     }
