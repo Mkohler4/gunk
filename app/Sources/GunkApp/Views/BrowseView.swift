@@ -14,15 +14,36 @@ struct BrowseView: View {
 
   @State private var selectedGunkId: Int64?
 
-  var body: some View {
-    HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
-      browserPane
-        .frame(minWidth: 440, maxWidth: .infinity, maxHeight: .infinity)
+  /// Pane contract from ux §3.2/§4.6 (D10): browser ≥ 440, detail 300–440,
+  /// and both must fit at the 960pt window minimum next to the fixed 192pt
+  /// sidebar. The detail width is computed explicitly because HStack's own
+  /// negotiation over two flexible panes can overshoot the proposal (it
+  /// sizes the bounded detail pane before the browser clamps to its
+  /// minimum), which cropped both edges at the minimum window size.
+  private static let browserMinWidth: CGFloat = 440
+  private static let detailMinWidth: CGFloat = 300
+  private static let detailMaxWidth: CGFloat = 440
 
-      detailPane
-        .frame(minWidth: 300, maxWidth: 440, maxHeight: .infinity)
+  var body: some View {
+    GeometryReader { proxy in
+      let detailWidth = max(
+        Self.detailMinWidth,
+        min(
+          Self.detailMaxWidth,
+          proxy.size.width - Self.browserMinWidth - BrandMetrics.Spacing.md
+        )
+      )
+
+      HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
+        browserPane
+          .frame(minWidth: Self.browserMinWidth, maxWidth: .infinity, maxHeight: .infinity)
+
+        detailPane
+          .frame(width: detailWidth)
+          .frame(maxHeight: .infinity)
+      }
+      .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
-    .frame(maxWidth: .infinity, maxHeight: .infinity)
     .onAppear {
       // D12: run-completion freshness is handled by the shell, which calls
       // `BrowseModel.refresh()` when `isProcessing` flips false (T-7.6);

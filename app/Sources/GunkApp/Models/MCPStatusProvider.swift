@@ -10,9 +10,22 @@ struct MCPStatusProvider {
   var configURL: URL
   var fileManager: FileManager
 
+  /// Cursor's config location. Dev-only: `GUNK_MCP_CONFIG=<path>` overrides
+  /// it so scripted runs can exercise the ready / needs-setup states without
+  /// touching the real `~/.cursor/mcp.json` (mirrors the `GUNK_ENGINE_BIN`
+  /// pattern — never set in normal launches).
+  static var defaultConfigURL: URL {
+    if let override = ProcessInfo.processInfo.environment["GUNK_MCP_CONFIG"],
+       !override.isEmpty {
+      return URL(fileURLWithPath: override)
+    }
+
+    return FileManager.default.homeDirectoryForCurrentUser
+      .appendingPathComponent(".cursor/mcp.json")
+  }
+
   init(
-    configURL: URL = FileManager.default.homeDirectoryForCurrentUser
-      .appendingPathComponent(".cursor/mcp.json"),
+    configURL: URL = MCPStatusProvider.defaultConfigURL,
     fileManager: FileManager = .default
   ) {
     self.configURL = configURL
