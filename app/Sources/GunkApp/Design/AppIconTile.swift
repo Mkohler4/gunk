@@ -69,10 +69,19 @@ struct AppIconTile: View {
           )
         )
       )
+      // Visible Cursor-style rim: a lighter gray border that defines the
+      // tile edge against dark Dock backgrounds.
       .overlay(
         shape.strokeBorder(
-          .white.opacity(BrandMetrics.Glass.strokeOpacity * 2),
-          lineWidth: max(1, size / 256)
+          LinearGradient(
+            colors: [
+              .white.opacity(0.42),
+              .white.opacity(0.18),
+            ],
+            startPoint: .top,
+            endPoint: .bottom
+          ),
+          lineWidth: max(1, size * 10 / 1024)
         )
       )
       .frame(width: tileEdge, height: tileEdge)
