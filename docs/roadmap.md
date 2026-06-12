@@ -296,7 +296,8 @@ needs attention.
       processing model technically allows concurrency today), with a global
       animated processing state; the app stays fully browsable during a run
 - [ ] Dependencies + versions panel in module detail (parsed from bundle
-      manifests)
+      manifests) — *moved to Phase 10* as the "requirements readout"
+      (reshaped from a path list into "to run this elsewhere you need")
 - [ ] Fix the Dock badge render bug (B2) while in the processing/feedback
       area
 - [ ] Stretch (looks-good-only, explicitly low value): graph view of module
@@ -307,16 +308,42 @@ needs attention.
 
 ## Phase 10 — Run & test modules (Weeks 14–15)
 
-**Demo:** Click "Test module", a terminal opens with generated instructions,
-and the module earns a "Tested" badge.
+**Demo:** Click "Try it" on a module, watch its entrypoint actually run with
+the output streaming in a terminal block, and the module earns a "Tested"
+badge.
 
-- [ ] "Test in terminal" flow: generate per-module run/test instructions and
-      open Terminal.app pre-seeded with them
+> Product definition + design prompt:
+> [smoke-run-prompt.md](design/feature-report/smoke-run-prompt.md) — the
+> developer trust loop. MCP is the agent's door into a module; this phase is
+> the developer's door. Two questions drive every item: *"does it actually
+> do the thing?"* (proof, not claims) and *"can I take it somewhere?"*
+> (portability).
+
+- [ ] **Smoke run ("Try it")**: execute a module's entrypoint against its
+      extracted bundle in a sandbox, stream stdout/stderr into a mono
+      terminal block in the detail sheet, persist the receipt (when,
+      pass/fail, duration, output). First-run consent treatment (it executes
+      extracted code); states: never-tried / consent / running / passed /
+      failed / resting receipt. Build verification already stores a command
+      + log, so the store pattern exists
+- [ ] **Copyable invocation snippet** per module, generated from the stored
+      entrypoints + symbols ("how do I use this" in one glance)
+- [ ] **Requirements readout**: reshape shared-dependency *paths* into "to
+      run this elsewhere you need" — runtime, packages, env vars (parsed
+      from bundle manifests; absorbs the old "dependencies + versions
+      panel" item from Phase 9)
 - [ ] Tested badge: new store field + leveling rule (badge tier scales with
       how much the module was tested) — this becomes the marketplace ranking
-      signal in Phase 12
+      signal in Phase 12, and smoke-run receipts are the first *honest*
+      usage signal for the Library's `heroRank` `FUTURE` seam (never
+      fabricate usage numbers)
+- [ ] Runs stay **receipts, not a dashboard**: the extraction-run inspector
+      (T-8.6) answers "what did gunk do"; the smoke run answers "what does
+      the module do" — two surfaces, linked from the module, never merged
 - [ ] UI-module runner: detect UI modules and launch/preview them from the
       app
+- [ ] Explicitly out: dependency-graph visualizations, run-history charts,
+      in-app editing, metrics dashboards
 
 ---
 
