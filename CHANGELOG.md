@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Fixed
+- `gunk.app` the run-completion summary no longer lies about how many
+  modules a run added (it could claim "14 modules added" when zero were
+  persisted). The old count captured the engine's mid-run `modulesFound`
+  telemetry — a *pre-gate candidate* count emitted by the refine stage that
+  the accept/reject gates later correct downward — and a `max(old, new)`
+  capture with a `> 0` guard kept the inflated number and discarded the
+  honest final zero. "N modules added" is now a store diff: the shell
+  snapshots `BrowseModel.loadedGunkIds` when a run starts and counts the
+  ids that exist after the post-run refresh and didn't before — exactly the
+  cells that appear in the grid, needs-approval included, and a real zero
+  stays zero. The live "N found" label in the processing strip still shows
+  engine telemetry, which is fine for progress but never the completion
+  claim. Summary arithmetic extracted into `RunCompletionSummary`'s
+  initializer and under test (`RunCompletionSummaryTests`).
+
 ### Changed
 - `gunk.app` the Library appbar's `provider · model` readout is now a
   working model switcher (T-8.8 brought forward, Mark's direction): a
