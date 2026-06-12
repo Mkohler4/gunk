@@ -10,6 +10,14 @@ struct ModelOption: Equatable, Identifiable {
   var id: String {
     "\(provider.rawValue)/\(modelId)"
   }
+
+  /// Selection identity (T-8.8): an option is the selected one only when
+  /// *both* halves of the storage contract agree — `llm.provider` and
+  /// `llm.model`. The same model id under another provider is a different
+  /// option.
+  func matches(provider: LLMProvider, modelId: String) -> Bool {
+    self.provider == provider && self.modelId == modelId
+  }
 }
 
 /// The curated hosted-model catalog behind the shell's model switcher
@@ -83,6 +91,46 @@ enum ModelCatalog {
       .map { $0.lowercased() == "gpt" ? "GPT" : String($0).capitalized }
       .joined(separator: " ")
   }
+
+  // MARK: Menu derivation (T-8.8 close-out: pure, so it's testable)
+
+  /// Subtitle on the off-catalog row — the switcher never hides what
+  /// Settings actually has configured.
+  static let customOptionSubtitle = "Custom · from Settings"
+
+  /// The providers the open menu sections by: hosted providers whose key
+  /// probe succeeds, in mockup order. Unkeyed providers are intentionally
+  /// absent (ratified T-8.8 deviation) — an empty result renders the
+  /// "Add an API key in Settings" state.
+  static func keyedProviders(hasKey: (LLMProvider) -> Bool) -> [LLMProvider] {
+    hostedProviders.filter(hasKey)
+  }
+
+  /// One provider section's rows: the curated catalog, plus the saved
+  /// model as a "Custom · from Settings" row exactly when that model is
+  /// off-catalog, non-empty, and saved under this provider.
+  static func menuOptions(
+    for provider: LLMProvider,
+    selectedProvider: LLMProvider,
+    selectedModelId: String
+  ) -> [ModelOption] {
+    var options = options(for: provider)
+
+    if provider == selectedProvider,
+       !options.contains(where: { $0.modelId == selectedModelId }),
+       !selectedModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      options.append(
+        ModelOption(
+          provider: provider,
+          modelId: selectedModelId,
+          displayName: displayName(for: selectedModelId),
+          subtitle: customOptionSubtitle
+        )
+      )
+    }
+
+    return options
+  }
 }
 
 /// The shell-chrome model switcher (T-8.8, brought forward): the trailing
@@ -137,10 +185,23 @@ struct ModelSwitcher: View {
     HStack(spacing: BrandMetrics.Spacing.sm) {
       Text(providerRawValue)
         .foregroundStyle(BrandColors.textSecondary)
+        // Incompressible like the model-name slot below: under width
+        // pressure the appbar must fall back to its two-row stack, not
+        // quietly eat the provider name.
+        .fixedSize()
       Text("·")
         .foregroundStyle(BrandColors.textTertiary)
+        .fixedSize()
       Text(modelDisplayName)
         .foregroundStyle(BrandColors.textPrimary)
+        // T-8.8 close-out: the name lives in a fixed-width slot and
+        // middle-truncates past it (an id's head and tail are its
+        // distinguishing parts) — switching models can never resize the
+        // appbar or push the search field around, and the slot stays
+        // incompressible so the 960pt fallback to the two-row stack
+        // triggers instead of squeezing the name.
+        .truncationMode(.middle)
+        .frame(width: BrandMetrics.Control.modelLabelWidth, alignment: .leading)
 
       // T-8.8: the selected provider is missing its key — the switcher
       // carries a quiet warning dot and Settings is the way out.
@@ -238,30 +299,18 @@ struct ModelSwitcher: View {
     .accessibilityLabel("Open model settings")
   }
 
-  /// The provider's curated catalog, plus the currently-saved custom model
-  /// when Settings holds something off-catalog (T-8.8: the switcher never
-  /// hides what is actually configured).
+  /// The provider's curated catalog plus the off-catalog custom row —
+  /// derivation lives in `ModelCatalog.menuOptions` (pure, under test).
   private func menuOptions(for provider: LLMProvider) -> [ModelOption] {
-    var options = ModelCatalog.options(for: provider)
-
-    if provider == selectedProvider,
-       !options.contains(where: { $0.modelId == model }),
-       !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      options.append(
-        ModelOption(
-          provider: provider,
-          modelId: model,
-          displayName: ModelCatalog.displayName(for: model),
-          subtitle: "Custom · from Settings"
-        )
-      )
-    }
-
-    return options
+    ModelCatalog.menuOptions(
+      for: provider,
+      selectedProvider: selectedProvider,
+      selectedModelId: model
+    )
   }
 
   private func isSelected(_ option: ModelOption) -> Bool {
-    option.provider == selectedProvider && option.modelId == model
+    option.matches(provider: selectedProvider, modelId: model)
   }
 
   /// Selecting only selects (T-8.8): write the same two storage keys
@@ -288,17 +337,28 @@ struct ModelSwitcher: View {
   }
 
   private func refreshKeyedProviders() {
-    keyedProviders = ModelCatalog.hostedProviders.filter(hasKey)
+    keyedProviders = ModelCatalog.keyedProviders(hasKey: hasKey)
   }
 
   private func hasKey(_ provider: LLMProvider) -> Bool {
-    // Dev-only screenshot hook (same family as GUNK_DEBUG_MODEL_MENU):
-    // skip the Keychain probe entirely. An unsigned debug binary changes
-    // identity on every rebuild, so this synchronous `SecItemCopyMatching`
-    // (reached from `body` via `selectedProviderNeedsKey` and from
-    // `refreshKeyedProviders`) raises a blocking Keychain consent dialog
-    // *before the first window exists* — scripted runs hang with zero
-    // windows until a human clicks.
+    // Dev-only screenshot hooks (same family as GUNK_DEBUG_MODEL_MENU):
+    // both short-circuit the Keychain probe entirely. An unsigned debug
+    // binary changes identity on every rebuild, so this synchronous
+    // `SecItemCopyMatching` (reached from `body` via
+    // `selectedProviderNeedsKey` and from `refreshKeyedProviders`) raises
+    // a blocking Keychain consent dialog *before the first window exists*
+    // — scripted runs hang with zero windows until a human clicks.
+    //
+    // GUNK_DEBUG_KEYED_PROVIDERS=anthropic,openai stages the *keyed* menu
+    // states the same way GUNK_DEBUG_NO_KEYCHAIN stages the unkeyed one:
+    // only the listed providers (case-insensitive raw values) probe as
+    // keyed. It wins when both hooks are set; no-op in normal launches.
+    if let staged = ProcessInfo.processInfo.environment["GUNK_DEBUG_KEYED_PROVIDERS"] {
+      return staged.split(separator: ",").contains {
+        $0.trimmingCharacters(in: .whitespaces)
+          .caseInsensitiveCompare(provider.rawValue) == .orderedSame
+      }
+    }
     if ProcessInfo.processInfo.environment["GUNK_DEBUG_NO_KEYCHAIN"] == "1" {
       return false
     }

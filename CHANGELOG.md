@@ -7,6 +7,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `gunk.app` model switcher close-out (T-8.8; the switcher itself landed
+  brought-forward in #153): the model name now sits in a fixed-width slot
+  (`BrandMetrics.Control.modelLabelWidth`, sized so the longest catalog
+  name "Claude Sonnet 4" fits untruncated) and middle-truncates past it,
+  so switching models never resizes the appbar or moves the search field —
+  the slot is fixed rather than max-capped because a compressible label
+  let the single-row appbar squeeze the name at the 960pt minimum instead
+  of falling back to the two-row stack (the provider text and `·`
+  separator are incompressible for the same reason). The menu's options
+  derivation is extracted pure and under test (`ModelCatalogTests`):
+  keyed-provider filtering, the "Custom · from Settings" row appearing
+  exactly when the saved model is off-catalog and non-empty, and selection
+  identity as provider + modelId. Dev-only screenshot hook added:
+  `GUNK_DEBUG_KEYED_PROVIDERS=<anthropic,openai>` short-circuits the
+  switcher's Keychain probe affirmatively (same family as
+  `GUNK_DEBUG_NO_KEYCHAIN`, which it wins over when both are set), so the
+  keyed menu states can be staged without the consent dialog that blocks
+  unsigned debug binaries; no-op in normal launches.
 - `gunk.app` the sidebar status strip is decomposed into single-purpose
   elements (T-8.7). The old `ShellStatusStrip` was four jobs in one chip —
   idle MCP health, live processing, completion summary, and run failure —

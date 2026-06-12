@@ -778,7 +778,7 @@ predictable click targets.
 
 ---
 
-## T-8.8 — Model switcher in the shell chrome
+## T-8.8 — Model switcher in the shell chrome ✅ (landed in #153, closed out)
 
 **Owner:** agent
 **Checkpoint:** none
@@ -786,39 +786,64 @@ predictable click targets.
 ### Goal
 Provider/model switching without opening Settings.
 
-### Files
-- `app/Sources/GunkApp/Views/AppShellView.swift` (toolbar)
-- `app/Sources/GunkApp/Views/SettingsView.swift` (read-only reference for
-  the storage contract)
+### How it actually landed
+The switcher was **brought forward into the T-8.5 PR (#153)** on Mark's
+direction rather than built here: `Views/ModelSwitcher.swift` (+
+`ModelCatalog`, under `ModelCatalogTests`) renders the toolbox-v2
+`.model-menu` popover, reads/writes the exact `llm.provider` / `llm.model`
+storage Settings owns, never duplicates key entry, and carries the
+missing-key warning dot. Two decisions deviate from the original task text
+below and are **ratified — do not relitigate**:
 
-### Task execution (agent prompt)
+1. **Placement is the Library appbar's trailing slot** (the toolbox-v2
+   mockup's `.model` position), not the window toolbar — the switcher is a
+   Library-surface control.
+2. **The menu offers only providers whose API key is saved** (Ollama
+   intentionally absent until its UX is designed). An unkeyed install
+   shows the "Add an API key in Settings to choose a model." state with
+   the "Model settings…" row as the way out, instead of listing unkeyed
+   providers.
 
-> 1. Add a compact model switcher to the shell toolbar (trailing side): a
->    menu showing `provider · model` as its label. Menu contents: the
->    three providers as sections, each listing that provider's default
->    model plus the currently-saved custom model if different; a "Model
->    settings…" item routes to Settings.
-> 2. It reads/writes the exact same storage as Settings:
->    `@AppStorage("llm.provider")`, `@AppStorage("llm.model")`; switching
->    provider loads that provider's Keychain key state. If the selected
->    provider has no saved key (and is not Ollama), show a small warning
->    dot on the switcher and route the user to Settings on selection.
-> 3. Do not duplicate save/test logic — the switcher only selects;
->    key entry stays in Settings.
-> 4. `swift build`, `swift test`, screenshots: switcher closed, open, and
->    the missing-key warning state.
-
-### Refining loop
-- Keep the label width stable (middle-truncate long model names) so the
-  toolbar doesn't jump when switching.
+### Close-out (this task's actual work)
+- **Stable label width:** the model name sits in a fixed-width slot
+  (`BrandMetrics.Control.modelLabelWidth`, sized so "Claude Sonnet 4" —
+  the longest catalog name — fits untruncated) and middle-truncates past
+  it. The slot is fixed rather than max-capped on purpose: a max-only
+  frame is compressible, which let the appbar's single-row layout squeeze
+  the name at the 960pt minimum instead of falling back to the two-row
+  stack, and a compressible label resizes as models switch. The provider
+  text and `·` separator are `fixedSize()` for the same reason. Verified
+  by screenshot at 960pt and default width: switching models does not
+  move the search field (the chip's width varies only with the provider
+  word, absorbed by the appbar's spacer).
+- **Menu logic extracted pure and under test** (`ModelCatalogTests`):
+  `ModelCatalog.keyedProviders(hasKey:)` (keyed-only filtering),
+  `ModelCatalog.menuOptions(for:selectedProvider:selectedModelId:)` (the
+  "Custom · from Settings" row appears exactly when the saved model is
+  off-catalog, non-empty, and saved under that provider), and
+  `ModelOption.matches(provider:modelId:)` (selection identity is
+  provider + modelId, never modelId alone). No behavior change.
+- **`GUNK_DEBUG_KEYED_PROVIDERS=<anthropic,openai>`** joins the dev-hook
+  family: affirmatively short-circuits the switcher's `hasKey` probe the
+  same way `GUNK_DEBUG_NO_KEYCHAIN` does negatively, so the *keyed* menu
+  states can be screenshot-staged without a real Keychain probe (which
+  blocks unsigned debug binaries behind a consent dialog). Wins over
+  `GUNK_DEBUG_NO_KEYCHAIN` when both are set; no-op in normal launches.
+- All four states screenshot-staged via the hooks: closed, keyed menu
+  open (accent check on the selected model), missing-key warning dot,
+  unkeyed empty-menu state.
 
 ### Human-in-the-loop (me)
 - I switch providers with and without saved keys and confirm the engine
-  picks up the change on the next run (it reads the same defaults).
+  picks up the change on the next run (`SourceProcessingRunner` reads the
+  same `llm.provider`/`llm.model` defaults at spawn time — verify live,
+  not by code inspection).
 
 ### Acceptance
 - Provider/model switchable from the chrome; storage contract identical to
-  Settings; missing-key state visible. Build + tests green.
+  Settings; missing-key state visible; label width stable across model
+  switches at both window widths; menu options logic under test; all four
+  switcher states stageable via dev hooks. Build + tests green.
 
 ---
 

@@ -56,6 +56,15 @@ enum BrandMetrics {
     static let disabledOpacity: Double = 0.45
     /// Square hit target for icon-only buttons.
     static let iconButtonSize: CGFloat = 28
+    /// Fixed slot for the model switcher's model-name label (T-8.8). Sized
+    /// so the longest catalog name ("Claude Sonnet 4", ~96pt at
+    /// callout-medium) fits untruncated with headroom; anything longer
+    /// middle-truncates. Fixed (not just a cap) on purpose: a max-only
+    /// frame is compressible, which let the appbar's single-row layout
+    /// squeeze the name at the 960pt minimum instead of falling back to
+    /// the two-row stack, and a compressible label means the chip resizes
+    /// as models switch — the exact jump this token exists to prevent.
+    static let modelLabelWidth: CGFloat = 112
   }
 
   /// Brand-mark sizing (see `BrandMark`). The face stays legible down to
