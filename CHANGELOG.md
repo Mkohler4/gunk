@@ -7,6 +7,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `gunk.app` the sidebar status strip is decomposed into single-purpose
+  elements (T-8.7). The old `ShellStatusStrip` was four jobs in one chip —
+  idle MCP health, live processing, completion summary, and run failure —
+  behind one ambiguous click target. It is replaced by: a **persistent MCP
+  chip** at the sidebar bottom with exactly two states — "Agent connected"
+  (green, deliberately *not* clickable; hovering shows the config path) and
+  "MCP not set up → Connect" (amber, routes to Settings until T-8.10's
+  one-click setup lands); a **transient processing element** above it while
+  a run is active (source name, linear progress, live "N found" telemetry —
+  allowed there, never as a completion claim) that clicks into the Library
+  and disappears when idle; and a **run-end toast** floating over the
+  detail area's bottom edge (glass — it floats on the controls layer):
+  success reads "N modules added · M need review" from the truthful
+  store-diff `RunCompletionSummary` with a **View** action (→ Library,
+  applying the needs-approval scope only when M > 0 — the same wiring as
+  the sidebar badge tap-through), failure reads "Run failed" with an
+  **Inspect** action (→ run inspector at the most recent failure, T-8.6's
+  existing plumbing). The toast auto-dismisses after 8s, has a manual ×,
+  enters on `BrandMotion.settle` so completion lands as feedback, and is
+  overlay-only — it can never shift layout (docked bottom-center so it
+  cannot overlap the module detail's action row at the 960pt minimum).
+  Toast-state derivation and the M > 0 filter rule are pure and under test
+  (`ShellRunToastTests`). Dev-only screenshot hook added:
+  `GUNK_DEBUG_TOAST=<success|failure>` stages the toast without a live run
+  (same family as `GUNK_DEBUG_DROP_OVERLAY`).
 - `gunk.app` run traces are now an inspector, not a destination (T-8.6):
   `RunsView` is refactored into `RunInspectorView`, a sheet summoned from
   the places users actually are — a "View runs" affordance on each sources
