@@ -139,6 +139,7 @@ struct SettingsStatusSnapshot: Equatable {
   }
 }
 
+@MainActor
 struct SettingsView: View {
   @AppStorage("llm.provider") private var providerRawValue = LLMProvider.openAI.rawValue
   @AppStorage("llm.model") private var model = LLMProvider.openAI.defaultModel
@@ -149,12 +150,17 @@ struct SettingsView: View {
   @State private var statusMessage: String?
   @State private var isTestingConnection = false
 
+  /// Shared with the shell's chip and the setup sheet (T-8.10): one
+  /// `MCPClientConfigurator` source, so a toggle here re-checks everywhere.
+  @ObservedObject private var mcpSetup: MCPSetupModel
+
   private let secretStore: SecretStore
   private let testConnection: (LLMProvider, String, String) async throws -> Void
   private let storePath: String?
   private let resolveEngine: () -> ResolvedEngine?
   private let mcpConfigURL: URL
   private let fileManager: FileManager
+  private let openConfig: (URL) -> Void
 
   init(
     provider: LLMProvider = .openAI,
@@ -166,7 +172,9 @@ struct SettingsView: View {
     storePath: String? = Store.defaultURL.path,
     resolveEngine: @escaping () -> ResolvedEngine? = { EngineBinary.resolve() },
     mcpConfigURL: URL = MCPStatusProvider.defaultConfigURL,
-    fileManager: FileManager = .default
+    fileManager: FileManager = .default,
+    mcpSetup: MCPSetupModel? = nil,
+    openConfig: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
   ) {
     self._providerRawValue = AppStorage(
       wrappedValue: provider.rawValue,
@@ -187,6 +195,8 @@ struct SettingsView: View {
     self.resolveEngine = resolveEngine
     self.mcpConfigURL = mcpConfigURL
     self.fileManager = fileManager
+    self.mcpSetup = mcpSetup ?? MCPSetupModel()
+    self.openConfig = openConfig
   }
 
   var body: some View {
@@ -237,11 +247,19 @@ struct SettingsView: View {
           statusRow(statusSnapshot.apiKey)
           statusRow(statusSnapshot.store)
           statusRow(statusSnapshot.engine)
-          statusRow(statusSnapshot.mcp)
         }
 
         Button("Refresh status") {
           refreshStatus()
+        }
+      }
+
+      // T-8.10: the old single Cursor MCP row is replaced by per-client
+      // toggles backed by the same `MCPClientConfigurator` the chip and the
+      // setup sheet read — statuses stay in agreement everywhere.
+      Section("MCP clients") {
+        ForEach(mcpSetup.rows) { row in
+          mcpClientRow(row)
         }
       }
     }
@@ -254,6 +272,89 @@ struct SettingsView: View {
     }
     .onChange(of: model) {
       refreshStatus()
+    }
+  }
+
+  // MARK: MCP clients (T-8.10)
+
+  private func mcpClientRow(_ row: MCPSetupModel.ClientRow) -> some View {
+    VStack(alignment: .leading, spacing: 3) {
+      Toggle(isOn: mcpToggleBinding(for: row)) {
+        VStack(alignment: .leading, spacing: 3) {
+          HStack(alignment: .firstTextBaseline) {
+            Text(row.client.displayName)
+              .font(.caption.weight(.medium))
+            Spacer(minLength: 8)
+            Text(row.displayStatus.label)
+              .font(.caption2.bold())
+              .foregroundStyle(mcpStatusColor(row.displayStatus))
+          }
+
+          Text(row.configURL.path)
+            .font(.caption.monospaced())
+            .foregroundStyle(.secondary)
+            .lineLimit(1)
+            .truncationMode(.middle)
+            .textSelection(.enabled)
+        }
+      }
+      .toggleStyle(.switch)
+      .controlSize(.small)
+
+      if let problem = mcpProblemMessage(for: row) {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+          Text(problem)
+            .font(.caption2)
+            .foregroundStyle(.red)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+
+          Button("Open config") {
+            openConfig(row.configURL)
+          }
+          .font(.caption2)
+        }
+      }
+    }
+    .padding(.vertical, 3)
+  }
+
+  private func mcpToggleBinding(for row: MCPSetupModel.ClientRow) -> Binding<Bool> {
+    Binding(
+      get: { row.isConnected },
+      set: { wired in
+        if wired {
+          mcpSetup.connect(row.client)
+        } else {
+          mcpSetup.disconnect(row.client)
+        }
+      }
+    )
+  }
+
+  /// A wire/unwire failure (verbatim, with the open-config way out — the
+  /// configurator never clobbers a malformed file) or an unreadable-config
+  /// status message.
+  private func mcpProblemMessage(for row: MCPSetupModel.ClientRow) -> String? {
+    if let actionError = row.actionError {
+      return actionError
+    }
+    if case .problem(let message) = row.displayStatus {
+      return message
+    }
+    return nil
+  }
+
+  private func mcpStatusColor(_ status: MCPSetupModel.DisplayStatus) -> Color {
+    switch status {
+    case .connected:
+      return .green
+    case .notSetUp:
+      return .orange
+    case .notDetected:
+      return .secondary
+    case .problem:
+      return .red
     }
   }
 
@@ -351,6 +452,7 @@ struct SettingsView: View {
       mcpConfigURL: mcpConfigURL,
       fileManager: fileManager
     )
+    mcpSetup.refresh()
   }
 
   private static func liveTestConnection(
