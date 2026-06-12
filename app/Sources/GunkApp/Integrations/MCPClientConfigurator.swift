@@ -89,6 +89,7 @@ enum MCPClientStatus: Equatable, Sendable {
 
 enum MCPConfigError: Error, LocalizedError, Equatable {
   case binaryNotFound
+  case installFailed(path: String, detail: String)
   case malformedConfig(path: String, detail: String)
   case unreadableConfig(path: String, detail: String)
 
@@ -96,6 +97,8 @@ enum MCPConfigError: Error, LocalizedError, Equatable {
     switch self {
     case .binaryNotFound:
       return "Could not locate the gunk-mcp binary. Install it with `bun run install:bin` from mcp/ or set GUNK_MCP_BIN."
+    case .installFailed(let path, let detail):
+      return "Could not install gunk-mcp to \(path): \(detail)"
     case .malformedConfig(let path, let detail):
       return "Refusing to modify \(path): \(detail). Fix or remove the file and try again."
     case .unreadableConfig(let path, let detail):
@@ -104,41 +107,82 @@ enum MCPConfigError: Error, LocalizedError, Equatable {
   }
 }
 
-/// Locates the `gunk-mcp` binary the config entries should spawn. Mirrors
-/// `EngineBinary.resolve`:
-/// 1. `GUNK_MCP_BIN` env var (explicit binary, dev/CI).
-/// 2. `gunk-mcp` bundled in the app's Resources (not bundled today — see the
-///    T-8.9 summary; kept so a future `make app` change needs no code).
-/// 3. `GUNK_MCP_INSTALL_PATH` (the documented installer override), if it
-///    points at an executable.
-/// 4. `~/.local/bin/gunk-mcp` — the documented `bun run install:bin` target.
+/// Locates the `gunk-mcp` binary the config entries should spawn.
+///
+/// Packaged builds bundle `gunk-mcp` alongside `gunk-engine` (app/Makefile),
+/// but client configs must never point inside the .app bundle — the path
+/// breaks the moment the app moves or updates. So `wire` goes through
+/// `ensureInstalled`, which copies the bundled binary to the documented
+/// install path (`~/.local/bin/gunk-mcp`, the `bun run install:bin` target;
+/// `GUNK_MCP_INSTALL_PATH` overrides the destination) and points configs at
+/// that stable path. The copy is idempotent: byte-identical installs are
+/// left untouched, stale ones are refreshed.
 enum MCPBinary {
-  static func resolve(
+  static func defaultBundledBinary(bundle: Bundle = .main) -> URL? {
+    bundle.url(forResource: "gunk-mcp", withExtension: nil)
+  }
+
+  /// The stable path `wire` installs to and writes into client configs.
+  static func installURL(
     environment: [String: String] = ProcessInfo.processInfo.environment,
-    bundle: Bundle = .main,
+    home: URL = FileManager.default.homeDirectoryForCurrentUser
+  ) -> URL {
+    if let override = environment["GUNK_MCP_INSTALL_PATH"], !override.isEmpty {
+      return URL(fileURLWithPath: override)
+    }
+    return home.appendingPathComponent(".local/bin/gunk-mcp")
+  }
+
+  /// Wire-time resolution:
+  /// 1. `GUNK_MCP_BIN` env var — explicit binary (dev/CI), no install side
+  ///    effect.
+  /// 2. Bundled `gunk-mcp` — installed/refreshed at the install path, which
+  ///    is what gets returned (and written into configs).
+  /// 3. An existing install (dev `bun run install:bin`) with no bundle —
+  ///    used as-is.
+  static func ensureInstalled(
+    environment: [String: String] = ProcessInfo.processInfo.environment,
+    bundledBinary: URL? = MCPBinary.defaultBundledBinary(),
     fileManager: FileManager = .default,
     home: URL = FileManager.default.homeDirectoryForCurrentUser
-  ) -> URL? {
+  ) throws -> URL {
     if let explicit = environment["GUNK_MCP_BIN"], !explicit.isEmpty {
       return URL(fileURLWithPath: explicit)
     }
 
-    if let bundled = bundle.url(forResource: "gunk-mcp", withExtension: nil),
-       fileManager.isExecutableFile(atPath: bundled.path) {
-      return bundled
+    let destination = installURL(environment: environment, home: home)
+
+    if let bundled = bundledBinary, fileManager.isExecutableFile(atPath: bundled.path) {
+      try installIfNeeded(from: bundled, to: destination, fileManager: fileManager)
+      return destination
     }
 
-    if let installed = environment["GUNK_MCP_INSTALL_PATH"], !installed.isEmpty,
-       fileManager.isExecutableFile(atPath: installed) {
-      return URL(fileURLWithPath: installed)
+    if fileManager.isExecutableFile(atPath: destination.path) {
+      return destination
     }
 
-    let defaultInstall = home.appendingPathComponent(".local/bin/gunk-mcp")
-    if fileManager.isExecutableFile(atPath: defaultInstall.path) {
-      return defaultInstall
+    throw MCPConfigError.binaryNotFound
+  }
+
+  private static func installIfNeeded(from source: URL, to destination: URL, fileManager: FileManager) throws {
+    if fileManager.fileExists(atPath: destination.path),
+       fileManager.contentsEqual(atPath: source.path, andPath: destination.path) {
+      return
     }
 
-    return nil
+    do {
+      try fileManager.createDirectory(
+        at: destination.deletingLastPathComponent(),
+        withIntermediateDirectories: true
+      )
+      if fileManager.fileExists(atPath: destination.path) {
+        try fileManager.removeItem(at: destination)
+      }
+      try fileManager.copyItem(at: source, to: destination)
+      try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: destination.path)
+    } catch {
+      throw MCPConfigError.installFailed(path: destination.path, detail: error.localizedDescription)
+    }
   }
 }
 
@@ -168,21 +212,27 @@ struct MCPClientConfigurator {
   let applicationsDirectory: URL
   let fileManager: FileManager
   let environment: [String: String]
-  let resolveBinary: () -> URL?
+  let ensureBinary: () throws -> URL
 
   init(
     home: URL = FileManager.default.homeDirectoryForCurrentUser,
     applicationsDirectory: URL = URL(fileURLWithPath: "/Applications", isDirectory: true),
     fileManager: FileManager = .default,
     environment: [String: String] = ProcessInfo.processInfo.environment,
-    resolveBinary: (() -> URL?)? = nil
+    bundledBinary: URL? = MCPBinary.defaultBundledBinary(),
+    ensureBinary: (() throws -> URL)? = nil
   ) {
     self.home = home
     self.applicationsDirectory = applicationsDirectory
     self.fileManager = fileManager
     self.environment = environment
-    self.resolveBinary = resolveBinary ?? {
-      MCPBinary.resolve(environment: environment, fileManager: fileManager, home: home)
+    self.ensureBinary = ensureBinary ?? {
+      try MCPBinary.ensureInstalled(
+        environment: environment,
+        bundledBinary: bundledBinary,
+        fileManager: fileManager,
+        home: home
+      )
     }
   }
 
@@ -328,10 +378,7 @@ struct MCPClientConfigurator {
   // MARK: - Wire / unwire
 
   func wire(_ client: MCPClient) throws {
-    guard let binary = resolveBinary() else {
-      throw MCPConfigError.binaryNotFound
-    }
-
+    let binary = try ensureBinary()
     let url = configURL(for: client)
     switch client.configFormat {
     case .json:

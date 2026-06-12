@@ -21,9 +21,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   array). Wiring twice is byte-stable, unrelated entries are preserved,
   malformed config aborts with a clear error instead of clobbering, and
   unwire removes only the gunk entry (it never rewrites the file when the
-  entry is absent). The `gunk-mcp` binary resolves like the engine binary:
-  `GUNK_MCP_BIN` → bundled → `GUNK_MCP_INSTALL_PATH` →
-  `~/.local/bin/gunk-mcp`. `MCPStatusProvider` now delegates its Cursor
+  entry is absent). `make app` now bundles `gunk-mcp` alongside
+  `gunk-engine`, and wiring installs/refreshes the bundled binary at the
+  documented install path (`~/.local/bin/gunk-mcp`; destination override
+  `GUNK_MCP_INSTALL_PATH`) before pointing configs at that stable path — so
+  packaged builds work without `bun run install:bin`, configs never
+  reference a path inside the .app bundle (which would break when the app
+  moves or updates), the copy is skipped when byte-identical and refreshed
+  when stale, and `GUNK_MCP_BIN` still short-circuits everything for
+  dev/CI. `MCPStatusProvider` now delegates its Cursor
   check to the configurator with byte-identical status strings and the same
   `GUNK_MCP_CONFIG` dev override. Everything is constructor-injected and
   covered by tests that run only against temp directories.

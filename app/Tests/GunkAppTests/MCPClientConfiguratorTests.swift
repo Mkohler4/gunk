@@ -21,15 +21,29 @@ final class MCPClientConfiguratorTests: XCTestCase {
 
   private func makeConfigurator(
     binary: String? = "/Users/tester/.local/bin/gunk-mcp",
-    environment: [String: String] = [:]
+    environment: [String: String] = [:],
+    bundledBinary: URL? = nil
   ) -> MCPClientConfigurator {
     MCPClientConfigurator(
       home: home,
       applicationsDirectory: applications,
       fileManager: .default,
       environment: environment,
-      resolveBinary: { binary.map { URL(fileURLWithPath: $0) } }
+      bundledBinary: bundledBinary,
+      ensureBinary: bundledBinary != nil ? nil : {
+        guard let binary else { throw MCPConfigError.binaryNotFound }
+        return URL(fileURLWithPath: binary)
+      }
     )
+  }
+
+  @discardableResult
+  private func makeExecutable(at url: URL, contents: String = "#!/bin/sh\necho gunk-mcp\n") throws -> URL {
+    let fileManager = FileManager.default
+    try fileManager.createDirectory(at: url.deletingLastPathComponent(), withIntermediateDirectories: true)
+    try Data(contents.utf8).write(to: url)
+    try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: url.path)
+    return url
   }
 
   private func seed(_ text: String, at url: URL) throws {
@@ -313,38 +327,112 @@ final class MCPClientConfiguratorTests: XCTestCase {
     }
   }
 
-  func testMCPBinaryResolutionOrder() throws {
+  func testEnsureInstalledCopiesBundledBinaryToInstallPath() throws {
     let fileManager = FileManager.default
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"))
+    let install = home.appendingPathComponent(".local/bin/gunk-mcp")
 
-    // 1. Explicit env override wins without an existence check (dev/CI).
-    XCTAssertEqual(
-      MCPBinary.resolve(environment: ["GUNK_MCP_BIN": "/dev/gunk-mcp"], fileManager: fileManager, home: home)?.path,
-      "/dev/gunk-mcp"
+    let resolved = try MCPBinary.ensureInstalled(
+      environment: [:], bundledBinary: bundled, fileManager: fileManager, home: home
     )
 
-    // 2. Installer override path, only when executable.
-    let installed = home.appendingPathComponent("custom/gunk-mcp")
-    try fileManager.createDirectory(at: installed.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try Data("#!/bin/sh\n".utf8).write(to: installed)
-    try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: installed.path)
+    XCTAssertEqual(resolved.path, install.path)
+    XCTAssertTrue(fileManager.isExecutableFile(atPath: install.path))
+    XCTAssertTrue(fileManager.contentsEqual(atPath: bundled.path, andPath: install.path))
+  }
+
+  func testEnsureInstalledIsIdempotentWhenInstallMatchesBundle() throws {
+    let fileManager = FileManager.default
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"))
+
+    let install = try MCPBinary.ensureInstalled(
+      environment: [:], bundledBinary: bundled, fileManager: fileManager, home: home
+    )
+    let firstAttributes = try fileManager.attributesOfItem(atPath: install.path)
+
+    let again = try MCPBinary.ensureInstalled(
+      environment: [:], bundledBinary: bundled, fileManager: fileManager, home: home
+    )
+    let secondAttributes = try fileManager.attributesOfItem(atPath: again.path)
+
+    XCTAssertEqual(install, again)
     XCTAssertEqual(
-      MCPBinary.resolve(environment: ["GUNK_MCP_INSTALL_PATH": installed.path], fileManager: fileManager, home: home)?.path,
-      installed.path
+      firstAttributes[.systemFileNumber] as? Int,
+      secondAttributes[.systemFileNumber] as? Int,
+      "a byte-identical install must not be rewritten"
+    )
+  }
+
+  func testEnsureInstalledRefreshesStaleInstalledBinary() throws {
+    let fileManager = FileManager.default
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"), contents: "#!/bin/sh\necho v2\n")
+    let install = try makeExecutable(at: home.appendingPathComponent(".local/bin/gunk-mcp"), contents: "#!/bin/sh\necho v1\n")
+
+    _ = try MCPBinary.ensureInstalled(
+      environment: [:], bundledBinary: bundled, fileManager: fileManager, home: home
     )
 
-    // 3. The documented default install location.
-    let defaultInstall = home.appendingPathComponent(".local/bin/gunk-mcp")
-    try fileManager.createDirectory(at: defaultInstall.deletingLastPathComponent(), withIntermediateDirectories: true)
-    try Data("#!/bin/sh\n".utf8).write(to: defaultInstall)
-    try fileManager.setAttributes([.posixPermissions: 0o755], ofItemAtPath: defaultInstall.path)
-    XCTAssertEqual(
-      MCPBinary.resolve(environment: [:], fileManager: fileManager, home: home)?.path,
-      defaultInstall.path
+    XCTAssertTrue(
+      fileManager.contentsEqual(atPath: bundled.path, andPath: install.path),
+      "a stale install must be refreshed from the bundle"
+    )
+  }
+
+  func testEnsureInstalledPrefersExplicitOverrideWithoutInstalling() throws {
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"))
+
+    let resolved = try MCPBinary.ensureInstalled(
+      environment: ["GUNK_MCP_BIN": "/dev/gunk-mcp"], bundledBinary: bundled, fileManager: .default, home: home
     )
 
-    // 4. Nothing resolvable.
-    try fileManager.removeItem(at: defaultInstall)
-    XCTAssertNil(MCPBinary.resolve(environment: [:], fileManager: fileManager, home: home))
+    XCTAssertEqual(resolved.path, "/dev/gunk-mcp")
+    XCTAssertFalse(
+      FileManager.default.fileExists(atPath: home.appendingPathComponent(".local/bin/gunk-mcp").path),
+      "the explicit override must not trigger an install"
+    )
+  }
+
+  func testEnsureInstalledHonorsInstallPathOverride() throws {
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"))
+    let custom = home.appendingPathComponent("custom/bin/gunk-mcp")
+
+    let resolved = try MCPBinary.ensureInstalled(
+      environment: ["GUNK_MCP_INSTALL_PATH": custom.path], bundledBinary: bundled, fileManager: .default, home: home
+    )
+
+    XCTAssertEqual(resolved.path, custom.path)
+    XCTAssertTrue(FileManager.default.isExecutableFile(atPath: custom.path))
+  }
+
+  func testEnsureInstalledFallsBackToExistingInstallWithoutBundle() throws {
+    let install = try makeExecutable(at: home.appendingPathComponent(".local/bin/gunk-mcp"))
+
+    let resolved = try MCPBinary.ensureInstalled(
+      environment: [:], bundledBinary: nil, fileManager: .default, home: home
+    )
+
+    XCTAssertEqual(resolved.path, install.path)
+  }
+
+  func testEnsureInstalledThrowsWhenNothingIsAvailable() {
+    XCTAssertThrowsError(
+      try MCPBinary.ensureInstalled(environment: [:], bundledBinary: nil, fileManager: .default, home: home)
+    ) { error in
+      XCTAssertEqual(error as? MCPConfigError, .binaryNotFound)
+    }
+  }
+
+  func testWireWithBundledBinaryInstallsAndPointsConfigAtInstallPath() throws {
+    let bundled = try makeExecutable(at: home.appendingPathComponent("bundle/gunk-mcp"))
+    let configurator = makeConfigurator(bundledBinary: bundled)
+    let install = home.appendingPathComponent(".local/bin/gunk-mcp")
+
+    try configurator.wire(.cursor)
+
+    XCTAssertTrue(FileManager.default.isExecutableFile(atPath: install.path))
+    XCTAssertEqual(configurator.status(for: .cursor), .ready(command: install.path))
+    let entry = try XCTUnwrap(try gunkEntry(in: configurator.configURL(for: .cursor), for: .cursor))
+    XCTAssertEqual(entry["command"] as? String, install.path)
   }
 
   // MARK: - Detection
