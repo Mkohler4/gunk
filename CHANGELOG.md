@@ -10,6 +10,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` toolbox-v2 palette retune (T-8.3b Part A): `BrandColors` dark
+  surfaces move from the green-tinted "ooze" near-black to the neutral
+  graphite tokens read from the toolbox-v2 mockup — `#161618` window, a new
+  `backgroundSecondary` (`#1d1d20`) content surface, `#27272b` cards, a new
+  `backgroundElevatedHover` (`#303036`) step, and a `rgba(48,48,54,0.55)`
+  glass tint with a `0.09` hairline. The text ramp goes neutral
+  (`#f3f3f5`/`#9b9ba2`/`#6c6c74`), separators become `rgba(255,255,255,0.07)`,
+  and `warning`/`danger` retune to `#e7b765`/`#e5786a`. The accent green is
+  **unchanged** (`#5fe08c`, green-on-meaning-only); light-mode values are
+  re-derived neutral; brand-mark art colors are untouched. New fixed
+  provider-accent art colors (Anthropic coral `#D26D43`, OpenAI teal
+  `#639FA9`, Google indigo `#33508A`, neutral fallback) ship with a
+  case-insensitive `BrandColors.providerAccent(for:)` resolver for the
+  toolbox-v2 provider badges.
 - `gunk.app` shell IA restructure (T-8.2): the five-section navigation
   (Sources/Modules/Approval/Runs/Settings) is replaced by a three-section IA
   — **Library / Marketplace / Settings**. Library renders the existing
