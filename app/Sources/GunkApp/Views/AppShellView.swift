@@ -43,7 +43,12 @@ struct AppShellView: View {
   @State private var selection: AppSection
   @State private var mcpStatus: SettingsStatusItem?
   @State private var completedSummary: RunCompletionSummary?
-  @State private var modulesFoundDuringRun = 0
+  /// Snapshot of `BrowseModel.loadedGunkIds` when a run starts. The
+  /// completion summary's "N modules added" is the store diff against this
+  /// — the engine's mid-run `modulesFound` telemetry counts pre-gate
+  /// candidates and must never become the completion claim (it once showed
+  /// "14 added" on a run that persisted zero).
+  @State private var gunkIdsBeforeRun: Set<Int64> = []
   @State private var pendingReviewsAtRunStart = 0
   @State private var summaryDecayTask: Task<Void, Never>?
 
@@ -125,6 +130,12 @@ struct AppShellView: View {
       services.browseModel.refresh()
       mcpStatus = mcpStatusProvider.status()
       applyDropOverlayDebugOverride()
+      // Appearing mid-run: snapshot what already exists so the completion
+      // summary only counts what this run actually adds (mirrors
+      // BrowseView's arrival-highlight snapshot).
+      if services.processingModel.isProcessing {
+        gunkIdsBeforeRun = services.browseModel.loadedGunkIds
+      }
     }
     .onChange(of: selection) {
       mcpStatus = mcpStatusProvider.status()
@@ -135,13 +146,6 @@ struct AppShellView: View {
       }
       if wasProcessing, !isProcessing {
         runDidEnd()
-      }
-    }
-    .onChange(of: services.processingModel.modulesFound) { _, found in
-      // `ProcessingModel.complete` resets the count in the same update that
-      // flips `isProcessing`, so capture it while the run is still live.
-      if services.processingModel.isProcessing, found > 0 {
-        modulesFoundDuringRun = max(modulesFoundDuringRun, found)
       }
     }
     .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
@@ -280,7 +284,7 @@ struct AppShellView: View {
     withAnimation(BrandMotion.standard) {
       completedSummary = nil
     }
-    modulesFoundDuringRun = 0
+    gunkIdsBeforeRun = services.browseModel.loadedGunkIds
     pendingReviewsAtRunStart = services.browseModel.approvalQueue.count
   }
 
@@ -294,8 +298,10 @@ struct AppShellView: View {
     }
 
     let summary = RunCompletionSummary(
-      modulesAdded: modulesFoundDuringRun,
-      needsReview: max(0, services.browseModel.approvalQueue.count - pendingReviewsAtRunStart)
+      gunkIdsBeforeRun: gunkIdsBeforeRun,
+      gunkIdsAfterRun: services.browseModel.loadedGunkIds,
+      pendingReviewsAtRunStart: pendingReviewsAtRunStart,
+      pendingReviewsNow: services.browseModel.approvalQueue.count
     )
 
     withAnimation(BrandMotion.standard) {
@@ -680,9 +686,24 @@ private struct SidebarProcessingIndicator: View {
 
 // MARK: - Status strip
 
-private struct RunCompletionSummary: Equatable {
+/// The truthful run-completion claim ("N modules added · M need review").
+/// `modulesAdded` is a store diff — modules that exist now and didn't when
+/// the run started. Engine telemetry (`ProcessingModel.modulesFound`) counts
+/// pre-gate candidates and corrects *downward* as gates reject; it may label
+/// live progress ("N found") but never the completion claim.
+struct RunCompletionSummary: Equatable {
   let modulesAdded: Int
   let needsReview: Int
+
+  init(
+    gunkIdsBeforeRun: Set<Int64>,
+    gunkIdsAfterRun: Set<Int64>,
+    pendingReviewsAtRunStart: Int,
+    pendingReviewsNow: Int
+  ) {
+    modulesAdded = gunkIdsAfterRun.subtracting(gunkIdsBeforeRun).count
+    needsReview = max(0, pendingReviewsNow - pendingReviewsAtRunStart)
+  }
 }
 
 private enum ShellStripState: Equatable {
