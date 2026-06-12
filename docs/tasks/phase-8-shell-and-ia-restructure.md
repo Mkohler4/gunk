@@ -675,6 +675,17 @@ user who skips onboarding still knows where to add a folder.
 **Owner:** agent
 **Checkpoint:** none
 
+### Scope flag (2026-06-12) — module detail is being re-decided
+
+The module-run exploration
+(`docs/design/explorations/module-run-v1.md`) replaces the toolbox-v2
+"detail = centered glass sheet" assumption with a **full module page**
+(breadcrumb navigation), and its `view run →` provenance line is this
+task's module-detail entry point. T-8.6's substance (extraction-run
+inspector, not a tab) is unchanged, but `[HOLD FOR ME]`: do not
+pre-build the glass-sheet detail container — the sheet-vs-page decision
+is Mark's, and the module page work itself is Phase 10, not this task.
+
 ### Goal
 Run traces stay reachable but stop being a top-level destination: an
 inspector opened from the places users actually are.

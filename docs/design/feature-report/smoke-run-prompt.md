@@ -5,6 +5,11 @@
 > design chat (it already knows gunk). This file is the repo's record of the
 > 2026-06-12 ideation ("what matters for the developer other than the MCP")
 > so the design chat, the roadmap, and the eventual task brief can't drift.
+>
+> **Stage 2 exists:** [`module-io-prompt.md`](module-io-prompt.md) evolves
+> this feature — receipt-first evidence with a developer verdict, a typed
+> input surface the developer controls, and the on-demand "How this works"
+> analysis. When the two prompts disagree, stage 2 wins.
 
 ---
 

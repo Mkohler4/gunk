@@ -318,14 +318,26 @@ badge.
 > the developer's door. Two questions drive every item: *"does it actually
 > do the thing?"* (proof, not claims) and *"can I take it somewhere?"*
 > (portability).
+>
+> **Scope grew (2026-06-12):** the design exploration
+> [module-run-v1.md](design/explorations/module-run-v1.md) lands clicking a
+> module on a **full module page** (breadcrumb, not a sheet) whose spine is
+> the proof loop: a synthesized before/after Proof card with developer
+> verdicts and pinned golden examples, a **real terminal** with developer
+> and example inputs (sandbox-bounded), and the Tested-badge leveling rule
+> as the honest metric — one passing example never reads "Proven." This
+> phase needs its own task-list doc once the design HTML lands; items below
+> are the original (still-valid) skeleton, with two revisions inline.
 
 - [ ] **Smoke run ("Try it")**: execute a module's entrypoint against its
-      extracted bundle in a sandbox, stream stdout/stderr into a mono
-      terminal block in the detail sheet, persist the receipt (when,
-      pass/fail, duration, output). First-run consent treatment (it executes
-      extracted code); states: never-tried / consent / running / passed /
-      failed / resting receipt. Build verification already stores a command
-      + log, so the store pattern exists
+      extracted bundle in a sandbox, persist the receipt (when, pass/fail,
+      duration, output). Receipt-first per module-run-v1: the primary
+      evidence is the before/after Proof card **on the full module page**
+      (the "detail sheet" is superseded); the raw command + log demote to a
+      disclosure. First-run consent treatment (it executes extracted code);
+      states: never-tried / consent / running / passed / failed / resting
+      receipt. Build verification already stores a command + log, so the
+      store pattern exists
 - [ ] **Copyable invocation snippet** per module, generated from the stored
       entrypoints + symbols ("how do I use this" in one glance)
 - [ ] **Requirements readout**: reshape shared-dependency *paths* into "to
@@ -340,8 +352,9 @@ badge.
 - [ ] Runs stay **receipts, not a dashboard**: the extraction-run inspector
       (T-8.6) answers "what did gunk do"; the smoke run answers "what does
       the module do" — two surfaces, linked from the module, never merged
-- [ ] UI-module runner: detect UI modules and launch/preview them from the
-      app
+- [ ] UI-module runner: detect UI modules and **launch the browser** at the
+      module's served surface — in-app preview is explicitly out for now
+      (module-run-v1 revision of the old "launch/preview them from the app")
 - [ ] Explicitly out: dependency-graph visualizations, run-history charts,
       in-app editing, metrics dashboards
 
