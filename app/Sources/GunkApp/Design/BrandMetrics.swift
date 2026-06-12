@@ -24,8 +24,9 @@ enum BrandMetrics {
   enum Glass {
     /// Opacity of the `surfaceGlass` tint laid over the blur.
     static let tintOpacity: Double = 0.55
-    /// Inner hairline stroke, from the concept's `inset 0 0 0 1px` highlight.
-    static let strokeOpacity: Double = 0.07
+    /// Inner hairline stroke, from the toolbox-v2 glass border
+    /// `rgba(255,255,255,0.09)`.
+    static let strokeOpacity: Double = 0.09
     /// Top-edge sheen gradient strength, from the concept's overlay.
     static let sheenOpacity: Double = 0.16
     /// Drop shadow under floating glass surfaces.

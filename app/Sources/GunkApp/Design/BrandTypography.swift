@@ -20,6 +20,10 @@ enum BrandTypography {
   static let title = sans(size: 22, weight: .semibold)
   /// Card titles, emphasized rows.
   static let headline = sans(size: 15, weight: .semibold)
+  /// Briefing-card module names (toolbox-v2 cell: 16/600).
+  static let cardTitle = sans(size: 16, weight: .semibold)
+  /// Hero-cell module names (toolbox-v2 hero: 19/600).
+  static let cardTitleHero = sans(size: 19, weight: .semibold)
   /// Default reading size.
   static let body = sans(size: 13, weight: .regular)
   /// Secondary labels, list metadata.

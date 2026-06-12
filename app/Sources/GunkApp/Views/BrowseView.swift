@@ -4,15 +4,30 @@ import SwiftUI
 @MainActor
 struct BrowseView: View {
   let model: BrowseModel
+  /// Sources and intake now live in the Library (T-8.3): the source list folds
+  /// into a sheet and folders are added through the one true intake path.
+  let sourceListModel: GunkListModel
+  let processingModel: ProcessingModel
+  let dropZoneHandler: DropZoneHandler
   /// From the shared `MCPStatusProvider` (owned by the shell): when Cursor
   /// isn't wired up, the Agent-ready treatment flips to needs-setup copy
   /// that navigates to Settings (ux §4.5, D8).
   var mcpNeedsSetup = false
   var openBundle: (URL) -> Void = { NSWorkspace.shared.open($0) }
-  var onShowSources: () -> Void = {}
   var onShowSettings: () -> Void = {}
 
   @State private var selectedGunkId: Int64?
+  @State private var showSourcesPanel = false
+
+  /// Arrival highlight (ux §4.4), moved from the retired Sources surface to the
+  /// module grid: modules created during a run carry the accent treatment for
+  /// a beat after the run completes. Mirrors the old `arrivedSourceIds` decay.
+  @State private var arrivedGunkIds: Set<Int64> = []
+  @State private var gunkIdsBeforeRun: Set<Int64> = []
+  @State private var arrivalDecayTasks: [Int64: Task<Void, Never>] = [:]
+
+  /// How long a freshly created module keeps its highlight (ux §4.4).
+  private static let arrivalHighlightLifetime: Duration = .seconds(2)
 
   /// Pane contract from ux §3.2/§4.6 (D10): browser ≥ 440, detail 300–440,
   /// and both must fit at the 960pt window minimum next to the fixed 192pt
@@ -24,6 +39,17 @@ struct BrowseView: View {
   private static let detailMinWidth: CGFloat = 300
   private static let detailMaxWidth: CGFloat = 440
 
+  /// Grid metrics from the toolbox-v2 mockup: `--card: 262px` min cell width,
+  /// up to 3 columns. At the 960pt window minimum the browser pane is ~440pt,
+  /// which resolves to a single column with the hero at full width (the
+  /// mockup's own narrow reflow) — cells never shrink below `cardMinWidth`.
+  private static let cardMinWidth: CGFloat = 262
+  private static let gridGap: CGFloat = BrandMetrics.Spacing.md
+  private static let maxColumns = 3
+  /// Uniform row heights keep grid rows flush (cells stretch to the row).
+  private static let standardRowHeight: CGFloat = 200
+  private static let heroRowHeight: CGFloat = 256
+
   var body: some View {
     GeometryReader { proxy in
       let detailWidth = max(
@@ -33,9 +59,10 @@ struct BrowseView: View {
           proxy.size.width - Self.browserMinWidth - BrandMetrics.Spacing.md
         )
       )
+      let browserWidth = proxy.size.width - detailWidth - BrandMetrics.Spacing.md
 
       HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
-        browserPane
+        browserPane(width: browserWidth)
           .frame(minWidth: Self.browserMinWidth, maxWidth: .infinity, maxHeight: .infinity)
 
         detailPane
@@ -49,133 +76,383 @@ struct BrowseView: View {
       // `BrowseModel.refresh()` when `isProcessing` flips false (T-7.6);
       // this refresh covers section re-entry.
       model.refresh()
+      sourceListModel.refresh()
       synchronizeSelection()
+      // Entering mid-run: snapshot what already exists so completion only
+      // highlights what the run actually adds.
+      if processingModel.isProcessing {
+        gunkIdsBeforeRun = model.loadedGunkIds
+      }
     }
     .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
       model.refresh()
+      sourceListModel.refresh()
     }
     .onChange(of: model.sections) {
       synchronizeSelection()
+    }
+    .onChange(of: processingModel.isProcessing) { wasProcessing, isProcessing in
+      if !wasProcessing, isProcessing {
+        gunkIdsBeforeRun = model.loadedGunkIds
+      } else if wasProcessing, !isProcessing {
+        // Reload so the run's new modules are loaded, then highlight only the
+        // ids that weren't present when the run started.
+        model.refresh()
+        let added = model.loadedGunkIds.subtracting(gunkIdsBeforeRun)
+        for gunkId in added {
+          markArrived(gunkId)
+        }
+      }
+    }
+    .sheet(isPresented: $showSourcesPanel) {
+      SourcesPanelView(
+        sourceListModel: sourceListModel,
+        processingModel: processingModel,
+        onAddFolder: addFolder,
+        onShowModules: { sourceId in
+          showSourcesPanel = false
+          model.filters.sourceId = sourceId
+        },
+        onClose: { showSourcesPanel = false }
+      )
+    }
+  }
+
+  /// Arrival treatment (ux §4.4): the new cell carries the highlight, then it
+  /// decays after a beat. Per-id decay tasks so overlapping arrivals don't
+  /// cancel each other.
+  private func markArrived(_ gunkId: Int64) {
+    withAnimation(BrandMotion.settle) {
+      _ = arrivedGunkIds.insert(gunkId)
+    }
+
+    arrivalDecayTasks[gunkId]?.cancel()
+    arrivalDecayTasks[gunkId] = Task {
+      try? await Task.sleep(for: Self.arrivalHighlightLifetime)
+      guard !Task.isCancelled else {
+        return
+      }
+      withAnimation(BrandMotion.smooth) {
+        _ = arrivedGunkIds.remove(gunkId)
+      }
+      arrivalDecayTasks.removeValue(forKey: gunkId)
+    }
+  }
+
+  /// Folder picker → the one true intake path. Never duplicates the insert /
+  /// processing logic that lives in `DropZoneHandler`.
+  private func addFolder() {
+    let panel = NSOpenPanel()
+    panel.canChooseDirectories = true
+    panel.canChooseFiles = false
+    panel.allowsMultipleSelection = true
+    panel.prompt = "Add"
+    panel.message = "Choose folders to add to your library"
+
+    guard panel.runModal() == .OK, !panel.urls.isEmpty else {
+      return
+    }
+
+    do {
+      try dropZoneHandler.handleDrop(urls: panel.urls)
+    } catch {
+      NSApp.presentError(error)
     }
   }
 
   // MARK: Browser
 
-  private var browserPane: some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-      // Pinned filter bar (ux §3.2): lives outside the scroll view.
-      filterBar
+  private func browserPane(width: CGFloat) -> some View {
+    let contentWidth = width - 2 * BrandMetrics.Spacing.md
+    let columns = max(
+      1,
+      min(Self.maxColumns, Int((contentWidth + Self.gridGap) / (Self.cardMinWidth + Self.gridGap)))
+    )
+    let cellWidth = (contentWidth - Self.gridGap * CGFloat(columns - 1)) / CGFloat(columns)
 
+    return Group {
       if model.sections.isEmpty {
-        EmptyStateView(
-          "No modules yet",
-          message: "Drop a folder on Sources or the Dock icon and gunk will decompose it into reusable modules."
-        ) {
-          Button("Go to Sources", action: onShowSources)
-            .buttonStyle(.brandPrimary)
-        }
+        emptyState
       } else {
+        // Cards scroll beneath the floating glass controls layer (the
+        // safe-area inset header below).
         ScrollView {
           LazyVStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
             ForEach(model.sections) { section in
-              sectionView(section)
+              sectionView(section, columns: columns, cellWidth: cellWidth)
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
-          .padding(.bottom, BrandMetrics.Spacing.sm)
+          .padding(.horizontal, BrandMetrics.Spacing.md)
+          .padding(.bottom, BrandMetrics.Spacing.md)
+          .padding(.top, BrandMetrics.Spacing.sm)
         }
       }
     }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .safeAreaInset(edge: .top, spacing: BrandMetrics.Spacing.sm) {
+      libraryHeader
+        .padding(.horizontal, BrandMetrics.Spacing.md)
+        .padding(.top, BrandMetrics.Spacing.sm)
+    }
+    // The content scrolling surface behind the cards (mockup `--bg-2`).
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+        .fill(BrandColors.backgroundSecondary)
+    )
+    .clipShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous))
   }
 
-  private var filterBar: some View {
-    GlassCard(
-      padding: BrandMetrics.Spacing.md,
-      cornerRadius: BrandMetrics.Radius.medium,
-      elevated: false
-    ) {
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+  @ViewBuilder
+  private var emptyState: some View {
+    if model.totalModuleCount == 0 {
+      EmptyStateView(
+        "No modules yet",
+        message: "Drag a folder onto the window, or click Add module, and gunk will decompose it into reusable modules."
+      ) {
+        Button {
+          addFolder()
+        } label: {
+          Label("Add module", systemImage: "plus.square.on.square")
+        }
+        .buttonStyle(.brandPrimary)
+      }
+    } else {
+      EmptyStateView(
+        "No matches",
+        message: "No modules match the current search and filters."
+      )
+    }
+  }
+
+  // MARK: Header (the v2 controls layer — glass lives here only)
+
+  private var libraryHeader: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      // Row 1: identity + source management (T-8.3) — split across two rows
+      // so controls never fight for width at the 960pt minimum.
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Text("Library")
+          .font(BrandTypography.headline)
+          .foregroundStyle(BrandColors.textPrimary)
+
+        countChip
+
+        Spacer(minLength: BrandMetrics.Spacing.sm)
+
+        Button {
+          sourceListModel.refresh()
+          showSourcesPanel = true
+        } label: {
+          Label("Sources (\(sourceListModel.sources.count))", systemImage: "folder")
+        }
+        .buttonStyle(.brandSecondary)
+        .help("View and manage your sources")
+
+        Button {
+          addFolder()
+        } label: {
+          // "Add module", not "Add folder": the user is adding a capability
+          // to their toolbox; the folder picker is just the mechanism.
+          Label("Add module", systemImage: "plus.square.on.square")
+        }
+        .buttonStyle(.brandSecondary)
+        .help("Choose a folder and gunk will decompose it into modules")
+
+        // T-8.8's `provider · model` switcher lands in this trailing slot.
+      }
+
+      // Row 2: grouping + search. The source/tag/language/approval *filter*
+      // UI is intentionally absent for now — `BrowseModel`'s filter state
+      // stays intact, and the controls return layered inside the search
+      // bar once that design lands (see T-8.3b follow-ups in the task doc).
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        // Neutral graphite selection (mockup `.seg`): green is meaning-only
+        // and a grouping toggle carries no meaning-state, so the selected
+        // segment must not take the accent (nor the system blue).
         Picker("Group", selection: groupBinding) {
           ForEach(BrowseGroup.allCases) { group in
             Text(group.label).tag(group)
           }
         }
         .pickerStyle(.segmented)
-        .tint(BrandColors.accent)
-        .frame(maxWidth: 360)
+        .labelsHidden()
+        .tint(BrandColors.backgroundElevatedHover)
+        .frame(width: 168)
+        .help("Group the library by source project or by extracting model")
 
-        HStack(spacing: BrandMetrics.Spacing.sm) {
-          Picker("Source", selection: sourceBinding) {
-            Text("All sources").tag(Int64?.none)
-            ForEach(model.availableSources) { source in
-              Text(source.name).tag(Int64?.some(source.id))
-            }
-          }
-          .pickerStyle(.menu)
-          .frame(maxWidth: 180)
-
-          Picker("Tag", selection: tagBinding) {
-            Text("All tags").tag(String?.none)
-            ForEach(model.availableTags, id: \.self) { tag in
-              Text(tag).tag(String?.some(tag))
-            }
-          }
-          .pickerStyle(.menu)
-          .frame(maxWidth: 150)
-
-          Picker("Language", selection: languageBinding) {
-            Text("All languages").tag(String?.none)
-            ForEach(model.availableLanguages, id: \.self) { language in
-              Text(language).tag(String?.some(language))
-            }
-          }
-          .pickerStyle(.menu)
-          .frame(maxWidth: 160)
-
-          Picker("Approval", selection: approvalBinding) {
-            ForEach(BrowseApprovalFilter.allCases) { approval in
-              Text(approval.label).tag(approval)
-            }
-          }
-          .pickerStyle(.menu)
-          .frame(maxWidth: 170)
-        }
+        searchField
       }
-      .frame(maxWidth: .infinity, alignment: .leading)
     }
+    .padding(BrandMetrics.Spacing.md)
     .controlSize(.small)
+    .brandGlass(cornerRadius: BrandMetrics.Radius.medium, elevated: true)
   }
 
-  private func sectionView(_ section: BrowseSection) -> some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-      SectionHeader(section.tag)
+  private var countChip: some View {
+    Text("\(model.totalModuleCount)")
+      .font(BrandTypography.caption.weight(.semibold))
+      .monospacedDigit()
+      .foregroundStyle(BrandColors.textSecondary)
+      .padding(.horizontal, BrandMetrics.Spacing.sm)
+      .padding(.vertical, BrandMetrics.Spacing.xs / 2)
+      .background(
+        Capsule().fill(
+          BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2)
+        )
+      )
+      .accessibilityLabel("\(model.totalModuleCount) modules in the library")
+  }
 
-      VStack(spacing: BrandMetrics.Spacing.sm) {
-        ForEach(section.items) { item in
-          ModuleRow(
-            item: item,
-            metadata: rowMetadata(for: item),
-            isAgentReady: item.gunk.extractedAt != nil,
-            isSelected: selectedGunkId == item.id,
-            canOpenBundle: item.gunk.bundlePath != nil,
-            onOpenBundle: {
-              if let bundlePath = item.gunk.bundlePath {
-                openBundle(URL(fileURLWithPath: bundlePath))
-              }
-            },
-            onSelect: { selectedGunkId = item.id }
-          )
+  private var searchField: some View {
+    HStack(spacing: BrandMetrics.Spacing.xs) {
+      Image(systemName: "magnifyingglass")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textTertiary)
+
+      TextField("Search", text: queryBinding)
+        .textFieldStyle(.plain)
+        .font(BrandTypography.body)
+        .foregroundStyle(BrandColors.textPrimary)
+
+      if !model.filters.query.isEmpty {
+        Button {
+          model.filters.query = ""
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textTertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear search")
+      }
+    }
+    .padding(.horizontal, BrandMetrics.Spacing.sm)
+    .padding(.vertical, BrandMetrics.Spacing.xs)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .frame(maxWidth: .infinity)
+  }
+
+  // MARK: Grouped grid (usage-ranked hero per group)
+
+  private func sectionView(_ section: BrowseSection, columns: Int, cellWidth: CGFloat) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      sectionHeader(section)
+
+      VStack(spacing: Self.gridGap) {
+        ForEach(Array(gridRows(for: section, columns: columns).enumerated()), id: \.offset) { _, row in
+          gridRow(row, columns: columns, cellWidth: cellWidth)
         }
       }
     }
   }
 
-  private func rowMetadata(for item: BrowseItem) -> String {
-    [
-      item.source.name,
-      model.languageLabel(for: item),
-      model.approvalLabel(for: item),
-    ].joined(separator: " · ")
+  private func sectionHeader(_ section: BrowseSection) -> some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      Image(systemName: model.filters.group == .project ? "folder" : "cpu")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textTertiary)
+
+      Text(section.tag)
+        .font(BrandTypography.headline)
+        .foregroundStyle(BrandColors.textPrimary)
+        .lineLimit(1)
+
+      Spacer(minLength: BrandMetrics.Spacing.sm)
+
+      Text(section.items.count == 1 ? "1 capability" : "\(section.items.count) capabilities")
+        .font(BrandTypography.caption)
+        .foregroundStyle(BrandColors.textTertiary)
+    }
+  }
+
+  private struct GridSlot: Identifiable {
+    let item: BrowseItem
+    let isHero: Bool
+
+    var id: Int64 {
+      item.id
+    }
+  }
+
+  /// Splits a section's hero-rank-ordered items into grid rows: the first
+  /// item is the hero, spanning two columns (or full width when the pane is
+  /// narrow — the hero reflows rather than shrinking); the rest flow in
+  /// `columns`-wide rows.
+  private func gridRows(for section: BrowseSection, columns: Int) -> [[GridSlot]] {
+    guard let hero = section.items.first else {
+      return []
+    }
+
+    var rows: [[GridSlot]] = []
+    var firstRow: [GridSlot] = [GridSlot(item: hero, isHero: true)]
+    let heroSpan = min(2, columns)
+    var standards = Array(section.items.dropFirst())
+
+    let seatsBesideHero = max(0, columns - heroSpan)
+    for item in standards.prefix(seatsBesideHero) {
+      firstRow.append(GridSlot(item: item, isHero: false))
+    }
+    standards.removeFirst(min(seatsBesideHero, standards.count))
+    rows.append(firstRow)
+
+    var index = 0
+    while index < standards.count {
+      let end = min(index + columns, standards.count)
+      rows.append(standards[index..<end].map { GridSlot(item: $0, isHero: false) })
+      index = end
+    }
+
+    return rows
+  }
+
+  private func gridRow(_ row: [GridSlot], columns: Int, cellWidth: CGFloat) -> some View {
+    let containsHero = row.contains(where: \.isHero)
+    let rowHeight = containsHero ? Self.heroRowHeight : Self.standardRowHeight
+    let heroSpan = min(2, columns)
+    let heroWidth = cellWidth * CGFloat(heroSpan) + Self.gridGap * CGFloat(heroSpan - 1)
+
+    return HStack(alignment: .top, spacing: Self.gridGap) {
+      ForEach(row) { slot in
+        moduleCell(for: slot)
+          .frame(width: slot.isHero ? heroWidth : cellWidth, height: rowHeight)
+      }
+
+      if row.count < columns, !containsHero {
+        Spacer(minLength: 0)
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func moduleCell(for slot: GridSlot) -> some View {
+    ModuleCell(
+      item: slot.item,
+      state: cellState(for: slot.item),
+      provenance: model.provenance(for: slot.item),
+      isHero: slot.isHero,
+      isSelected: selectedGunkId == slot.item.id,
+      isArrived: arrivedGunkIds.contains(slot.item.id),
+      onSelect: { selectedGunkId = slot.item.id }
+    )
+  }
+
+  /// One trust verdict per cell: extracted modules are agent-ready, the
+  /// approval queue is amber, and everything else not yet extracted is the
+  /// dimmed *Not in toolbox* quiet state.
+  private func cellState(for item: BrowseItem) -> ModuleCellState {
+    if item.gunk.extractedAt != nil {
+      return .agentReady
+    }
+
+    if model.approvalFilter(for: item) == .needsApproval {
+      return .needsApproval
+    }
+
+    return .notInToolbox
   }
 
   // MARK: Detail
@@ -193,6 +470,11 @@ struct BrowseView: View {
         onDelete: { model.delete(gunkId: detail.item.gunk.id) }
       )
     } else {
+      // Interim design only: this resting "Select a module" pane (and the
+      // inline detail pane itself) is removed when T-8.6 moves the detail
+      // into the toolbox-v2 centered glass sheet. Detail *functionality*
+      // stays — only the inline right-pane presentation goes (see the
+      // T-8.3b follow-ups in the phase-8 task doc).
       EmptyStateView(
         "Select a module",
         message: "Open a module to inspect its files, bundle, and runability signals."
@@ -209,31 +491,10 @@ struct BrowseView: View {
     )
   }
 
-  private var sourceBinding: Binding<Int64?> {
+  private var queryBinding: Binding<String> {
     Binding(
-      get: { model.filters.sourceId },
-      set: { model.filters.sourceId = $0 }
-    )
-  }
-
-  private var tagBinding: Binding<String?> {
-    Binding(
-      get: { model.filters.tag },
-      set: { model.filters.tag = $0 }
-    )
-  }
-
-  private var languageBinding: Binding<String?> {
-    Binding(
-      get: { model.filters.language },
-      set: { model.filters.language = $0 }
-    )
-  }
-
-  private var approvalBinding: Binding<BrowseApprovalFilter> {
-    Binding(
-      get: { model.filters.approval },
-      set: { model.filters.approval = $0 }
+      get: { model.filters.query },
+      set: { model.filters.query = $0 }
     )
   }
 
@@ -246,108 +507,6 @@ struct BrowseView: View {
        !visibleItems.contains(where: { $0.id == selectedGunkId }) {
       self.selectedGunkId = nil
     }
-  }
-}
-
-// MARK: - Module row
-
-private struct ModuleRow: View {
-  let item: BrowseItem
-  let metadata: String
-  let isAgentReady: Bool
-  let isSelected: Bool
-  let canOpenBundle: Bool
-  let onOpenBundle: () -> Void
-  let onSelect: () -> Void
-
-  @State private var isHovering = false
-
-  var body: some View {
-    GlassCard(
-      padding: BrandMetrics.Spacing.md,
-      cornerRadius: BrandMetrics.Radius.medium,
-      elevated: false
-    ) {
-      HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
-        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-          Text(item.gunk.name)
-            .font(BrandTypography.body.weight(.medium))
-            .foregroundStyle(BrandColors.textPrimary)
-            .lineLimit(1)
-
-          if let purpose = item.gunk.purpose {
-            Text(purpose)
-              .font(BrandTypography.caption)
-              .foregroundStyle(BrandColors.textSecondary)
-              .lineLimit(2)
-          }
-
-          Text(metadata)
-            .font(BrandTypography.caption)
-            .foregroundStyle(BrandColors.textTertiary)
-            .lineLimit(1)
-
-          if !item.tags.isEmpty || isAgentReady {
-            HStack(spacing: BrandMetrics.Spacing.xs) {
-              // Compact row-level Agent-ready badge (ux §4.5 — kept unless
-              // it's cut at the CP3 gate).
-              if isAgentReady {
-                StatusBadge("Agent-ready", variant: .success, systemImage: "sparkles")
-              }
-
-              ForEach(item.tags, id: \.self) { tag in
-                TagChip(tag)
-              }
-            }
-            .padding(.top, BrandMetrics.Spacing.xs)
-          }
-        }
-
-        Spacer(minLength: BrandMetrics.Spacing.sm)
-
-        Text((item.gunk.confidence ?? 0), format: .percent.precision(.fractionLength(0)))
-          .font(BrandTypography.caption)
-          .monospacedDigit()
-          .foregroundStyle(BrandColors.textSecondary)
-
-        // Rows keep *open bundle* only; re-run and delete live in the
-        // detail pane (ux §3.2).
-        Button(action: onOpenBundle) {
-          Image(systemName: "folder")
-        }
-        .buttonStyle(.brandIcon)
-        .disabled(!canOpenBundle)
-        .help("Open bundle in Finder")
-        .accessibilityLabel("Open bundle for \(item.gunk.name)")
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-    .overlay {
-      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-        .strokeBorder(
-          isSelected ? BrandColors.accent : BrandColors.textPrimary.opacity(
-            isHovering ? BrandMetrics.Control.hoverHighlightOpacity : 0
-          )
-        )
-        .allowsHitTesting(false)
-    }
-    .background {
-      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-        .fill(BrandColors.accent.opacity(
-          isSelected ? BrandMetrics.Control.tintedFillOpacity : 0
-        ))
-    }
-    .contentShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous))
-    .onTapGesture(perform: onSelect)
-    .onHover { hovering in
-      withAnimation(BrandMotion.quick) {
-        isHovering = hovering
-      }
-    }
-    .animation(BrandMotion.quick, value: isSelected)
-    .accessibilityElement(children: .combine)
-    .accessibilityLabel(item.gunk.name)
-    .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 }
 

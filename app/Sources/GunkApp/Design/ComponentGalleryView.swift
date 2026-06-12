@@ -360,7 +360,9 @@ struct ComponentGalleryView: View {
 
   private static let paletteTokens: [(String, Color)] = [
     ("backgroundPrimary", BrandColors.backgroundPrimary),
+    ("backgroundSecondary", BrandColors.backgroundSecondary),
     ("backgroundElevated", BrandColors.backgroundElevated),
+    ("backgroundElevatedHover", BrandColors.backgroundElevatedHover),
     ("surfaceGlass", BrandColors.surfaceGlass),
     ("accent", BrandColors.accent),
     ("accentSecondary", BrandColors.accentSecondary),
@@ -371,6 +373,10 @@ struct ComponentGalleryView: View {
     ("warning", BrandColors.warning),
     ("danger", BrandColors.danger),
     ("separator", BrandColors.separator),
+    ("provider.anthropic", BrandColors.Provider.anthropic),
+    ("provider.openAI", BrandColors.Provider.openAI),
+    ("provider.google", BrandColors.Provider.google),
+    ("provider.neutral", BrandColors.Provider.neutral),
   ]
 
   private static let typeSteps: [(String, Font)] = [

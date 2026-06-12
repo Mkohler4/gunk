@@ -11,12 +11,17 @@ struct GunkListView: View {
   let arrivedSourceIds: Set<Int64>
   let onShowModules: (Int64) -> Void
 
+  /// Delete is destructive, so it routes through a confirmation
+  /// (Phase 8: "no more one-click permanent deletes"). Held here so the
+  /// confirmation copy lives next to the list it acts on.
+  @State private var pendingDeletion: Source?
+
   var body: some View {
     Group {
       if model.sources.isEmpty {
         EmptyStateView(
           "No sources yet",
-          message: "Drop a folder above, or onto the Dock icon."
+          message: "Drop a folder anywhere, or use Add folder."
         )
       } else {
         ScrollView {
@@ -27,7 +32,7 @@ struct GunkListView: View {
                 status: status(for: source),
                 isArrived: arrivedSourceIds.contains(source.id),
                 onShowModules: { onShowModules(source.id) },
-                onDelete: { model.delete(id: source.id) }
+                onDelete: { pendingDeletion = source }
               )
             }
           }
@@ -37,6 +42,33 @@ struct GunkListView: View {
       }
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .confirmationDialog(
+      pendingDeletion.map { "Remove \($0.name)?" } ?? "Remove source?",
+      isPresented: confirmDeletionBinding,
+      titleVisibility: .visible,
+      presenting: pendingDeletion
+    ) { source in
+      Button("Remove source", role: .destructive) {
+        model.delete(id: source.id)
+      }
+      Button("Cancel", role: .cancel) {}
+    } message: { _ in
+      // Matches the verified store behavior: `Store.removeSource(id:)` only
+      // stamps `removed_at` on the source row; the source's gunks are left
+      // intact (they're orphaned, not deleted).
+      Text("Removes the source from gunk. Its modules remain until you delete them.")
+    }
+  }
+
+  private var confirmDeletionBinding: Binding<Bool> {
+    Binding(
+      get: { pendingDeletion != nil },
+      set: { presenting in
+        if !presenting {
+          pendingDeletion = nil
+        }
+      }
+    )
   }
 
   private func status(for source: Source) -> SourceRowStatus {
@@ -50,6 +82,71 @@ struct GunkListView: View {
 
     let count = model.moduleCountBySource[source.id] ?? 0
     return count > 0 ? .modules(count) : .empty
+  }
+}
+
+// MARK: - Sources panel (sheet)
+
+/// The sources surface, folded into the Library as a sheet (T-8.3). It reuses
+/// `GunkListView` verbatim — the same status slot (processing progress,
+/// "N modules" navigation, failed-with-error, delete-with-confirmation) — so
+/// there is no second source-list implementation to keep in sync. Glass lives
+/// on the sheet chrome; the rows and content sit on a solid surface.
+@MainActor
+struct SourcesPanelView: View {
+  let sourceListModel: GunkListModel
+  let processingModel: ProcessingModel
+  /// Add folder shares the one true intake path (`DropZoneHandler`); the panel
+  /// never duplicates insert/processing logic.
+  let onAddFolder: () -> Void
+  /// "N modules" closes the panel and applies the source filter on the grid.
+  let onShowModules: (Int64) -> Void
+  let onClose: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Text("Sources (\(sourceListModel.sources.count))")
+          .font(BrandTypography.headline)
+          .foregroundStyle(BrandColors.textPrimary)
+
+        Spacer(minLength: BrandMetrics.Spacing.sm)
+
+        Button(action: onAddFolder) {
+          Label("Add folder", systemImage: "folder.badge.plus")
+        }
+        .buttonStyle(.brandSecondary)
+        .help("Choose a folder to add to your library")
+
+        Button("Done", action: onClose)
+          .buttonStyle(.brandSecondary)
+      }
+
+      if let errorMessage = sourceListModel.errorMessage {
+        Text(errorMessage)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.danger)
+          .textSelection(.enabled)
+      }
+
+      GunkListView(
+        model: sourceListModel,
+        processingModel: processingModel,
+        // Arrival now lands on the module grid (T-8.3); the panel lists the
+        // current sources without re-highlighting them.
+        arrivedSourceIds: [],
+        onShowModules: onShowModules
+      )
+    }
+    .padding(BrandMetrics.Spacing.lg)
+    .frame(minWidth: 460, idealWidth: 520, minHeight: 420, idealHeight: 520)
+    .background(BrandColors.backgroundPrimary)
+    .onAppear {
+      sourceListModel.refresh()
+    }
+    .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
+      sourceListModel.refresh()
+    }
   }
 }
 
