@@ -140,7 +140,8 @@ struct AppShellView: View {
       title: section.title,
       systemImage: section.systemImage,
       isSelected: selection == section,
-      accessory: accessory(for: section)
+      accessory: accessory(for: section),
+      accessoryAction: accessoryAction(for: section)
     ) {
       selection = section
     }
@@ -161,6 +162,22 @@ struct AppShellView: View {
       return count > 0 ? .count(count) : nil
     case .marketplace, .addModule, .settings:
       return nil
+    }
+  }
+
+  /// Badge tap-through (T-8.4): the Library count badge navigates to Library
+  /// *and* scopes it to the approval queue — review is a state in the
+  /// Library, not a separate room. The scope applies the same
+  /// `BrowseApprovalFilter.needsApproval` the queue rule feeds, so badge and
+  /// scope can never disagree.
+  private func accessoryAction(for section: AppSection) -> (() -> Void)? {
+    guard section == .library, case .count = accessory(for: section) else {
+      return nil
+    }
+
+    return {
+      selection = .library
+      services.browseModel.filters.approval = .needsApproval
     }
   }
 
@@ -379,6 +396,9 @@ private struct SidebarRow: View {
   let systemImage: String
   let isSelected: Bool
   let accessory: Accessory?
+  /// Tap-through on the accessory itself (e.g. the Library count badge →
+  /// the needs-approval scope); the rest of the row keeps `action`.
+  var accessoryAction: (() -> Void)?
   let action: () -> Void
 
   @State private var isHovering = false
@@ -426,16 +446,30 @@ private struct SidebarRow: View {
     case .processing:
       SidebarProcessingIndicator()
     case .count(let count):
-      Text("\(count)")
-        .font(BrandTypography.caption.weight(.semibold))
-        .monospacedDigit()
-        .foregroundStyle(BrandColors.backgroundPrimary)
-        .padding(.horizontal, BrandMetrics.Spacing.xs)
-        .frame(minWidth: BrandMetrics.Mark.small, minHeight: BrandMetrics.Mark.small)
-        .background(Capsule().fill(BrandColors.accent))
+      if let accessoryAction {
+        Button(action: accessoryAction) {
+          countBadge(count)
+        }
+        .buttonStyle(.plain)
+        .help("Review modules that need approval")
+        .accessibilityLabel("\(count) modules need approval. Review them.")
+      } else {
+        countBadge(count)
+      }
     case nil:
       EmptyView()
     }
+  }
+
+  private func countBadge(_ count: Int) -> some View {
+    Text("\(count)")
+      .font(BrandTypography.caption.weight(.semibold))
+      .monospacedDigit()
+      .foregroundStyle(BrandColors.backgroundPrimary)
+      .padding(.horizontal, BrandMetrics.Spacing.xs)
+      .frame(minWidth: BrandMetrics.Mark.small, minHeight: BrandMetrics.Mark.small)
+      .background(Capsule().fill(BrandColors.accent))
+      .contentShape(Capsule())
   }
 
   private var rowFill: Color {
@@ -645,29 +679,5 @@ private struct ModulesSectionView: View {
       )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-  }
-}
-
-@MainActor
-private struct ApprovalSectionView: View {
-  let model: BrowseModel
-
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: 12) {
-        if let errorMessage = model.errorMessage {
-          Text(errorMessage)
-            .font(.caption)
-            .foregroundStyle(.red)
-            .textSelection(.enabled)
-        }
-
-        ApprovalQueueView(model: model)
-      }
-      .frame(maxWidth: .infinity, alignment: .topLeading)
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { _ in
-      model.refresh()
-    }
   }
 }

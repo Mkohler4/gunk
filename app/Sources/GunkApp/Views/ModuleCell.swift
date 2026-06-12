@@ -52,6 +52,9 @@ struct ModuleCell: View {
   private static let heroMinHeight: CGFloat = 210
   /// Selection / arrival ring (mockup: `box-shadow: 0 0 0 2px green`).
   private static let ringWidth: CGFloat = 2
+  /// Needs-attention top edge (mockup `.card.attn::before`: `height: 3px`,
+  /// top-rounded with the card's own radius).
+  private static let attentionEdgeHeight: CGFloat = 3
   /// *Not in toolbox* is the standard card dimmed (hover restores it).
   private static let dimmedOpacity: Double = 0.5
 
@@ -115,6 +118,24 @@ struct ModuleCell: View {
       RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
         .fill(isHovering ? BrandColors.backgroundElevatedHover : BrandColors.backgroundElevated)
     )
+    .overlay(alignment: .top) {
+      // Needs-approval amber top edge (mockup `.card.attn::before`): the
+      // card's own rounded rect masked to its top sliver, so the edge stays
+      // concentric with the corners — never a square strip on a round card.
+      // Amber/`warning` only; the coral provider badge is an unrelated mark.
+      // The selection/arrival ring wins while present: the edge fades under
+      // it so two outlines never compete at the top corners.
+      if state == .needsApproval, !showsRing {
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+          .fill(BrandColors.warning)
+          .mask(alignment: .top) {
+            Rectangle()
+              .frame(height: Self.attentionEdgeHeight)
+          }
+          .allowsHitTesting(false)
+          .transition(.opacity)
+      }
+    }
     .overlay {
       if showsRing {
         RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)

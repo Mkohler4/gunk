@@ -268,6 +268,133 @@ final class BrowseModelTests: XCTestCase {
     )
   }
 
+  /// Badge → scope wiring (T-8.4): the needs-approval filter must show
+  /// exactly the modules in `approvalQueue` — the same rule the sidebar
+  /// badge counts — so badge, scope chip, and grid can never disagree.
+  func testNeedsApprovalScopeMatchesApprovalQueueMembership() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let queued = try insertGunk(
+      store: store,
+      source: source,
+      name: "queued-module",
+      tags: [],
+      confidence: 0.42
+    )
+    _ = try insertGunk(
+      store: store,
+      source: source,
+      name: "extracted-module",
+      tags: [],
+      confidence: 0.9,
+      extractedAt: 200
+    )
+    // Low confidence but already extracted: not pending approval.
+    _ = try insertGunk(
+      store: store,
+      source: source,
+      name: "extracted-low-confidence",
+      tags: [],
+      confidence: 0.3,
+      extractedAt: 300
+    )
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+    model.filters.approval = .needsApproval
+
+    XCTAssertEqual(model.approvalQueue.map(\.gunk.id), [queued.id])
+    XCTAssertEqual(
+      model.sections.flatMap(\.items).map(\.gunk.id),
+      model.approvalQueue.map(\.gunk.id)
+    )
+  }
+
+  /// The review copy derives its threshold from the same constant the queue
+  /// rule gates on (T-8.4; B1: hard-coded 0.7 until Phase 11) — a module at
+  /// the threshold is auto-accepted, one below it is queued.
+  func testConfidenceThresholdExposedMatchesQueueGate() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let belowThreshold = try insertGunk(
+      store: store,
+      source: source,
+      name: "below-threshold",
+      tags: [],
+      confidence: Extractor.defaultConfidenceThreshold - 0.01
+    )
+    _ = try insertGunk(
+      store: store,
+      source: source,
+      name: "at-threshold",
+      tags: [],
+      confidence: Extractor.defaultConfidenceThreshold
+    )
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+
+    XCTAssertEqual(model.confidenceThreshold, Extractor.defaultConfidenceThreshold)
+    XCTAssertEqual(model.approvalQueue.map(\.gunk.id), [belowThreshold.id])
+  }
+
+  /// Approving under the needs-approval scope hides the cell but must not
+  /// drop the module from the loaded set: the detail stays renderable so the
+  /// post-approve feedback remains visible (T-8.4 item 3).
+  func testApproveUnderNeedsApprovalScopeKeepsModuleLoaded() throws {
+    let store = try makeStore(now: { 500 })
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let queued = try insertGunk(
+      store: store,
+      source: source,
+      name: "queued-module",
+      tags: [],
+      confidence: 0.5
+    )
+    let model = BrowseModel(store: store, extractGunk: { _ in })
+
+    model.refresh()
+    model.filters.approval = .needsApproval
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [queued.id])
+
+    model.approve(gunkId: queued.id)
+
+    // The scope no longer shows the module (queue cleared)…
+    XCTAssertTrue(model.approvalQueue.isEmpty)
+    XCTAssertTrue(model.sections.isEmpty)
+    // …but it still exists and its detail is still available.
+    XCTAssertTrue(model.loadedGunkIds.contains(queued.id))
+    XCTAssertNotNil(model.detail(for: queued.id))
+    XCTAssertNotEqual(model.approvalFilter(for: try XCTUnwrap(
+      model.detail(for: queued.id)?.item
+    )), .needsApproval)
+  }
+
+  /// Reject is the destructive review path: the module is permanently
+  /// removed from the store and the queue (T-8.4 item 2).
+  func testRejectPermanentlyRemovesQueuedModule() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let queued = try insertGunk(
+      store: store,
+      source: source,
+      name: "queued-module",
+      tags: [],
+      confidence: 0.4
+    )
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+    XCTAssertEqual(model.approvalQueue.map(\.gunk.id), [queued.id])
+
+    model.reject(gunkId: queued.id)
+
+    XCTAssertNil(try store.gunk(id: queued.id))
+    XCTAssertTrue(model.approvalQueue.isEmpty)
+    XCTAssertFalse(model.loadedGunkIds.contains(queued.id))
+    XCTAssertNil(model.detail(for: queued.id))
+  }
+
   func testApproveMarksApprovedAt() throws {
     let store = try makeStore(now: { 500 })
     let source = try store.insertSource(name: "source", path: "/tmp/source")
