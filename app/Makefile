@@ -6,10 +6,12 @@ APP_BUNDLE := $(BUILD_DIR)/$(APP_NAME).app
 EXECUTABLE := .build/$(CONFIGURATION)/$(PRODUCT_NAME)
 ENGINE_DIR := ../engine
 ENGINE_BINARY := $(ENGINE_DIR)/dist/gunk-engine
+MCP_DIR := ../mcp
+MCP_BINARY := $(MCP_DIR)/dist/gunk-mcp
 SIGN_IDENTITY ?= -
 CODESIGN_FLAGS ?=
 
-.PHONY: build test app verify-app rebuild clean engine icon
+.PHONY: build test app verify-app rebuild clean engine mcp icon
 
 build:
 	swift build
@@ -39,11 +41,17 @@ icon: build
 engine:
 	cd "$(ENGINE_DIR)" && bun install --frozen-lockfile && bun run build
 
-app: build engine
+# Builds the MCP server the same way so `make app` can bundle it; wire()
+# installs the bundled copy to ~/.local/bin/gunk-mcp (T-8.9).
+mcp:
+	cd "$(MCP_DIR)" && bun install --frozen-lockfile && bun run build
+
+app: build engine mcp
 	rm -rf "$(APP_BUNDLE)"
 	mkdir -p "$(APP_BUNDLE)/Contents/MacOS" "$(APP_BUNDLE)/Contents/Resources"
 	cp "$(EXECUTABLE)" "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
 	cp "$(ENGINE_BINARY)" "$(APP_BUNDLE)/Contents/Resources/gunk-engine"
+	cp "$(MCP_BINARY)" "$(APP_BUNDLE)/Contents/Resources/gunk-mcp"
 	cp "AppIcon.icns" "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
 	printf '%s\n' \
 		'<?xml version="1.0" encoding="UTF-8"?>' \
@@ -84,6 +92,7 @@ app: build engine
 verify-app:
 	test -x "$(APP_BUNDLE)/Contents/MacOS/$(APP_NAME)"
 	test -x "$(APP_BUNDLE)/Contents/Resources/gunk-engine"
+	test -x "$(APP_BUNDLE)/Contents/Resources/gunk-mcp"
 	test -s "$(APP_BUNDLE)/Contents/Resources/AppIcon.icns"
 	plutil -lint "$(APP_BUNDLE)/Contents/Info.plist"
 	codesign --verify --strict "$(APP_BUNDLE)"

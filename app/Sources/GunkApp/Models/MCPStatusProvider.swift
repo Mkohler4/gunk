@@ -4,8 +4,10 @@ import Foundation
 ///
 /// Extracted from `SettingsStatusSnapshot` (T-7.6) so the shell's status
 /// strip and the Settings health group render the same answer (ux §4.3,
-/// §4.5, D8). The check itself is unchanged: it inspects Cursor's
-/// `~/.cursor/mcp.json` for a `gunk` server entry that spawns `gunk-mcp`.
+/// §4.5, D8). Since T-8.9 the check itself lives in
+/// `MCPClientConfigurator` (which generalizes it to every supported
+/// client); this provider maps the Cursor result onto the exact same
+/// `SettingsStatusItem` values it always produced.
 struct MCPStatusProvider {
   var configURL: URL
   var fileManager: FileManager
@@ -38,50 +40,42 @@ struct MCPStatusProvider {
 
   static func status(configURL: URL, fileManager: FileManager) -> SettingsStatusItem {
     let path = configURL.path
-    guard fileManager.fileExists(atPath: path) else {
+    let status = MCPClientConfigurator.status(of: .cursor, configURL: configURL, fileManager: fileManager)
+
+    switch status {
+    case .configMissing:
       return SettingsStatusItem(
         title: "MCP config",
         value: "Not configured",
         message: "Cursor config was not found at \(path). Follow docs/integration/cursor.md to add gunk.",
         state: .needsSetup
       )
-    }
-
-    do {
-      let data = try Data(contentsOf: configURL)
-      let object = try JSONSerialization.jsonObject(with: data)
-      guard let root = object as? [String: Any],
-            let servers = root["mcpServers"] as? [String: Any],
-            let gunk = servers["gunk"] as? [String: Any] else {
-        return SettingsStatusItem(
-          title: "MCP config",
-          value: "Missing gunk server",
-          message: "Add a `gunk` server entry under `mcpServers` in \(path).",
-          state: .needsSetup
-        )
-      }
-
-      let command = gunk["command"] as? String ?? ""
-      if command.contains("gunk-mcp") {
-        return SettingsStatusItem(
-          title: "MCP config",
-          value: "Configured for Cursor",
-          message: "Cursor can spawn gunk through \(command).",
-          state: .ready
-        )
-      }
-
+    case .entryMissing:
+      return SettingsStatusItem(
+        title: "MCP config",
+        value: "Missing gunk server",
+        message: "Add a `gunk` server entry under `mcpServers` in \(path).",
+        state: .needsSetup
+      )
+    case .ready(let command):
+      return SettingsStatusItem(
+        title: "MCP config",
+        value: "Configured for Cursor",
+        message: "Cursor can spawn gunk through \(command).",
+        state: .ready
+      )
+    case .commandMismatch:
       return SettingsStatusItem(
         title: "MCP config",
         value: "Check command",
         message: "The `gunk` MCP server exists, but its command does not look like gunk-mcp.",
         state: .needsSetup
       )
-    } catch {
+    case .unreadable(let description):
       return SettingsStatusItem(
         title: "MCP config",
         value: "Unreadable",
-        message: error.localizedDescription,
+        message: description,
         state: .unavailable
       )
     }
