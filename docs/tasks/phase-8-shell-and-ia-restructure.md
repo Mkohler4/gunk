@@ -370,6 +370,42 @@ right look instead of compounding the debt. It runs **next, before T-8.4**
 - No fabricated usage numbers; usage seam documented. Mono only for paths/code;
   accent green only on meaningful state. Fits at 960pt. Build + tests green.
 
+### Follow-ups from Mark's review of the landed Part A + Part B (2026-06-11)
+
+Documented design decisions from the screenshot-annotated review; the items
+marked *landed* shipped immediately after Part B, the rest are scheduled.
+
+1. **The inline detail pane is interim — including the resting "Select a
+   module" empty state on the right.** It is a leftover of the pre-v2 layout
+   and is **removed when the module detail moves into the toolbox-v2 centered
+   glass sheet** (radius `22`, `blur(50)` — see "Beyond the Library" in
+   `docs/design/explorations/toolbox-v2.md`, pinned to **T-8.6**). This is a
+   *design* removal only: every detail capability (trust readout, files,
+   bundle, approve/reject, actions) survives inside the sheet. Until then the
+   pane stays as scaffolding; do not invest further design effort in it.
+2. **The top app bar (Library controls layer) needs another pass.** Target is
+   Mark's annotated mockup: title + count chip, `Project | Model` segmented,
+   one long search field, trailing `provider · model` switcher. Landed now:
+   - **`Add folder` → `Add module`** (*landed*). The user is adding a
+     capability to their toolbox, not filing a folder; the folder picker is
+     just the mechanism. Intake path unchanged.
+   - **Filters UI removed for now** (*landed*). The popover is gone; the
+     segmented control + search are the only controls. `BrowseModel`'s
+     source/tag/language/approval filter state is intact and tested — nothing
+     was deleted below the view layer (T-8.4 still wires the needs-approval
+     filter to the sidebar badge).
+   - **Search bar extended** to fill the remaining controls-row width
+     (*landed*). The filters will eventually return **layered inside the
+     search bar**; that design is Mark's to explore — `[HOLD FOR ME]` do not
+     pre-design or land a filters-in-search treatment without his direction.
+   - **Segmented selection is neutral, not green** (*landed*). The selected
+     `Project | Model` segment was accent-tinted; that violates
+     green-on-meaning-only (a grouping toggle carries no meaning-state). It
+     now uses the system's neutral selected-segment treatment.
+   - The trailing slot stays reserved for the **T-8.8** `provider · model`
+     switcher (visible in the annotated mockup as `Anthropic · Claude
+     Sonnet 4 ⌄`).
+
 ---
 
 ## T-8.4 — Approval folds into Library

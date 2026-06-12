@@ -18,7 +18,6 @@ struct BrowseView: View {
 
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
-  @State private var showFiltersPopover = false
 
   /// Arrival highlight (ux §4.4), moved from the retired Sources surface to the
   /// module grid: modules created during a run carry the accent treatment for
@@ -209,12 +208,12 @@ struct BrowseView: View {
     if model.totalModuleCount == 0 {
       EmptyStateView(
         "No modules yet",
-        message: "Drag a folder onto the window, or click Add folder, and gunk will decompose it into reusable modules."
+        message: "Drag a folder onto the window, or click Add module, and gunk will decompose it into reusable modules."
       ) {
         Button {
           addFolder()
         } label: {
-          Label("Add folder", systemImage: "folder.badge.plus")
+          Label("Add module", systemImage: "plus.square.on.square")
         }
         .buttonStyle(.brandPrimary)
       }
@@ -253,17 +252,24 @@ struct BrowseView: View {
         Button {
           addFolder()
         } label: {
-          Label("Add folder", systemImage: "folder.badge.plus")
+          // "Add module", not "Add folder": the user is adding a capability
+          // to their toolbox; the folder picker is just the mechanism.
+          Label("Add module", systemImage: "plus.square.on.square")
         }
         .buttonStyle(.brandSecondary)
-        .help("Choose a folder to add to your library")
+        .help("Choose a folder and gunk will decompose it into modules")
 
         // T-8.8's `provider · model` switcher lands in this trailing slot.
       }
 
-      // Row 2: grouping, search, and the filters that the segmented control
-      // does NOT replace (they move into a compact popover, not deleted).
+      // Row 2: grouping + search. The source/tag/language/approval *filter*
+      // UI is intentionally absent for now — `BrowseModel`'s filter state
+      // stays intact, and the controls return layered inside the search
+      // bar once that design lands (see T-8.3b follow-ups in the task doc).
       HStack(spacing: BrandMetrics.Spacing.sm) {
+        // Neutral graphite selection (mockup `.seg`): green is meaning-only
+        // and a grouping toggle carries no meaning-state, so the selected
+        // segment must not take the accent (nor the system blue).
         Picker("Group", selection: groupBinding) {
           ForEach(BrowseGroup.allCases) { group in
             Text(group.label).tag(group)
@@ -271,15 +277,11 @@ struct BrowseView: View {
         }
         .pickerStyle(.segmented)
         .labelsHidden()
-        .tint(BrandColors.accent)
+        .tint(BrandColors.backgroundElevatedHover)
         .frame(width: 168)
         .help("Group the library by source project or by extracting model")
 
         searchField
-
-        filtersButton
-
-        Spacer(minLength: 0)
       }
     }
     .padding(BrandMetrics.Spacing.md)
@@ -331,80 +333,7 @@ struct BrowseView: View {
       RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
         .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
     )
-    .frame(maxWidth: 280)
-  }
-
-  /// Tag/language/approval/source *filtering* survives the v2 header inside
-  /// this popover — the segmented control replaced the old grouping, not the
-  /// filters.
-  private var filtersButton: some View {
-    Button {
-      showFiltersPopover = true
-    } label: {
-      Label(
-        activeFilterCount > 0 ? "Filters (\(activeFilterCount))" : "Filters",
-        systemImage: "line.3.horizontal.decrease.circle"
-      )
-    }
-    .buttonStyle(.brandSecondary)
-    .help("Filter by source, tag, language, or approval")
-    .popover(isPresented: $showFiltersPopover, arrowEdge: .bottom) {
-      filtersPopoverContent
-    }
-  }
-
-  private var filtersPopoverContent: some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-      Picker("Source", selection: sourceBinding) {
-        Text("All sources").tag(Int64?.none)
-        ForEach(model.availableSources) { source in
-          Text(source.name).tag(Int64?.some(source.id))
-        }
-      }
-
-      Picker("Tag", selection: tagBinding) {
-        Text("All tags").tag(String?.none)
-        ForEach(model.availableTags, id: \.self) { tag in
-          Text(tag).tag(String?.some(tag))
-        }
-      }
-
-      Picker("Language", selection: languageBinding) {
-        Text("All languages").tag(String?.none)
-        ForEach(model.availableLanguages, id: \.self) { language in
-          Text(language).tag(String?.some(language))
-        }
-      }
-
-      Picker("Approval", selection: approvalBinding) {
-        ForEach(BrowseApprovalFilter.allCases) { approval in
-          Text(approval.label).tag(approval)
-        }
-      }
-
-      if activeFilterCount > 0 {
-        Button("Clear filters") {
-          model.filters.sourceId = nil
-          model.filters.tag = nil
-          model.filters.language = nil
-          model.filters.approval = .all
-        }
-        .buttonStyle(.brandSecondary)
-      }
-    }
-    .pickerStyle(.menu)
-    .controlSize(.small)
-    .padding(BrandMetrics.Spacing.md)
-    .frame(width: 260)
-  }
-
-  private var activeFilterCount: Int {
-    var count = 0
-    if model.filters.sourceId != nil { count += 1 }
-    if model.filters.tag != nil { count += 1 }
-    if model.filters.language != nil { count += 1 }
-    if model.filters.approval != .all { count += 1 }
-    return count
+    .frame(maxWidth: .infinity)
   }
 
   // MARK: Grouped grid (usage-ranked hero per group)
@@ -541,6 +470,11 @@ struct BrowseView: View {
         onDelete: { model.delete(gunkId: detail.item.gunk.id) }
       )
     } else {
+      // Interim design only: this resting "Select a module" pane (and the
+      // inline detail pane itself) is removed when T-8.6 moves the detail
+      // into the toolbox-v2 centered glass sheet. Detail *functionality*
+      // stays — only the inline right-pane presentation goes (see the
+      // T-8.3b follow-ups in the phase-8 task doc).
       EmptyStateView(
         "Select a module",
         message: "Open a module to inspect its files, bundle, and runability signals."
@@ -561,34 +495,6 @@ struct BrowseView: View {
     Binding(
       get: { model.filters.query },
       set: { model.filters.query = $0 }
-    )
-  }
-
-  private var sourceBinding: Binding<Int64?> {
-    Binding(
-      get: { model.filters.sourceId },
-      set: { model.filters.sourceId = $0 }
-    )
-  }
-
-  private var tagBinding: Binding<String?> {
-    Binding(
-      get: { model.filters.tag },
-      set: { model.filters.tag = $0 }
-    )
-  }
-
-  private var languageBinding: Binding<String?> {
-    Binding(
-      get: { model.filters.language },
-      set: { model.filters.language = $0 }
-    )
-  }
-
-  private var approvalBinding: Binding<BrowseApprovalFilter> {
-    Binding(
-      get: { model.filters.approval },
-      set: { model.filters.approval = $0 }
     )
   }
 
