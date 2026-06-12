@@ -6,6 +6,28 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `gunk.app` multi-client MCP config writers (T-8.9; logic only, no UI —
+  T-8.10 builds the one-click setup sheet on top). New
+  `MCPClientConfigurator` (`Integrations/`) detects installed AI clients
+  (Cursor, Claude Code, Claude Desktop, Codex, OpenCode), reports per-client
+  wiring status, and idempotently wires/unwires the `gunk` MCP server entry
+  in each client's native config shape: `~/.cursor/mcp.json` and
+  `~/.claude.json` (`mcpServers.gunk`, stdio), Claude Desktop's
+  `claude_desktop_config.json` under `~/Library/Application Support/Claude/`,
+  Codex's `~/.codex/config.toml` (`[mcp_servers.gunk]` table, edited with a
+  line-targeted TOML writer so unrelated lines survive byte-for-byte), and
+  OpenCode's `~/.config/opencode/opencode.json` (`mcp.gunk`, local command
+  array). Wiring twice is byte-stable, unrelated entries are preserved,
+  malformed config aborts with a clear error instead of clobbering, and
+  unwire removes only the gunk entry (it never rewrites the file when the
+  entry is absent). The `gunk-mcp` binary resolves like the engine binary:
+  `GUNK_MCP_BIN` → bundled → `GUNK_MCP_INSTALL_PATH` →
+  `~/.local/bin/gunk-mcp`. `MCPStatusProvider` now delegates its Cursor
+  check to the configurator with byte-identical status strings and the same
+  `GUNK_MCP_CONFIG` dev override. Everything is constructor-injected and
+  covered by tests that run only against temp directories.
+
 ### Changed
 - `gunk.app` model switcher close-out (T-8.8; the switcher itself landed
   brought-forward in #153): the model name now sits in a fixed-width slot
