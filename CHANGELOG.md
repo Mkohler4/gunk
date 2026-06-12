@@ -6,6 +6,31 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- `gunk.app` run traces are now an inspector, not a destination (T-8.6):
+  `RunsView` is refactored into `RunInspectorView`, a sheet summoned from
+  the places users actually are — a "View runs" affordance on each sources
+  panel row, a quiet "Last run" line in the module detail header (kept
+  deliberately cheap: the module-run-v1 full page owns run provenance in
+  Phase 10), and the status strip's run-failed chip, which now opens the
+  inspector at the most recent failed run so the error text is one click
+  from the failure signal. Every entry opens *on* something: a context
+  (`all` / `source` / `most recent failure`) picks the initial selection,
+  under test in `RunInspectorTests`. While a run is active the open
+  inspector refreshes traces every 2.5s — the old tab never refreshed
+  mid-run. Numbers are formatted for humans: durations as seconds
+  ("83.2s", never "83214 ms") and timestamps carry the date only when the
+  run wasn't today. Restyled from debug-panel system colors to brand
+  tokens (solid surfaces; glass stays on container chrome). Also restores
+  the sources panel's lost door: the T-8.3b appbar slimming removed the
+  only trigger for `showSourcesPanel`, so the panel was unreachable — a
+  quiet folder icon now sits in the appbar's actions cluster (not filter
+  UI, so the one-row appbar rule holds). Dev-only screenshot hooks added:
+  `GUNK_DEBUG_RUN_INSPECTOR` opens the inspector at launch with a given
+  context, and `GUNK_DEBUG_NO_KEYCHAIN` skips the model switcher's
+  synchronous Keychain probe, which otherwise blocks an unsigned debug
+  binary's first window behind a consent dialog no script can click.
+
 ### Fixed
 - CI: two bugs in the changed-paths / CHANGELOG gating were failing PRs
   that should pass. `dorny/paths-filter` defaults to OR-ing patterns, so

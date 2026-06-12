@@ -58,6 +58,11 @@ struct AppShellView: View {
   @State private var dropPhase: WindowDropOverlay.Phase = .hidden
   @State private var dropOverlayDismissTask: Task<Void, Never>?
 
+  /// Run inspector presentation (T-8.6): traces stopped being a tab, so the
+  /// shell owns the sheet and every entry point (sources panel, module
+  /// detail, the run-failed status element) requests it with a context.
+  @State private var runInspectorContext: RunInspectorContext?
+
   /// How long the transient completed summary stays in the status strip
   /// before decaying back to the idle MCP chip (ux §4.3).
   private static let completedStateLifetime: Duration = .seconds(8)
@@ -125,11 +130,19 @@ struct AppShellView: View {
           .transition(.opacity)
       }
     }
+    .sheet(item: $runInspectorContext) { context in
+      RunInspectorView(
+        context: context,
+        processingModel: services.processingModel,
+        onClose: { runInspectorContext = nil }
+      )
+    }
     .onAppear {
       services.sourceListModel.refresh()
       services.browseModel.refresh()
       mcpStatus = mcpStatusProvider.status()
       applyDropOverlayDebugOverride()
+      applyRunInspectorDebugOverride()
       // Appearing mid-run: snapshot what already exists so the completion
       // summary only counts what this run actually adds (mirrors
       // BrowseView's arrival-highlight snapshot).
@@ -267,12 +280,14 @@ struct AppShellView: View {
 
   private func handleStripTap() {
     // The strip itself is rebuilt in T-8.7; for now its taps route to the
-    // surviving sections. Sources, review, and runs all fold into Library
-    // (runs becomes an inspector in T-8.6), so processing/completed/failed
-    // land there; the idle MCP chip still routes to Settings.
+    // surviving surfaces. Processing/completed land in the Library; a failed
+    // run opens the run inspector at the failure (T-8.6) so the error is
+    // diagnosable in one click; the idle MCP chip still routes to Settings.
     switch stripState {
-    case .processing, .completed, .runFailed:
+    case .processing, .completed:
       selection = .library
+    case .runFailed:
+      runInspectorContext = .mostRecentFailure
     case .idle:
       selection = .settings
     }
@@ -419,6 +434,24 @@ struct AppShellView: View {
     }
   }
 
+  /// Dev-only screenshot hook (same family as `GUNK_DEBUG_SECTION`): opens
+  /// the run inspector at launch with a given context — "all", "failure",
+  /// or "source:<id>" — so scripted runs can capture it without staging a
+  /// click path. No-op in normal launches.
+  private func applyRunInspectorDebugOverride() {
+    guard let value = ProcessInfo.processInfo.environment["GUNK_DEBUG_RUN_INSPECTOR"] else {
+      return
+    }
+
+    if value == "failure" {
+      runInspectorContext = .mostRecentFailure
+    } else if value.hasPrefix("source:"), let sourceId = Int64(value.dropFirst("source:".count)) {
+      runInspectorContext = .source(sourceId)
+    } else {
+      runInspectorContext = .all
+    }
+  }
+
   // MARK: Detail
 
   private var detailContainer: some View {
@@ -470,7 +503,8 @@ struct AppShellView: View {
         // (ux §4.5, D8) so the detail line and the status strip can't
         // disagree.
         mcpNeedsSetup: (mcpStatus ?? mcpStatusProvider.status()).state == .needsSetup,
-        onShowSettings: { selection = .settings }
+        onShowSettings: { selection = .settings },
+        onShowRuns: { runInspectorContext = $0 }
       )
     case .marketplace:
       EmptyStateView(
@@ -851,6 +885,7 @@ private struct ModulesSectionView: View {
   let dropZoneHandler: DropZoneHandler
   let mcpNeedsSetup: Bool
   let onShowSettings: () -> Void
+  let onShowRuns: (RunInspectorContext) -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
@@ -867,7 +902,8 @@ private struct ModulesSectionView: View {
         processingModel: processingModel,
         dropZoneHandler: dropZoneHandler,
         mcpNeedsSetup: mcpNeedsSetup,
-        onShowSettings: onShowSettings
+        onShowSettings: onShowSettings,
+        onShowRuns: onShowRuns
       )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)

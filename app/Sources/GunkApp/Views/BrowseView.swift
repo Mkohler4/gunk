@@ -15,6 +15,9 @@ struct BrowseView: View {
   var mcpNeedsSetup = false
   var openBundle: (URL) -> Void = { NSWorkspace.shared.open($0) }
   var onShowSettings: () -> Void = {}
+  /// Summons the shell-owned run inspector (T-8.6) from this view's entry
+  /// points: a source row's "View runs" and the module detail's "Last run".
+  var onShowRuns: (RunInspectorContext) -> Void = { _ in }
 
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
@@ -56,7 +59,8 @@ struct BrowseView: View {
       // The resting "Select a module" placeholder is gone (T-8.3b follow-up
       // 1): with nothing selected the grid owns the full width. The inline
       // pane only appears for a selected module, and remains interim until
-      // T-8.6 moves the detail into the toolbox-v2 centered glass sheet.
+      // the module-detail surface is re-decided (module-run-v1 proposes a
+      // full page; sheet-vs-page is Mark's call, Phase 10).
       let detail = selectedGunkId.flatMap { model.detail(for: $0) }
       let detailWidth = max(
         Self.detailMinWidth,
@@ -122,6 +126,12 @@ struct BrowseView: View {
         onShowModules: { sourceId in
           showSourcesPanel = false
           model.filters.sourceId = sourceId
+        },
+        onShowRuns: { sourceId in
+          // Hand off to the shell's inspector sheet; the panel closes first
+          // so the two sheets never stack.
+          showSourcesPanel = false
+          onShowRuns(.source(sourceId))
         },
         onClose: { showSourcesPanel = false }
       )
@@ -288,6 +298,7 @@ struct BrowseView: View {
         needsApprovalScopeChip
       }
 
+      sourcesButton
       modelSelector
     }
   }
@@ -298,6 +309,7 @@ struct BrowseView: View {
       HStack(spacing: BrandMetrics.Spacing.sm) {
         headerTitle
         Spacer(minLength: BrandMetrics.Spacing.sm)
+        sourcesButton
         modelSelector
       }
 
@@ -311,6 +323,23 @@ struct BrowseView: View {
         }
       }
     }
+  }
+
+  /// The sources panel's door. T-8.3 folded sources into the Library with
+  /// the panel reachable "from the Library header", but the T-8.3b appbar
+  /// slimming dropped the trigger — `showSourcesPanel` had no setter left.
+  /// Restored here because T-8.6's "View runs" entry point lives on the
+  /// panel's rows. A quiet icon in the actions cluster: not filter UI, so it
+  /// doesn't violate the one-row appbar rule.
+  private var sourcesButton: some View {
+    Button {
+      showSourcesPanel = true
+    } label: {
+      Image(systemName: "folder")
+    }
+    .buttonStyle(.brandIcon)
+    .help("Sources (\(sourceListModel.sources.count))")
+    .accessibilityLabel("Show sources, \(sourceListModel.sources.count) total")
   }
 
   /// The chip rides with the scope, not the grid: it disappears with the
@@ -595,9 +624,10 @@ struct BrowseView: View {
 
   // MARK: Detail
 
-  /// Interim presentation only: the inline right pane goes away when T-8.6
-  /// moves module detail into the toolbox-v2 centered glass sheet. Detail
-  /// *functionality* (trust readout, files, bundle, actions) survives there.
+  /// Interim presentation only: the inline right pane goes away when the
+  /// module-detail surface is re-decided (module-run-v1 proposes a full
+  /// page, Phase 10). Detail *functionality* (trust readout, files, bundle,
+  /// actions) survives wherever it lands.
   private func detailPane(for detail: BrowseModuleDetail) -> some View {
     ModuleDetailView(
       detail: detail,
@@ -618,7 +648,8 @@ struct BrowseView: View {
       },
       onReject: { model.reject(gunkId: detail.item.gunk.id) },
       onRerun: { model.reclassify(sourceId: detail.item.source.id) },
-      onDelete: { model.delete(gunkId: detail.item.gunk.id) }
+      onDelete: { model.delete(gunkId: detail.item.gunk.id) },
+      onShowRuns: { onShowRuns(.source(detail.item.source.id)) }
     )
   }
 
@@ -728,6 +759,11 @@ private struct ModuleDetailView: View {
   let onReject: () -> Void
   let onRerun: () -> Void
   let onDelete: () -> Void
+  /// Opens the run inspector at this module's source (T-8.6). Deliberately
+  /// a quiet text affordance: the module-run-v1 full page will own run
+  /// provenance properly (Phase 10) — this is the interim door, not a
+  /// destination treatment.
+  let onShowRuns: () -> Void
 
   @State private var showRejectConfirmation = false
 
@@ -756,7 +792,8 @@ private struct ModuleDetailView: View {
   // MARK: Review (T-8.4 — approval folded into the detail)
 
   /// Approve/reject for a queued module, above the actions row. Interim
-  /// home: moves into the T-8.6 glass sheet with the rest of this view.
+  /// home: moves with the rest of this view when module detail is
+  /// re-decided (module-run-v1, Phase 10).
   @ViewBuilder
   private var reviewSection: some View {
     if needsApproval {
@@ -831,6 +868,18 @@ private struct ModuleDetailView: View {
         )
       }
       .padding(.top, BrandMetrics.Spacing.xs)
+
+      Button(action: onShowRuns) {
+        HStack(spacing: BrandMetrics.Spacing.xs) {
+          Image(systemName: "clock.arrow.circlepath")
+          Text("Last run")
+          Image(systemName: "chevron.forward")
+        }
+        .font(BrandTypography.caption)
+        .foregroundStyle(BrandColors.textSecondary)
+      }
+      .buttonStyle(.plain)
+      .help("Inspect the latest extraction run for \(detail.item.source.name)")
     }
   }
 
