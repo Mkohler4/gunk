@@ -27,6 +27,10 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
+          # Default 'some' ORs the patterns, so '**' matched docs files and
+          # the '!docs/**' exclusion was dead — every PR counted as code.
+          # 'every' requires a file to match all patterns: in docs/ → not code.
+          predicate-quantifier: 'every'
           filters: |
             code:
               - '**'
