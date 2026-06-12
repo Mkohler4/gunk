@@ -42,15 +42,17 @@ struct AppShellView: View {
 
   @State private var selection: AppSection
   @State private var mcpStatus: SettingsStatusItem?
-  @State private var completedSummary: RunCompletionSummary?
+  /// The run-end toast (T-8.7): the completion/failure moment is a floating
+  /// overlay over the detail area, not a sidebar chip.
+  @State private var toast: ShellRunToast?
   /// Snapshot of `BrowseModel.loadedGunkIds` when a run starts. The
-  /// completion summary's "N modules added" is the store diff against this
+  /// completion toast's "N modules added" is the store diff against this
   /// — the engine's mid-run `modulesFound` telemetry counts pre-gate
   /// candidates and must never become the completion claim (it once showed
   /// "14 added" on a run that persisted zero).
   @State private var gunkIdsBeforeRun: Set<Int64> = []
   @State private var pendingReviewsAtRunStart = 0
-  @State private var summaryDecayTask: Task<Void, Never>?
+  @State private var toastDecayTask: Task<Void, Never>?
 
   /// Whole-window drop target state (T-8.5): the overlay phase is owned
   /// here, not by `isTargeted`, so it can outlive the drag to show the
@@ -63,9 +65,9 @@ struct AppShellView: View {
   /// detail, the run-failed status element) requests it with a context.
   @State private var runInspectorContext: RunInspectorContext?
 
-  /// How long the transient completed summary stays in the status strip
-  /// before decaying back to the idle MCP chip (ux §4.3).
-  private static let completedStateLifetime: Duration = .seconds(8)
+  /// How long the run-end toast floats before auto-dismissing (the old
+  /// strip's completed-state lifetime, kept at 8s — ux §4.3).
+  private static let toastLifetime: Duration = .seconds(8)
 
   /// SwiftUI `.onDrop` + window-level overlays can fight `NSWindow` first
   /// responder during drags; debounce the exit so the overlay never
@@ -143,6 +145,7 @@ struct AppShellView: View {
       mcpStatus = mcpStatusProvider.status()
       applyDropOverlayDebugOverride()
       applyRunInspectorDebugOverride()
+      applyToastDebugOverride()
       // Appearing mid-run: snapshot what already exists so the completion
       // summary only counts what this run actually adds (mirrors
       // BrowseView's arrival-highlight snapshot).
@@ -185,7 +188,32 @@ struct AppShellView: View {
         }
       }
     } footer: {
-      ShellStatusStrip(state: stripState, onTap: handleStripTap)
+      // T-8.7 decomposed the old four-jobs-in-one status strip: a transient
+      // processing element stacked above the persistent MCP chip. Run-end
+      // feedback is the toast over the detail area, not a sidebar state.
+      VStack(spacing: BrandMetrics.Spacing.sm) {
+        if services.processingModel.isProcessing {
+          ShellProcessingChip(
+            subject: processingStatus.subject,
+            fractionComplete: processingStatus.fraction,
+            modulesFound: services.processingModel.modulesFound
+          ) {
+            // Library owns processing visibility (T-8.2+).
+            selection = .library
+          }
+          .transition(.move(edge: .bottom).combined(with: .opacity))
+        }
+
+        ShellMCPChip(
+          isConnected: (mcpStatus ?? mcpStatusProvider.status()).state == .ready,
+          configPath: mcpStatusProvider.configURL.path
+        ) {
+          // Until T-8.10's one-click setup flow lands, Connect routes to
+          // Settings exactly as the old strip did.
+          selection = .settings
+        }
+      }
+      .animation(BrandMotion.standard, value: services.processingModel.isProcessing)
     }
     .padding(BrandMetrics.Spacing.sm)
   }
@@ -236,30 +264,14 @@ struct AppShellView: View {
     }
   }
 
-  // MARK: Status strip (ux §4.3)
+  // MARK: Processing element (T-8.7)
 
-  private var stripState: ShellStripState {
-    let processingModel = services.processingModel
-
-    if processingModel.isProcessing {
-      let (subject, detail) = processingStatus
-      return .processing(subject: subject, detail: detail)
-    }
-
-    if let completedSummary {
-      return .completed(completedSummary)
-    }
-
-    if processingModel.errorMessage != nil {
-      return .runFailed
-    }
-
-    return .idle(mcp: mcpStatus ?? mcpStatusProvider.status())
-  }
-
-  private var processingStatus: (subject: String, detail: String) {
-    let model = services.processingModel
-    let progress = model.progressBySource
+  /// Subject + averaged progress for the live processing element. The
+  /// subject comes from `progressBySource` plus a store lookup; the fraction
+  /// is the average across active sources (the old strip's computation,
+  /// reused as-is).
+  private var processingStatus: (subject: String, fraction: Double) {
+    let progress = services.processingModel.progressBySource
 
     let subject: String
     if progress.count > 1 {
@@ -271,34 +283,17 @@ struct AppShellView: View {
       subject = "Processing"
     }
 
-    let percent = progress.isEmpty
+    let fraction = progress.isEmpty
       ? 0
-      : Int((progress.values.reduce(0, +) / Double(progress.count)) * 100)
+      : progress.values.reduce(0, +) / Double(progress.count)
 
-    return (subject, "\(percent)% · \(model.modulesFound) found")
+    return (subject, fraction)
   }
 
-  private func handleStripTap() {
-    // The strip itself is rebuilt in T-8.7; for now its taps route to the
-    // surviving surfaces. Processing/completed land in the Library; a failed
-    // run opens the run inspector at the failure (T-8.6) so the error is
-    // diagnosable in one click; the idle MCP chip still routes to Settings.
-    switch stripState {
-    case .processing, .completed:
-      selection = .library
-    case .runFailed:
-      runInspectorContext = .mostRecentFailure
-    case .idle:
-      selection = .settings
-    }
-  }
+  // MARK: Run-end toast (T-8.7)
 
   private func runDidStart() {
-    summaryDecayTask?.cancel()
-    summaryDecayTask = nil
-    withAnimation(BrandMotion.standard) {
-      completedSummary = nil
-    }
+    dismissToast()
     gunkIdsBeforeRun = services.browseModel.loadedGunkIds
     pendingReviewsAtRunStart = services.browseModel.approvalQueue.count
   }
@@ -307,11 +302,6 @@ struct AppShellView: View {
     services.browseModel.refresh()
     services.sourceListModel.refresh()
 
-    // A failed run shows the run-failed chip instead of a summary.
-    guard services.processingModel.errorMessage == nil else {
-      return
-    }
-
     let summary = RunCompletionSummary(
       gunkIdsBeforeRun: gunkIdsBeforeRun,
       gunkIdsAfterRun: services.browseModel.loadedGunkIds,
@@ -319,20 +309,56 @@ struct AppShellView: View {
       pendingReviewsNow: services.browseModel.approvalQueue.count
     )
 
-    withAnimation(BrandMotion.standard) {
-      completedSummary = summary
+    presentToast(
+      .forRunEnd(
+        errorMessage: services.processingModel.errorMessage,
+        summary: summary
+      )
+    )
+  }
+
+  private func presentToast(_ newToast: ShellRunToast) {
+    // The settle spring is deliberate: the completion moment should land
+    // like feedback, not blink in like a chip swap.
+    withAnimation(BrandMotion.settle) {
+      toast = newToast
     }
 
-    summaryDecayTask?.cancel()
-    summaryDecayTask = Task {
-      try? await Task.sleep(for: Self.completedStateLifetime)
+    toastDecayTask?.cancel()
+    toastDecayTask = Task {
+      try? await Task.sleep(for: Self.toastLifetime)
       guard !Task.isCancelled else {
         return
       }
       withAnimation(BrandMotion.smooth) {
-        completedSummary = nil
+        toast = nil
       }
     }
+  }
+
+  private func dismissToast() {
+    toastDecayTask?.cancel()
+    toastDecayTask = nil
+    withAnimation(BrandMotion.smooth) {
+      toast = nil
+    }
+  }
+
+  private func handleToastAction(_ toast: ShellRunToast) {
+    switch toast {
+    case .success:
+      selection = .library
+      // Scope the Library to needs-approval only when the run queued
+      // reviews (M > 0) — the same wiring as the sidebar badge tap-through.
+      if let filter = toast.approvalFilterForView {
+        services.browseModel.filters.approval = filter
+      }
+    case .failure:
+      // Same target as the old strip's runFailed tap: the run inspector at
+      // the most recent failure (T-8.6) — no new plumbing.
+      runInspectorContext = .mostRecentFailure
+    }
+    dismissToast()
   }
 
   // MARK: Whole-window drop target (T-8.5)
@@ -452,6 +478,28 @@ struct AppShellView: View {
     }
   }
 
+  /// Dev-only screenshot hook (same family as `GUNK_DEBUG_DROP_OVERLAY`):
+  /// stages the run-end toast at launch — "success" or "failure" — without
+  /// a live run. No decay task, so scripted captures aren't racing the 8s
+  /// auto-dismiss. No-op in normal launches.
+  private func applyToastDebugOverride() {
+    switch ProcessInfo.processInfo.environment["GUNK_DEBUG_TOAST"] {
+    case "success":
+      toast = .success(
+        RunCompletionSummary(
+          gunkIdsBeforeRun: [],
+          gunkIdsAfterRun: [1, 2, 3, 4, 5],
+          pendingReviewsAtRunStart: 0,
+          pendingReviewsNow: 2
+        )
+      )
+    case "failure":
+      toast = .failure
+    default:
+      break
+    }
+  }
+
   // MARK: Detail
 
   private var detailContainer: some View {
@@ -459,6 +507,26 @@ struct AppShellView: View {
       .padding(.horizontal, detailHorizontalPadding)
       .padding(.vertical, BrandMetrics.Spacing.md)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+      // Run-end toast (T-8.7): a floating glass overlay — never injected
+      // layout. Docked bottom-center: at the 960pt minimum window the
+      // module detail's action row owns the bottom-trailing corner, so
+      // center-with-margin is the position that can never overlap it.
+      .overlay(alignment: .bottom) {
+        if let toast {
+          RunToastView(
+            toast: toast,
+            onAction: { handleToastAction(toast) },
+            onDismiss: dismissToast
+          )
+          .padding(.bottom, BrandMetrics.Spacing.lg)
+          .transition(
+            .asymmetric(
+              insertion: .move(edge: .bottom).combined(with: .opacity),
+              removal: .opacity
+            )
+          )
+        }
+      }
       // Solid window background — no glass wash. Toolbox-v2 confines glass
       // to the floating controls layer; the old flush wash drew a hairline
       // rim around the whole content area.
@@ -718,7 +786,7 @@ private struct SidebarProcessingIndicator: View {
   }
 }
 
-// MARK: - Status strip
+// MARK: - Run completion summary
 
 /// The truthful run-completion claim ("N modules added · M need review").
 /// `modulesAdded` is a store diff — modules that exist now and didn't when
@@ -740,48 +808,252 @@ struct RunCompletionSummary: Equatable {
   }
 }
 
-private enum ShellStripState: Equatable {
-  case idle(mcp: SettingsStatusItem)
-  case processing(subject: String, detail: String)
-  case completed(RunCompletionSummary)
-  case runFailed
+// MARK: - Run-end toast (T-8.7)
+
+/// The run-end toast's state, derived once when a run finishes. Success
+/// carries the truthful store-diff summary; failure carries no numbers —
+/// engine telemetry never becomes a completion claim.
+enum ShellRunToast: Equatable {
+  case success(RunCompletionSummary)
+  case failure
+
+  static func forRunEnd(errorMessage: String?, summary: RunCompletionSummary) -> ShellRunToast {
+    errorMessage == nil ? .success(summary) : .failure
+  }
+
+  var message: String {
+    switch self {
+    case .success(let summary):
+      var text = "\(summary.modulesAdded) module\(summary.modulesAdded == 1 ? "" : "s") added"
+      if summary.needsReview > 0 {
+        text += " · \(summary.needsReview) need\(summary.needsReview == 1 ? "s" : "") review"
+      }
+      return text
+    case .failure:
+      return "Run failed"
+    }
+  }
+
+  var actionLabel: String {
+    switch self {
+    case .success:
+      return "View"
+    case .failure:
+      return "Inspect"
+    }
+  }
+
+  /// The success View action scopes the Library to needs-approval only when
+  /// the run actually queued reviews (M > 0) — the same wiring as the
+  /// sidebar badge tap-through (T-8.4). A clean run's View applies nothing.
+  var approvalFilterForView: BrowseApprovalFilter? {
+    switch self {
+    case .success(let summary):
+      return summary.needsReview > 0 ? .needsApproval : nil
+    case .failure:
+      return nil
+    }
+  }
 }
 
-/// The app's one global status location, pinned at the sidebar bottom
-/// (ux §4.3, D2/D4/D8).
-private struct ShellStatusStrip: View {
-  let state: ShellStripState
-  let onTap: () -> Void
+/// Floating glass toast over the detail area's bottom edge: the completion
+/// moment as feedback, with exactly two click targets — the action button
+/// (View → Library / Inspect → run inspector) and the dismiss ×. Glass is
+/// allowed here: the toast floats on the controls layer; it never sits in
+/// layout.
+private struct RunToastView: View {
+  let toast: ShellRunToast
+  let onAction: () -> Void
+  let onDismiss: () -> Void
+
+  var body: some View {
+    HStack(spacing: BrandMetrics.Spacing.md) {
+      icon
+
+      Text(toast.message)
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textPrimary)
+        .lineLimit(1)
+
+      Button(toast.actionLabel, action: onAction)
+        .buttonStyle(.brandSecondary)
+
+      Button(action: onDismiss) {
+        Image(systemName: "xmark")
+      }
+      .buttonStyle(.brandIcon)
+      .help("Dismiss")
+      .accessibilityLabel("Dismiss")
+    }
+    .padding(.horizontal, BrandMetrics.Spacing.md)
+    .padding(.vertical, BrandMetrics.Spacing.sm)
+    // The toast always renders at its intrinsic width — the overlay must
+    // never compress the message or the action label.
+    .fixedSize()
+    .brandGlass(cornerRadius: BrandMetrics.Radius.large)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel(toast.message)
+  }
+
+  @ViewBuilder
+  private var icon: some View {
+    switch toast {
+    case .success:
+      // Accent green on the success moment — meaningful positive state.
+      Image(systemName: "sparkles")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.accent)
+    case .failure:
+      Image(systemName: "xmark.circle")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.danger)
+    }
+  }
+}
+
+// MARK: - MCP chip (T-8.7)
+
+/// Persistent MCP chip pinned at the sidebar bottom: one job — is the agent
+/// wired in? Exactly two states. Healthy is *not* a button — a healthy chip
+/// must never navigate anywhere; hover discloses the config path instead.
+/// The warning state is the only click target and routes to setup (Settings,
+/// until T-8.10's one-click flow lands). Solid fills: the chip sits on the
+/// sidebar surface — glass is reserved for floating layers.
+private struct ShellMCPChip: View {
+  let isConnected: Bool
+  let configPath: String
+  let onConnect: () -> Void
 
   @State private var isHovering = false
 
   var body: some View {
-    Button(action: onTap) {
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        icon
+    if isConnected {
+      chipBody(
+        systemImage: "checkmark.circle",
+        tint: BrandColors.success,
+        title: "Agent connected",
+        subtitle: nil,
+        hovering: false
+      )
+      .help("Configured at \(configPath)")
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel("Agent connected. MCP configured at \(configPath).")
+    } else {
+      Button(action: onConnect) {
+        chipBody(
+          systemImage: "exclamationmark.triangle",
+          tint: BrandColors.warning,
+          title: "MCP not set up",
+          subtitle: "Connect",
+          hovering: isHovering
+        )
+      }
+      .buttonStyle(.plain)
+      .onHover { hovering in
+        withAnimation(BrandMotion.quick) {
+          isHovering = hovering
+        }
+      }
+      .accessibilityLabel("MCP not set up. Connect your agent.")
+    }
+  }
 
-        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
-          Text(title)
+  private func chipBody(
+    systemImage: String,
+    tint: Color,
+    title: String,
+    subtitle: String?,
+    hovering: Bool
+  ) -> some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      Image(systemName: systemImage)
+        .font(BrandTypography.callout)
+        .foregroundStyle(tint)
+
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
+        Text(title)
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textPrimary)
+          .lineLimit(1)
+
+        if let subtitle {
+          Text(subtitle)
+            .font(BrandTypography.caption)
+            .foregroundStyle(BrandColors.textSecondary)
+            .lineLimit(1)
+        }
+      }
+
+      Spacer(minLength: 0)
+    }
+    .padding(BrandMetrics.Spacing.sm)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(
+          tint.opacity(
+            hovering
+              ? BrandMetrics.Control.tintedFillOpacity + BrandMetrics.Control.hoverHighlightOpacity
+              : BrandMetrics.Control.tintedFillOpacity
+          )
+        )
+    )
+    .contentShape(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+    )
+  }
+}
+
+// MARK: - Processing element (T-8.7)
+
+/// Transient processing element stacked above the MCP chip: one job — show
+/// the live run. Source name, linear progress, modules found ("found" is
+/// engine telemetry, allowed only here, never in the completion claim).
+/// Click lands in the Library; the chip disappears when idle — completion
+/// feedback is the toast's job.
+private struct ShellProcessingChip: View {
+  let subject: String
+  let fractionComplete: Double
+  let modulesFound: Int
+  let onOpen: () -> Void
+
+  @State private var isHovering = false
+
+  var body: some View {
+    Button(action: onOpen) {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        HStack(spacing: BrandMetrics.Spacing.sm) {
+          ProgressView()
+            .controlSize(.small)
+
+          Text(subject)
             .font(BrandTypography.callout)
             .foregroundStyle(BrandColors.textPrimary)
             .lineLimit(1)
             .truncationMode(.middle)
 
-          if let subtitle {
-            Text(subtitle)
-              .font(BrandTypography.caption)
-              .foregroundStyle(BrandColors.textSecondary)
-              .lineLimit(1)
-          }
+          Spacer(minLength: 0)
         }
 
-        Spacer(minLength: 0)
+        ProgressView(value: fractionComplete)
+          .progressViewStyle(.linear)
+          .controlSize(.small)
+          .tint(BrandColors.accent)
+
+        Text("\(Int(fractionComplete * 100))% · \(modulesFound) found")
+          .font(BrandTypography.caption)
+          .monospacedDigit()
+          .foregroundStyle(BrandColors.textSecondary)
       }
       .padding(BrandMetrics.Spacing.sm)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
         RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-          .fill(tint.opacity(fillOpacity))
+          .fill(
+            isHovering
+              ? BrandColors.backgroundElevatedHover
+              : BrandColors.backgroundElevated
+          )
       )
       .contentShape(
         RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
@@ -793,85 +1065,7 @@ private struct ShellStatusStrip: View {
         isHovering = hovering
       }
     }
-    .animation(BrandMotion.standard, value: state)
-    .accessibilityLabel(accessibilityText)
-  }
-
-  @ViewBuilder
-  private var icon: some View {
-    switch state {
-    case .idle(let mcp):
-      Image(systemName: mcp.state == .ready ? "checkmark.circle" : "exclamationmark.triangle")
-        .font(BrandTypography.callout)
-        .foregroundStyle(mcp.state == .ready ? BrandColors.success : BrandColors.warning)
-    case .processing:
-      ProgressView()
-        .controlSize(.small)
-    case .completed:
-      Image(systemName: "sparkles")
-        .font(BrandTypography.callout)
-        .foregroundStyle(BrandColors.accent)
-    case .runFailed:
-      Image(systemName: "xmark.circle")
-        .font(BrandTypography.callout)
-        .foregroundStyle(BrandColors.danger)
-    }
-  }
-
-  private var title: String {
-    switch state {
-    case .idle(let mcp):
-      return mcp.state == .ready ? "Agent connected" : "MCP not set up"
-    case .processing(let subject, _):
-      return subject
-    case .completed(let summary):
-      var text = "\(summary.modulesAdded) module\(summary.modulesAdded == 1 ? "" : "s") added"
-      if summary.needsReview > 0 {
-        text += " · \(summary.needsReview) need\(summary.needsReview == 1 ? "s" : "") review"
-      }
-      return text
-    case .runFailed:
-      return "Run failed"
-    }
-  }
-
-  private var subtitle: String? {
-    switch state {
-    case .idle(let mcp):
-      return mcp.state == .ready ? nil : "Connect Cursor → Settings"
-    case .processing(_, let detail):
-      return detail
-    case .completed(let summary):
-      return summary.needsReview > 0 ? "Review → Approval" : "View → Modules"
-    case .runFailed:
-      return "View → Runs"
-    }
-  }
-
-  private var tint: Color {
-    switch state {
-    case .idle(let mcp):
-      return mcp.state == .ready ? BrandColors.success : BrandColors.warning
-    case .processing:
-      return BrandColors.accent
-    case .completed:
-      return BrandColors.accent
-    case .runFailed:
-      return BrandColors.danger
-    }
-  }
-
-  private var fillOpacity: Double {
-    isHovering
-      ? BrandMetrics.Control.tintedFillOpacity + BrandMetrics.Control.hoverHighlightOpacity
-      : BrandMetrics.Control.tintedFillOpacity
-  }
-
-  private var accessibilityText: String {
-    if let subtitle {
-      return "\(title). \(subtitle)"
-    }
-    return title
+    .accessibilityLabel("Processing \(subject), \(Int(fractionComplete * 100)) percent, \(modulesFound) modules found. Open Library.")
   }
 }
 
