@@ -9,12 +9,15 @@ struct BrowseView: View {
   let sourceListModel: GunkListModel
   let processingModel: ProcessingModel
   let dropZoneHandler: DropZoneHandler
-  /// From the shared `MCPStatusProvider` (owned by the shell): when Cursor
-  /// isn't wired up, the Agent-ready treatment flips to needs-setup copy
-  /// that navigates to Settings (ux §4.5, D8).
+  /// From the shared `MCPSetupModel` (owned by the shell): when no client
+  /// is wired up, the Agent-ready treatment flips to needs-setup copy that
+  /// opens the one-click setup sheet (ux §4.5, D8; T-8.10).
   var mcpNeedsSetup = false
   var openBundle: (URL) -> Void = { NSWorkspace.shared.open($0) }
   var onShowSettings: () -> Void = {}
+  /// Opens the shell-owned MCP setup sheet (T-8.10) — every needs-setup
+  /// affordance routes here instead of Settings.
+  var onShowMCPSetup: () -> Void = {}
   /// Summons the shell-owned run inspector (T-8.6) from this view's entry
   /// points: a source row's "View runs" and the module detail's "Last run".
   var onShowRuns: (RunInspectorContext) -> Void = { _ in }
@@ -638,7 +641,7 @@ struct BrowseView: View {
       approvalThreshold: model.confidenceThreshold,
       mcpNeedsSetup: mcpNeedsSetup,
       openBundle: openBundle,
-      onShowSettings: onShowSettings,
+      onShowMCPSetup: onShowMCPSetup,
       onApprove: {
         // Approve feedback (T-8.4): the Agent-ready line transitions to its
         // success state in place; `settle` gives the landing overshoot.
@@ -754,7 +757,7 @@ private struct ModuleDetailView: View {
   let approvalThreshold: Double
   let mcpNeedsSetup: Bool
   let openBundle: (URL) -> Void
-  let onShowSettings: () -> Void
+  let onShowMCPSetup: () -> Void
   let onApprove: () -> Void
   let onReject: () -> Void
   let onRerun: () -> Void
@@ -884,24 +887,25 @@ private struct ModuleDetailView: View {
   }
 
   /// The MCP payoff truth line (ux §4.5, D8), derived from `extractedAt` —
-  /// no new store state. The needs-setup variant routes to Settings.
+  /// no new store state. The needs-setup variant opens the one-click setup
+  /// sheet (T-8.10) — no needs-setup affordance routes to Settings anymore.
   @ViewBuilder
   private var agentReadyLine: some View {
     if mcpNeedsSetup {
-      Button(action: onShowSettings) {
+      Button(action: onShowMCPSetup) {
         HStack(spacing: BrandMetrics.Spacing.sm) {
           StatusBadge(
             "MCP not set up",
             variant: .warning,
             systemImage: "exclamationmark.triangle"
           )
-          Text("Connect Cursor → Settings")
+          Text("Connect your agent")
             .font(BrandTypography.caption)
             .foregroundStyle(BrandColors.textSecondary)
         }
       }
       .buttonStyle(.plain)
-      .help("Open Settings to connect Cursor")
+      .help("Connect your agent through MCP")
     } else if detail.item.gunk.extractedAt != nil {
       HStack(spacing: BrandMetrics.Spacing.sm) {
         StatusBadge("Agent-ready", variant: .success, systemImage: "sparkles")

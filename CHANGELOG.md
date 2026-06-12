@@ -7,6 +7,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `gunk.app` MCP front and center: one-click setup UI (T-8.10, CP-C). New
+  `MCPSetupView` sheet lists every supported AI client (Cursor, Claude
+  Code, Claude Desktop, Codex, OpenCode) with its live status — Connected /
+  Not set up / Not detected / Problem — one **Connect** button per client,
+  and a **Connect all** primary action when 2+ detected clients are
+  unwired; the header carries the payoff line ("Your agent can use every
+  Agent-ready module in your library"). A wire that aborts on malformed
+  config surfaces the configurator's error verbatim with an "Open config"
+  affordance — nothing is ever silently overwritten. The sidebar MCP chip's
+  warning state now opens this sheet (it no longer routes to Settings), as
+  does the module detail's "MCP not set up" line; the healthy chip stays
+  un-clickable and its hover now lists the connected clients. Settings'
+  single Cursor MCP row is replaced by per-client wire/unwire toggles. All
+  three surfaces observe one shared `MCPSetupModel` over the same
+  `MCPClientConfigurator`, re-checked after every wire/unwire, so statuses
+  can never disagree ("Agent connected" now means at least one client is
+  wired). Dev-only screenshot hooks: `GUNK_DEBUG_MCP_SETUP=1` opens the
+  sheet at launch; `GUNK_DEBUG_MCP_HOME=<dir>` points the whole
+  configurator (detection, statuses, writes) at a staged fake home so
+  captures — including live Connect clicks — never touch real client
+  configs.
 - `gunk.app` multi-client MCP config writers (T-8.9; logic only, no UI —
   T-8.10 builds the one-click setup sheet on top). New
   `MCPClientConfigurator` (`Integrations/`) detects installed AI clients

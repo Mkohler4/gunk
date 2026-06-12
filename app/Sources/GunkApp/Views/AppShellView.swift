@@ -41,7 +41,11 @@ struct AppShellView: View {
   let services: AppServices
 
   @State private var selection: AppSection
-  @State private var mcpStatus: SettingsStatusItem?
+  /// One MCP model for the whole shell (T-8.10): the chip, the setup sheet,
+  /// and Settings observe the same instance, so a wire/unwire from any
+  /// surface re-checks all of them and they can never disagree.
+  @StateObject private var mcpSetup = MCPSetupModel()
+  @State private var showMCPSetup = false
   /// The run-end toast (T-8.7): the completion/failure moment is a floating
   /// overlay over the detail area, not a sidebar chip.
   @State private var toast: ShellRunToast?
@@ -76,8 +80,6 @@ struct AppShellView: View {
   /// How long the invalid-drop error stays inside the overlay before it
   /// dismisses.
   private static let dropErrorLifetime: Duration = .milliseconds(1600)
-
-  private let mcpStatusProvider = MCPStatusProvider()
 
   init(services: AppServices) {
     self.services = services
@@ -139,13 +141,17 @@ struct AppShellView: View {
         onClose: { runInspectorContext = nil }
       )
     }
+    .sheet(isPresented: $showMCPSetup) {
+      MCPSetupView(model: mcpSetup, onClose: { showMCPSetup = false })
+    }
     .onAppear {
       services.sourceListModel.refresh()
       services.browseModel.refresh()
-      mcpStatus = mcpStatusProvider.status()
+      mcpSetup.refresh()
       applyDropOverlayDebugOverride()
       applyRunInspectorDebugOverride()
       applyToastDebugOverride()
+      applyMCPSetupDebugOverride()
       // Appearing mid-run: snapshot what already exists so the completion
       // summary only counts what this run actually adds (mirrors
       // BrowseView's arrival-highlight snapshot).
@@ -154,7 +160,7 @@ struct AppShellView: View {
       }
     }
     .onChange(of: selection) {
-      mcpStatus = mcpStatusProvider.status()
+      mcpSetup.refresh()
     }
     .onChange(of: services.processingModel.isProcessing) { wasProcessing, isProcessing in
       if !wasProcessing, isProcessing {
@@ -205,12 +211,11 @@ struct AppShellView: View {
         }
 
         ShellMCPChip(
-          isConnected: (mcpStatus ?? mcpStatusProvider.status()).state == .ready,
-          configPath: mcpStatusProvider.configURL.path
+          isConnected: mcpSetup.isAnyClientConnected,
+          connectedSummary: mcpSetup.connectedSummary
         ) {
-          // Until T-8.10's one-click setup flow lands, Connect routes to
-          // Settings exactly as the old strip did.
-          selection = .settings
+          // T-8.10: Connect opens the one-click setup sheet.
+          showMCPSetup = true
         }
       }
       .animation(BrandMotion.standard, value: services.processingModel.isProcessing)
@@ -478,6 +483,17 @@ struct AppShellView: View {
     }
   }
 
+  /// Dev-only screenshot hook (same family as `GUNK_DEBUG_RUN_INSPECTOR`):
+  /// `GUNK_DEBUG_MCP_SETUP=1` opens the setup sheet at launch. Pair with
+  /// `GUNK_DEBUG_MCP_HOME=<dir>` (see `MCPSetupModel`) so staged captures —
+  /// including live Connect clicks — never touch real client configs.
+  /// No-op in normal launches.
+  private func applyMCPSetupDebugOverride() {
+    if ProcessInfo.processInfo.environment["GUNK_DEBUG_MCP_SETUP"] == "1" {
+      showMCPSetup = true
+    }
+  }
+
   /// Dev-only screenshot hook (same family as `GUNK_DEBUG_DROP_OVERLAY`):
   /// stages the run-end toast at launch — "success" or "failure" — without
   /// a live run. No decay task, so scripted captures aren't racing the 8s
@@ -567,11 +583,11 @@ struct AppShellView: View {
         sourceListModel: services.sourceListModel,
         processingModel: services.processingModel,
         dropZoneHandler: services.dropZoneHandler,
-        // The shell's MCP snapshot drives the Agent-ready needs-setup copy
-        // (ux §4.5, D8) so the detail line and the status strip can't
-        // disagree.
-        mcpNeedsSetup: (mcpStatus ?? mcpStatusProvider.status()).state == .needsSetup,
+        // The shared MCP model drives the Agent-ready needs-setup copy
+        // (ux §4.5, D8) so the detail line and the chip can't disagree.
+        mcpNeedsSetup: !mcpSetup.isAnyClientConnected,
         onShowSettings: { selection = .settings },
+        onShowMCPSetup: { showMCPSetup = true },
         onShowRuns: { runInspectorContext = $0 }
       )
     case .marketplace:
@@ -585,7 +601,7 @@ struct AppShellView: View {
       // later. Drag-and-drop and the empty-Library button still intake.
       Color.clear
     case .settings:
-      SettingsView(storePath: services.store.databasePath)
+      SettingsView(storePath: services.store.databasePath, mcpSetup: mcpSetup)
     }
   }
 }
@@ -915,13 +931,13 @@ private struct RunToastView: View {
 
 /// Persistent MCP chip pinned at the sidebar bottom: one job — is the agent
 /// wired in? Exactly two states. Healthy is *not* a button — a healthy chip
-/// must never navigate anywhere; hover discloses the config path instead.
-/// The warning state is the only click target and routes to setup (Settings,
-/// until T-8.10's one-click flow lands). Solid fills: the chip sits on the
-/// sidebar surface — glass is reserved for floating layers.
+/// must never navigate anywhere; hover discloses which clients are wired
+/// (and through which config). The warning state is the only click target
+/// and opens the one-click setup sheet (T-8.10). Solid fills: the chip sits
+/// on the sidebar surface — glass is reserved for floating layers.
 private struct ShellMCPChip: View {
   let isConnected: Bool
-  let configPath: String
+  let connectedSummary: String
   let onConnect: () -> Void
 
   @State private var isHovering = false
@@ -935,9 +951,9 @@ private struct ShellMCPChip: View {
         subtitle: nil,
         hovering: false
       )
-      .help("Configured at \(configPath)")
+      .help("Connected: \(connectedSummary)")
       .accessibilityElement(children: .ignore)
-      .accessibilityLabel("Agent connected. MCP configured at \(configPath).")
+      .accessibilityLabel("Agent connected. \(connectedSummary).")
     } else {
       Button(action: onConnect) {
         chipBody(
@@ -1079,6 +1095,7 @@ private struct ModulesSectionView: View {
   let dropZoneHandler: DropZoneHandler
   let mcpNeedsSetup: Bool
   let onShowSettings: () -> Void
+  let onShowMCPSetup: () -> Void
   let onShowRuns: (RunInspectorContext) -> Void
 
   var body: some View {
@@ -1097,6 +1114,7 @@ private struct ModulesSectionView: View {
         dropZoneHandler: dropZoneHandler,
         mcpNeedsSetup: mcpNeedsSetup,
         onShowSettings: onShowSettings,
+        onShowMCPSetup: onShowMCPSetup,
         onShowRuns: onShowRuns
       )
     }
