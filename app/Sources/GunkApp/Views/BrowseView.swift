@@ -19,6 +19,11 @@ struct BrowseView: View {
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
 
+  /// Same storage Settings writes — the appbar's `provider · model` readout
+  /// can never disagree with the configured extraction model.
+  @AppStorage("llm.provider") private var llmProviderRawValue = LLMProvider.openAI.rawValue
+  @AppStorage("llm.model") private var llmModel = LLMProvider.openAI.defaultModel
+
   /// Arrival highlight (ux §4.4), moved from the retired Sources surface to the
   /// module grid: modules created during a run carry the accent treatment for
   /// a beat after the run completes. Mirrors the old `arrivedSourceIds` decay.
@@ -29,13 +34,14 @@ struct BrowseView: View {
   /// How long a freshly created module keeps its highlight (ux §4.4).
   private static let arrivalHighlightLifetime: Duration = .seconds(2)
 
-  /// Pane contract from ux §3.2/§4.6 (D10): browser ≥ 440, detail 300–440,
-  /// and both must fit at the 960pt window minimum next to the fixed 192pt
-  /// sidebar. The detail width is computed explicitly because HStack's own
-  /// negotiation over two flexible panes can overshoot the proposal (it
-  /// sizes the bounded detail pane before the browser clamps to its
-  /// minimum), which cropped both edges at the minimum window size.
-  private static let browserMinWidth: CGFloat = 440
+  /// Pane contract from ux §3.2/§4.6 (D10), relaxed for the 232pt mockup
+  /// sidebar: browser ≥ 400, detail 300–440, and both must fit at the 960pt
+  /// window minimum (960 − 232 = 728 ≥ 400 + 300 + spacing). The detail
+  /// width is computed explicitly because HStack's own negotiation over two
+  /// flexible panes can overshoot the proposal (it sizes the bounded detail
+  /// pane before the browser clamps to its minimum), which cropped both
+  /// edges at the minimum window size.
+  private static let browserMinWidth: CGFloat = 400
   private static let detailMinWidth: CGFloat = 300
   private static let detailMaxWidth: CGFloat = 440
 
@@ -52,6 +58,11 @@ struct BrowseView: View {
 
   var body: some View {
     GeometryReader { proxy in
+      // The resting "Select a module" placeholder is gone (T-8.3b follow-up
+      // 1): with nothing selected the grid owns the full width. The inline
+      // pane only appears for a selected module, and remains interim until
+      // T-8.6 moves the detail into the toolbox-v2 centered glass sheet.
+      let detail = selectedGunkId.flatMap { model.detail(for: $0) }
       let detailWidth = max(
         Self.detailMinWidth,
         min(
@@ -59,15 +70,19 @@ struct BrowseView: View {
           proxy.size.width - Self.browserMinWidth - BrandMetrics.Spacing.md
         )
       )
-      let browserWidth = proxy.size.width - detailWidth - BrandMetrics.Spacing.md
+      let browserWidth = detail == nil
+        ? proxy.size.width
+        : proxy.size.width - detailWidth - BrandMetrics.Spacing.md
 
       HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
         browserPane(width: browserWidth)
           .frame(minWidth: Self.browserMinWidth, maxWidth: .infinity, maxHeight: .infinity)
 
-        detailPane
-          .frame(width: detailWidth)
-          .frame(maxHeight: .infinity)
+        if let detail {
+          detailPane(for: detail)
+            .frame(width: detailWidth)
+            .frame(maxHeight: .infinity)
+        }
       }
       .frame(maxWidth: .infinity, maxHeight: .infinity)
     }
@@ -227,81 +242,182 @@ struct BrowseView: View {
 
   // MARK: Header (the v2 controls layer — glass lives here only)
 
+  /// The annotated-mockup appbar (T-8.3b follow-up 2): one row — `Library` +
+  /// count, the `Project | Model` segmented, one long search field, then the
+  /// actions. At the 960pt window minimum a single row can't hold a useful
+  /// search width, so it falls back to the two-row stack instead of
+  /// shrinking touch targets (T-8.3 refining loop).
+  ///
+  /// The source/tag/language/approval *filter* UI is intentionally absent —
+  /// `BrowseModel`'s filter state stays intact, and the controls return
+  /// layered inside the search bar once that design lands (`[HOLD FOR ME]`,
+  /// see the T-8.3b follow-ups in the task doc).
   private var libraryHeader: some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-      // Row 1: identity + source management (T-8.3) — split across two rows
-      // so controls never fight for width at the 960pt minimum.
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        Text("Library")
-          .font(BrandTypography.headline)
-          .foregroundStyle(BrandColors.textPrimary)
-
-        countChip
-
-        Spacer(minLength: BrandMetrics.Spacing.sm)
-
-        Button {
-          sourceListModel.refresh()
-          showSourcesPanel = true
-        } label: {
-          Label("Sources (\(sourceListModel.sources.count))", systemImage: "folder")
-        }
-        .buttonStyle(.brandSecondary)
-        .help("View and manage your sources")
-
-        Button {
-          addFolder()
-        } label: {
-          // "Add module", not "Add folder": the user is adding a capability
-          // to their toolbox; the folder picker is just the mechanism.
-          Label("Add module", systemImage: "plus.square.on.square")
-        }
-        .buttonStyle(.brandSecondary)
-        .help("Choose a folder and gunk will decompose it into modules")
-
-        // T-8.8's `provider · model` switcher lands in this trailing slot.
-      }
-
-      // Row 2: grouping + search. The source/tag/language/approval *filter*
-      // UI is intentionally absent for now — `BrowseModel`'s filter state
-      // stays intact, and the controls return layered inside the search
-      // bar once that design lands (see T-8.3b follow-ups in the task doc).
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        // Neutral graphite selection (mockup `.seg`): green is meaning-only
-        // and a grouping toggle carries no meaning-state, so the selected
-        // segment must not take the accent (nor the system blue).
-        Picker("Group", selection: groupBinding) {
-          ForEach(BrowseGroup.allCases) { group in
-            Text(group.label).tag(group)
-          }
-        }
-        .pickerStyle(.segmented)
-        .labelsHidden()
-        .tint(BrandColors.backgroundElevatedHover)
-        .frame(width: 168)
-        .help("Group the library by source project or by extracting model")
-
-        searchField
-      }
+    ViewThatFits(in: .horizontal) {
+      singleRowHeader
+      stackedHeader
     }
+    // Regular-weight controls and md padding land the mockup `.toolbar`'s
+    // 56pt presence — small controls read too thin against the cards.
     .padding(BrandMetrics.Spacing.md)
-    .controlSize(.small)
     .brandGlass(cornerRadius: BrandMetrics.Radius.medium, elevated: true)
   }
 
-  private var countChip: some View {
-    Text("\(model.totalModuleCount)")
-      .font(BrandTypography.caption.weight(.semibold))
-      .monospacedDigit()
-      .foregroundStyle(BrandColors.textSecondary)
-      .padding(.horizontal, BrandMetrics.Spacing.sm)
-      .padding(.vertical, BrandMetrics.Spacing.xs / 2)
-      .background(
-        Capsule().fill(
-          BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2)
+  /// Mockup `.search { max-width: 300px }` — the field must not run the
+  /// whole appbar.
+  private static let searchMaxWidth: CGFloat = 300
+
+  private var singleRowHeader: some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      headerTitle
+      groupPicker
+      searchField
+        .frame(minWidth: 160, maxWidth: Self.searchMaxWidth)
+
+      Spacer(minLength: BrandMetrics.Spacing.sm)
+
+      modelSelector
+    }
+  }
+
+  /// Narrow fallback: identity + model on top, grouping + search below.
+  private var stackedHeader: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        headerTitle
+        Spacer(minLength: BrandMetrics.Spacing.sm)
+        modelSelector
+      }
+
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        groupPicker
+        searchField
+          .frame(maxWidth: Self.searchMaxWidth)
+      }
+    }
+  }
+
+  private var headerTitle: some View {
+    HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.sm) {
+      Text("Library")
+        .font(BrandTypography.headline)
+        .foregroundStyle(BrandColors.textPrimary)
+
+      // Plain muted count, no pill — the mockup's `.tb-title .count`.
+      Text("\(model.totalModuleCount)")
+        .font(BrandTypography.caption.weight(.medium))
+        .monospacedDigit()
+        .foregroundStyle(BrandColors.textSecondary)
+        .accessibilityLabel("\(model.totalModuleCount) modules in the library")
+    }
+  }
+
+  /// Inset of the segment buttons inside their well (mockup `.seg`
+  /// `padding: 2px`); the inner radius stays concentric with the well.
+  private static let segmentInset: CGFloat = 2
+
+  /// Custom-built segmented (mockup `.seg`, scaled to the appbar's weight —
+  /// the system control reads too thin). Neutral graphite selection: green
+  /// is meaning-only and a grouping toggle carries no meaning-state.
+  private var groupPicker: some View {
+    HStack(spacing: Self.segmentInset) {
+      ForEach(BrowseGroup.allCases) { group in
+        segmentButton(group)
+      }
+    }
+    .padding(Self.segmentInset)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(BrandColors.separator)
+    )
+    .help("Group the library by source project or by extracting model")
+  }
+
+  private func segmentButton(_ group: BrowseGroup) -> some View {
+    let isSelected = model.filters.group == group
+    return Button {
+      model.filters.group = group
+    } label: {
+      Text(group.label)
+        .font(BrandTypography.callout.weight(.medium))
+        .foregroundStyle(isSelected ? BrandColors.textPrimary : BrandColors.textSecondary)
+        .padding(.horizontal, BrandMetrics.Spacing.md)
+        .padding(.vertical, BrandMetrics.Spacing.sm)
+        .background(
+          RoundedRectangle(
+            cornerRadius: BrandMetrics.Radius.medium - Self.segmentInset,
+            style: .continuous
+          )
+          .fill(
+            isSelected
+              ? BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity)
+              : .clear
+          )
         )
+        .contentShape(
+          RoundedRectangle(
+            cornerRadius: BrandMetrics.Radius.medium - Self.segmentInset,
+            style: .continuous
+          )
+        )
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("Group by \(group.label)")
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+
+  /// The trailing `provider · model` readout (mockup `.model`). Visual slot
+  /// only for now — T-8.8 builds the actual switching menu behind it.
+  private var modelSelector: some View {
+    Button {
+      // FUTURE(T-8.8): open the model switcher menu.
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Text(llmProviderRawValue)
+          .foregroundStyle(BrandColors.textSecondary)
+        Text("·")
+          .foregroundStyle(BrandColors.textTertiary)
+        Text(modelDisplayName)
+          .foregroundStyle(BrandColors.textPrimary)
+        Image(systemName: "chevron.down")
+          .font(BrandTypography.caption.weight(.semibold))
+          .foregroundStyle(BrandColors.textSecondary)
+      }
+      .font(BrandTypography.callout.weight(.medium))
+      .lineLimit(1)
+      .padding(.horizontal, BrandMetrics.Spacing.md)
+      .padding(.vertical, BrandMetrics.Spacing.sm)
+      .background(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+          .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
       )
-      .accessibilityLabel("\(model.totalModuleCount) modules in the library")
+      .overlay(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+          .strokeBorder(BrandColors.separator)
+      )
+      .contentShape(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+      )
+    }
+    .buttonStyle(.plain)
+    .help("Extraction model — switching lands with the model picker (T-8.8)")
+    .accessibilityLabel("Extraction model: \(llmProviderRawValue), \(modelDisplayName)")
+  }
+
+  /// Display form of the stored model id, e.g. `claude-sonnet-4-20250514` →
+  /// "Claude Sonnet 4", `gpt-4.1-mini` → "GPT 4.1 Mini".
+  private var modelDisplayName: String {
+    var name = llmModel
+    if let snapshotSuffix = name.range(of: #"-\d{8}$"#, options: .regularExpression) {
+      name.removeSubrange(snapshotSuffix)
+    }
+    return name.split(separator: "-")
+      .map { $0.lowercased() == "gpt" ? "GPT" : String($0).capitalized }
+      .joined(separator: " ")
   }
 
   private var searchField: some View {
@@ -327,11 +443,18 @@ struct BrowseView: View {
         .accessibilityLabel("Clear search")
       }
     }
-    .padding(.horizontal, BrandMetrics.Spacing.sm)
-    .padding(.vertical, BrandMetrics.Spacing.xs)
+    // Taller than the mockup's 8pt input padding per Mark's review — the
+    // field carries the appbar's vertical weight.
+    .padding(.horizontal, BrandMetrics.Spacing.md)
+    .padding(.vertical, BrandMetrics.Spacing.md)
     .background(
       RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
         .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .overlay(
+      // Mockup `.search input` hairline border.
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(BrandColors.separator)
     )
     .frame(maxWidth: .infinity)
   }
@@ -457,39 +580,21 @@ struct BrowseView: View {
 
   // MARK: Detail
 
-  @ViewBuilder
-  private var detailPane: some View {
-    if let selectedGunkId,
-       let detail = model.detail(for: selectedGunkId) {
-      ModuleDetailView(
-        detail: detail,
-        mcpNeedsSetup: mcpNeedsSetup,
-        openBundle: openBundle,
-        onShowSettings: onShowSettings,
-        onRerun: { model.reclassify(sourceId: detail.item.source.id) },
-        onDelete: { model.delete(gunkId: detail.item.gunk.id) }
-      )
-    } else {
-      // Interim design only: this resting "Select a module" pane (and the
-      // inline detail pane itself) is removed when T-8.6 moves the detail
-      // into the toolbox-v2 centered glass sheet. Detail *functionality*
-      // stays — only the inline right-pane presentation goes (see the
-      // T-8.3b follow-ups in the phase-8 task doc).
-      EmptyStateView(
-        "Select a module",
-        message: "Open a module to inspect its files, bundle, and runability signals."
-      )
-    }
+  /// Interim presentation only: the inline right pane goes away when T-8.6
+  /// moves module detail into the toolbox-v2 centered glass sheet. Detail
+  /// *functionality* (trust readout, files, bundle, actions) survives there.
+  private func detailPane(for detail: BrowseModuleDetail) -> some View {
+    ModuleDetailView(
+      detail: detail,
+      mcpNeedsSetup: mcpNeedsSetup,
+      openBundle: openBundle,
+      onShowSettings: onShowSettings,
+      onRerun: { model.reclassify(sourceId: detail.item.source.id) },
+      onDelete: { model.delete(gunkId: detail.item.gunk.id) }
+    )
   }
 
   // MARK: Filter bindings (unchanged BrowseModel contract)
-
-  private var groupBinding: Binding<BrowseGroup> {
-    Binding(
-      get: { model.filters.group },
-      set: { model.filters.group = $0 }
-    )
-  }
 
   private var queryBinding: Binding<String> {
     Binding(
@@ -500,7 +605,7 @@ struct BrowseView: View {
 
   /// ux §3.2: filter changes never steal or re-assign the selection. If the
   /// selected module is no longer visible the selection clears, and the
-  /// detail pane shows its empty state — that is a valid resting state.
+  /// inline detail pane collapses — the full-width grid is the resting state.
   private func synchronizeSelection() {
     let visibleItems = model.sections.flatMap(\.items)
     if let selectedGunkId,

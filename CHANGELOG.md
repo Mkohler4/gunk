@@ -10,6 +10,41 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` appbar vertical-weight pass (T-8.3b follow-up 2, Mark's
+  review): the bar, the `Project | Model` segmented (now custom-built to
+  the mockup `.seg`, scaled up), and the search field are all taller; the
+  search field is capped at the mockup's 300pt max width instead of
+  running the whole bar. The trailing slot renders a `provider · model ⌄`
+  readout from the Settings `llm.provider`/`llm.model` storage (visual
+  only — T-8.8 builds the switching menu). **Add module** moves from the
+  appbar to a new sidebar nav row whose screen is intentionally blank for
+  now (drag-and-drop and the empty-Library button still intake; the
+  folder-picker plumbing is untouched). The sidebar widens from 192pt to
+  the mockup's 232pt, with the Library browser-pane minimum relaxed to
+  400pt so everything still fits the 960pt minimum window.
+- `gunk.app` Library drops the resting "Select a module" placeholder ahead
+  of T-8.6 (T-8.3b follow-up 1): with nothing selected the briefing-card
+  grid owns the full content width; the interim inline detail pane only
+  appears once a module is selected and still goes away entirely when
+  T-8.6 moves module detail into the toolbox-v2 centered glass sheet.
+- `gunk.app` Library appbar lands the annotated-mockup single row (T-8.3b
+  follow-up 2): `Library` + a plain muted count (the pill chip is gone),
+  the `Project | Model` segmented, one long search field (now with the
+  mockup's hairline border), and the labeled **Add module** button; the
+  trailing slot stays reserved for T-8.8's `provider · model` switcher.
+  Controls are regular weight at the mockup's `.search input` proportions
+  (a small-control first pass read too thin). The sources-panel entry
+  point is removed from the appbar for now — it returns with the
+  filters-in-search design; the panel and filter state are untouched. At
+  the 960pt window minimum the row falls back to the previous two-row
+  stack instead of shrinking touch targets. The glass treatment now
+  carries the mockup's exact `.glass` box-shadow — a crisp 1pt inner top
+  highlight (`inset 0 1px 0 rgba(255,255,255,0.10)`) plus the
+  `0 12px 40px -16px rgba(0,0,0,0.6)` drop shadow — the sidebar, which was
+  previously un-shadowed and diverged from the HTML, now shares the same
+  elevated treatment as the appbar, and the shell's pre-v2 flush glass
+  wash (which rimmed the whole modules surface with a hairline) is
+  replaced by a solid `backgroundPrimary` window background.
 - `gunk.app` Library header pass from Mark's review of T-8.3b (documented as
   follow-ups in the phase-8 task doc): **`Add folder` is now `Add module`**
   (the user adds a capability, not a folder — same intake path), the

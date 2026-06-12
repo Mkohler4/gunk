@@ -24,7 +24,10 @@ struct GlassSidebar<Header: View, Content: View, Footer: View>: View {
     }
     .padding(BrandMetrics.Spacing.md)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .brandGlass(cornerRadius: BrandMetrics.Radius.large, elevated: false)
+    // The mockup sidebar shares the `.glass` treatment with the toolbar —
+    // including its drop shadow — so it floats like the controls layer
+    // instead of sitting flush (toolbox-v2-library.html `.glass`).
+    .brandGlass(cornerRadius: BrandMetrics.Radius.large, elevated: true)
   }
 }
 
