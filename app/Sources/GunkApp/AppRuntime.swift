@@ -75,7 +75,12 @@ final class AppRuntime: ObservableObject {
 
   private func bootstrap() {
     do {
-      let store = try Store(path: Store.defaultURL)
+      // Dev-only, like GUNK_DESIGN_GALLERY: scripted screenshot runs point
+      // the app at a scratch database instead of `~/.gunk/store.db`. No-op
+      // in normal launches.
+      let storeURL = ProcessInfo.processInfo.environment["GUNK_DB_PATH"]
+        .map(URL.init(fileURLWithPath:)) ?? Store.defaultURL
+      let store = try Store(path: storeURL)
       let dockIconController = DockIconController()
       let processingModel = ProcessingModel(
         dockIconController: dockIconController,

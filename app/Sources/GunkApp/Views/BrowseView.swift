@@ -19,11 +19,6 @@ struct BrowseView: View {
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
 
-  /// Same storage Settings writes — the appbar's `provider · model` readout
-  /// can never disagree with the configured extraction model.
-  @AppStorage("llm.provider") private var llmProviderRawValue = LLMProvider.openAI.rawValue
-  @AppStorage("llm.model") private var llmModel = LLMProvider.openAI.defaultModel
-
   /// Arrival highlight (ux §4.4), moved from the retired Sources surface to the
   /// module grid: modules created during a run carry the accent treatment for
   /// a beat after the run completes. Mirrors the old `arrivedSourceIds` decay.
@@ -221,17 +216,11 @@ struct BrowseView: View {
   @ViewBuilder
   private var emptyState: some View {
     if model.totalModuleCount == 0 {
-      EmptyStateView(
-        "No modules yet",
-        message: "Drag a folder onto the window, or click Add module, and gunk will decompose it into reusable modules."
-      ) {
-        Button {
-          addFolder()
-        } label: {
-          Label("Add module", systemImage: "plus.square.on.square")
-        }
-        .buttonStyle(.brandPrimary)
-      }
+      // First-run (T-8.5): the content area itself is the add affordance —
+      // a click-or-drag zone sharing the full-window drop overlay's visual
+      // language, so the empty state *teaches* the drag gesture. Drag is
+      // never the only door: the panel and its button both open the picker.
+      LibraryIntakeZone(onAddFolder: addFolder)
     } else if model.filters.approval == .needsApproval, model.approvalQueue.isEmpty {
       // Cleared-queue state (T-8.4 refining loop): approving the last queued
       // module lands here, not on the generic no-matches state. The scope
@@ -439,54 +428,11 @@ struct BrowseView: View {
     .accessibilityAddTraits(isSelected ? .isSelected : [])
   }
 
-  /// The trailing `provider · model` readout (mockup `.model`). Visual slot
-  /// only for now — T-8.8 builds the actual switching menu behind it.
+  /// The trailing `provider · model` switcher (mockup `.model` +
+  /// `.model-menu`, T-8.8 brought forward): a working menu that lists each
+  /// keyed provider's models and routes to Settings for key entry.
   private var modelSelector: some View {
-    Button {
-      // FUTURE(T-8.8): open the model switcher menu.
-    } label: {
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        Text(llmProviderRawValue)
-          .foregroundStyle(BrandColors.textSecondary)
-        Text("·")
-          .foregroundStyle(BrandColors.textTertiary)
-        Text(modelDisplayName)
-          .foregroundStyle(BrandColors.textPrimary)
-        Image(systemName: "chevron.down")
-          .font(BrandTypography.caption.weight(.semibold))
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-      .font(BrandTypography.callout.weight(.medium))
-      .lineLimit(1)
-      .padding(.horizontal, BrandMetrics.Spacing.md)
-      .padding(.vertical, BrandMetrics.Spacing.sm)
-      .background(
-        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-          .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
-      )
-      .overlay(
-        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-          .strokeBorder(BrandColors.separator)
-      )
-      .contentShape(
-        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-      )
-    }
-    .buttonStyle(.plain)
-    .help("Extraction model — switching lands with the model picker (T-8.8)")
-    .accessibilityLabel("Extraction model: \(llmProviderRawValue), \(modelDisplayName)")
-  }
-
-  /// Display form of the stored model id, e.g. `claude-sonnet-4-20250514` →
-  /// "Claude Sonnet 4", `gpt-4.1-mini` → "GPT 4.1 Mini".
-  private var modelDisplayName: String {
-    var name = llmModel
-    if let snapshotSuffix = name.range(of: #"-\d{8}$"#, options: .regularExpression) {
-      name.removeSubrange(snapshotSuffix)
-    }
-    return name.split(separator: "-")
-      .map { $0.lowercased() == "gpt" ? "GPT" : String($0).capitalized }
-      .joined(separator: " ")
+    ModelSwitcher(onShowSettings: onShowSettings)
   }
 
   private var searchField: some View {
@@ -697,6 +643,71 @@ struct BrowseView: View {
        !model.loadedGunkIds.contains(selectedGunkId) {
       self.selectedGunkId = nil
     }
+  }
+}
+
+// MARK: - Intake affordances (T-8.5 — drag is never the only door)
+
+/// The first-run empty Library: a centered click-or-drag panel that shares
+/// the full-window drop overlay's visual language (glass card, dashed
+/// border, folder icon) so it *teaches* the drag gesture, plus an accent
+/// **Add folder** button for the no-gesture path. Clicking anywhere on the
+/// panel opens the same folder picker.
+private struct LibraryIntakeZone: View {
+  let onAddFolder: () -> Void
+
+  @State private var isHovering = false
+
+  /// Matches `WindowDropOverlay`'s card width so the two surfaces read as
+  /// the same affordance.
+  private static let panelMaxWidth: CGFloat = 460
+
+  var body: some View {
+    VStack(spacing: BrandMetrics.Spacing.md) {
+      Image(systemName: "folder.badge.plus")
+        .font(BrandTypography.sans(size: 44, weight: .regular))
+        .foregroundStyle(isHovering ? BrandColors.textPrimary : BrandColors.textSecondary)
+
+      Text("Drag a folder here, or click to browse")
+        .font(BrandTypography.cardTitleHero)
+        .foregroundStyle(BrandColors.textPrimary)
+        .multilineTextAlignment(.center)
+
+      Text("gunk decomposes each folder into reusable, verified capabilities for your agent.")
+        .font(BrandTypography.body)
+        .foregroundStyle(BrandColors.textSecondary)
+        .multilineTextAlignment(.center)
+
+      Button(action: onAddFolder) {
+        Label("Add folder", systemImage: "folder.badge.plus")
+      }
+      .buttonStyle(.brandPrimary)
+      .padding(.top, BrandMetrics.Spacing.xs)
+    }
+    .padding(.vertical, BrandMetrics.Spacing.xl + BrandMetrics.Spacing.md)
+    .padding(.horizontal, BrandMetrics.Spacing.xl + BrandMetrics.Spacing.sm)
+    .frame(maxWidth: Self.panelMaxWidth)
+    .brandGlass(cornerRadius: BrandMetrics.Radius.xl, elevated: false)
+    .overlay {
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.xl, style: .continuous)
+        .strokeBorder(
+          isHovering ? BrandColors.textSecondary : BrandColors.textTertiary,
+          style: StrokeStyle(
+            lineWidth: 2,
+            dash: [BrandMetrics.Spacing.sm, BrandMetrics.Spacing.xs]
+          )
+        )
+    }
+    .contentShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.xl, style: .continuous))
+    .onTapGesture(perform: onAddFolder)
+    .onHover { hovering in
+      withAnimation(BrandMotion.quick) {
+        isHovering = hovering
+      }
+    }
+    .frame(maxWidth: .infinity, maxHeight: .infinity)
+    .accessibilityElement(children: .contain)
+    .accessibilityLabel("Add a folder to your library. Drag one here, or click to browse.")
   }
 }
 
