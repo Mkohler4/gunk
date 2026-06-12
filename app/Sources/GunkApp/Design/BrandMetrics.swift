@@ -29,9 +29,15 @@ enum BrandMetrics {
     static let strokeOpacity: Double = 0.09
     /// Top-edge sheen gradient strength, from the concept's overlay.
     static let sheenOpacity: Double = 0.16
-    /// Drop shadow under floating glass surfaces.
-    static let shadowOpacity: Double = 0.35
-    static let shadowRadius: CGFloat = 24
+    /// Crisp 1pt inner top highlight, from the toolbox-v2 glass
+    /// `inset 0 1px 0 rgba(255,255,255,0.10)`.
+    static let innerTopHighlightOpacity: Double = 0.10
+    /// Drop shadow under floating glass surfaces, mapped from the toolbox-v2
+    /// glass `0 12px 40px -16px rgba(0,0,0,0.6)`: the -16px spread pulls the
+    /// 40px CSS blur in to a ~24px visible falloff, which is a SwiftUI
+    /// radius of 12 (visible extent ≈ 2 × radius).
+    static let shadowOpacity: Double = 0.6
+    static let shadowRadius: CGFloat = 12
     static let shadowYOffset: CGFloat = 12
   }
 

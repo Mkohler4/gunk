@@ -383,6 +383,12 @@ marked *landed* shipped immediately after Part B, the rest are scheduled.
    *design* removal only: every detail capability (trust readout, files,
    bundle, approve/reject, actions) survives inside the sheet. Until then the
    pane stays as scaffolding; do not invest further design effort in it.
+   - **Resting placeholder removed early** (*landed*, 2026-06-12, Mark's
+     direction). The "Select a module" empty state is gone ahead of T-8.6:
+     with nothing selected the grid owns the full content width, and the
+     inline pane only appears once a module is selected. The
+     selected-module presentation is intentionally untouched — that design
+     is T-8.6's centered glass sheet.
 2. **The top app bar (Library controls layer) needs another pass.** Target is
    Mark's annotated mockup: title + count chip, `Project | Model` segmented,
    one long search field, trailing `provider · model` switcher. Landed now:
@@ -405,6 +411,56 @@ marked *landed* shipped immediately after Part B, the rest are scheduled.
    - The trailing slot stays reserved for the **T-8.8** `provider · model`
      switcher (visible in the annotated mockup as `Anthropic · Claude
      Sonnet 4 ⌄`).
+   - **Single-row appbar** (*landed*, 2026-06-12). The controls layer now
+     matches the annotated mockup's one-row `.toolbar`: `Library` + a plain
+     muted count (the pill chip is gone — mockup `.tb-title .count`),
+     `Project | Model` segmented, one long search field (with the mockup's
+     hairline border), and the labeled **Add module** button per Mark's
+     direction. Controls are regular weight at mockup `.search input`
+     proportions — the first pass used `controlSize(.small)` and read too
+     thin against the cards. At the 960pt window minimum the row falls back
+     to the two-row stack (`ViewThatFits`) instead of shrinking touch
+     targets.
+   - **No sources entry point in the appbar for now** (*landed*,
+     2026-06-12, Mark's direction). The folder glyph that opened the
+     sources panel is removed; sources management returns when the
+     filters-in-search treatment lands (`[HOLD FOR ME]` above — Mark's
+     design). The panel itself (`SourcesPanelView`) and `BrowseModel`'s
+     filter state are untouched; only the appbar affordance is gone, so
+     T-8.4+ must restore an entry point alongside that design.
+   - **Window background is solid** (*landed*, 2026-06-12). The detail
+     container's pre-v2 flush glass wash drew a thin hairline rim around
+     the whole modules surface; it is replaced with solid
+     `backgroundPrimary` (toolbox-v2: glass lives on the floating controls
+     layer only).
+   - **Appbar vertical-weight pass + model readout** (*landed*, 2026-06-12,
+     Mark's review). The bar, segmented, and search field all get taller:
+     the search field takes 12pt vertical padding and is capped at the
+     mockup's 300pt max width (it no longer runs the whole bar); the
+     `Project | Model` segmented is now custom-built (mockup `.seg`,
+     scaled up — the system control reads too thin at any size). The
+     trailing slot now renders the `provider · model ⌄` readout from the
+     Settings `llm.provider`/`llm.model` storage — **visual only**; T-8.8
+     still owns the switching menu behind it.
+   - **`Add module` moves to the sidebar** (*landed*, 2026-06-12, Mark's
+     direction). The appbar button is gone; the sidebar gains an
+     `Add module` nav row whose screen is intentionally blank — Mark
+     designs it later. Drag-and-drop and the empty-Library button remain
+     intake paths; the folder-picker plumbing (`addFolder` →
+     `DropZoneHandler`) is untouched for that screen to use.
+   - **Sidebar widens to the mockup's 232pt** (*landed*, 2026-06-12). The
+     192pt fit-math width read too narrow; the Library's browser-pane
+     minimum relaxes to 400pt so 232 + content still fits the 960pt
+     minimum window.
+   - **Glass shadows matched to the mockup** (*landed*, 2026-06-12). The
+     appbar and the sidebar now carry the exact `.glass` box-shadow from
+     `gunk Library (standalone).html` / `toolbox-v2-library.html`:
+     `inset 0 1px 0 rgba(255,255,255,0.10)` (a crisp 1pt inner top
+     highlight) plus `0 12px 40px -16px rgba(0,0,0,0.6)` (mapped to SwiftUI
+     shadow radius 12 / y 12 / opacity 0.6 — the −16px spread pulls the
+     40px CSS blur to a ~24px falloff). The sidebar was previously
+     un-shadowed (`elevated: false`), which diverged from the HTML — both
+     surfaces now share the same elevated treatment.
 
 ---
 

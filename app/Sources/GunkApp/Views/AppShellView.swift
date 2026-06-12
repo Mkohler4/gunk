@@ -60,10 +60,12 @@ struct AppShellView: View {
     _selection = State(initialValue: .library)
   }
 
-  /// Fixed sidebar width. 192 (not the ux doc's nominal 200) because the
-  /// Modules browser is 765pt wide at minimum, and 192 + 765 must fit the
-  /// 960pt minimum window without squeezing (ux §4.6, D10).
-  private static let sidebarWidth: CGFloat = 192
+  /// Fixed sidebar width — the toolbox-v2 mockup's 232pt (Mark's review:
+  /// the old 192 read too narrow). The Library's pane minimums were relaxed
+  /// to keep 232 + content fitting the 960pt minimum window (the inline
+  /// detail pane is interim and collapsed at rest since the T-8.3b
+  /// follow-ups).
+  private static let sidebarWidth: CGFloat = 232
 
   var body: some View {
     // A plain two-pane layout instead of NavigationSplitView: the split
@@ -157,7 +159,7 @@ struct AppShellView: View {
       }
       let count = services.browseModel.approvalQueue.count
       return count > 0 ? .count(count) : nil
-    case .marketplace, .settings:
+    case .marketplace, .addModule, .settings:
       return nil
     }
   }
@@ -264,13 +266,10 @@ struct AppShellView: View {
       .padding(.horizontal, detailHorizontalPadding)
       .padding(.vertical, BrandMetrics.Spacing.md)
       .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-      .background {
-        // backgroundPrimary base with a flush glass wash on top — the
-        // detail container's glass layering (ux §3.0).
-        BrandColors.backgroundPrimary
-          .brandGlass(cornerRadius: 0, elevated: false)
-          .ignoresSafeArea()
-      }
+      // Solid window background — no glass wash. Toolbox-v2 confines glass
+      // to the floating controls layer; the old flush wash drew a hairline
+      // rim around the whole content area.
+      .background(BrandColors.backgroundPrimary.ignoresSafeArea())
       .toolbar(removing: .title)
       .toolbar {
         // D13: the window title stays "gunk" (its text is removed from the
@@ -318,6 +317,11 @@ struct AppShellView: View {
         "Marketplace — coming soon",
         message: "Use other people's modules, and publish yours."
       )
+    case .addModule:
+      // Intentionally blank: the appbar's folder-picker intake moved here
+      // (Mark's direction, T-8.3b follow-ups) and Mark designs this screen
+      // later. Drag-and-drop and the empty-Library button still intake.
+      Color.clear
     case .settings:
       SettingsView(storePath: services.store.databasePath)
     }
@@ -329,6 +333,7 @@ struct AppShellView: View {
 private enum AppSection: String, CaseIterable, Identifiable {
   case library
   case marketplace
+  case addModule
   case settings
 
   var id: String {
@@ -341,6 +346,8 @@ private enum AppSection: String, CaseIterable, Identifiable {
       return "Library"
     case .marketplace:
       return "Marketplace"
+    case .addModule:
+      return "Add module"
     case .settings:
       return "Settings"
     }
@@ -352,6 +359,8 @@ private enum AppSection: String, CaseIterable, Identifiable {
       return "square.grid.2x2"
     case .marketplace:
       return "storefront"
+    case .addModule:
+      return "plus.square.on.square"
     case .settings:
       return "gearshape"
     }

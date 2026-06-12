@@ -23,6 +23,7 @@ struct GlassMaterial: ViewModifier {
             .regular.tint(BrandColors.surfaceGlass.opacity(BrandMetrics.Glass.tintOpacity)),
             in: .rect(cornerRadius: cornerRadius)
           )
+          .overlay(innerTopHighlight)
           .shadow(
             color: .black.opacity(elevated ? BrandMetrics.Glass.shadowOpacity : 0),
             radius: BrandMetrics.Glass.shadowRadius,
@@ -34,6 +35,21 @@ struct GlassMaterial: ViewModifier {
     #else
       fallback(content: content)
     #endif
+  }
+
+  /// The toolbox-v2 glass `inset 0 1px 0 rgba(255,255,255,0.10)`: a crisp
+  /// 1pt highlight hugging the inside of the top edge, clipped by the shape
+  /// so it fades out through the corner curves.
+  private var innerTopHighlight: some View {
+    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+      .fill(.clear)
+      .overlay(alignment: .top) {
+        Rectangle()
+          .fill(.white.opacity(BrandMetrics.Glass.innerTopHighlightOpacity))
+          .frame(height: 1)
+      }
+      .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+      .allowsHitTesting(false)
   }
 
   private func fallback(content: Content) -> some View {
@@ -58,6 +74,7 @@ struct GlassMaterial: ViewModifier {
       .overlay(
         shape.strokeBorder(.white.opacity(BrandMetrics.Glass.strokeOpacity))
       )
+      .overlay(innerTopHighlight)
       .clipShape(shape)
       .shadow(
         color: .black.opacity(elevated ? BrandMetrics.Glass.shadowOpacity : 0),
