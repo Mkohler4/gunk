@@ -7,6 +7,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Fixed
+- CI: two bugs in the changed-paths / CHANGELOG gating were failing PRs
+  that should pass. `dorny/paths-filter` defaults to OR-ing patterns, so
+  `'**'` matched every file, the `'!docs/**'` exclusion was dead code, and
+  docs-only PRs were classified as code changes and hit the CHANGELOG gate
+  (now `predicate-quantifier: 'every'`). The gate itself diffed against
+  `origin/$BASE_REF`, a ref `actions/checkout` can leave pointing at the
+  PR's own test-merge commit — an empty diff that failed PRs that *did*
+  update the CHANGELOG; it now diffs the test-merge commit against its
+  first parent, which is the base tip by construction.
 - `gunk.app` the run-completion summary no longer lies about how many
   modules a run added (it could claim "14 modules added" when zero were
   persisted). The old count captured the engine's mid-run `modulesFound`

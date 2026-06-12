@@ -27,6 +27,10 @@ jobs:
         id: filter
         uses: dorny/paths-filter@v4
         with:
+          # Default 'some' ORs the patterns, so '**' matched docs files and
+          # the '!docs/**' exclusion was dead — every PR counted as code.
+          # 'every' requires a file to match all patterns: in docs/ → not code.
+          predicate-quantifier: 'every'
           filters: |
             code:
               - '**'
@@ -85,11 +89,13 @@ jobs:
 
       - name: Require a CHANGELOG entry
         if: ${{ !contains(github.event.pull_request.labels.*.name, 'no-changelog') }}
-        env:
-          BASE_REF: ${{ github.base_ref }}
         run: |
-          git fetch --no-tags origin "$BASE_REF"
-          if git diff --name-only "origin/$BASE_REF" HEAD | grep -qx 'CHANGELOG.md'; then
+          # HEAD is the PR test-merge commit; its first parent is the base
+          # branch tip, so this diff is exactly the PR's changes. Diffing
+          # against origin/$BASE_REF is unreliable: actions/checkout can
+          # leave that ref pointing at the merge commit itself, making the
+          # diff empty and failing PRs that did update the CHANGELOG.
+          if git diff --name-only HEAD^1 HEAD | grep -qx 'CHANGELOG.md'; then
             echo "CHANGELOG.md updated."
           else
             echo "Code changed but CHANGELOG.md was not updated."
