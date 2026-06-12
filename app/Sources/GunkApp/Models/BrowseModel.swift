@@ -150,7 +150,13 @@ final class BrowseModel {
   typealias LoadRunTraces = @MainActor () -> [RunTrace]
 
   private let store: Store
-  private let confidenceThreshold: Double
+  /// The auto-accept gate the approval queue is computed from
+  /// (`isPendingApproval`). Exposed so review copy ("62% — below the 70%
+  /// auto-accept threshold") derives from the same constant the queue rule
+  /// gates on and the two can never disagree. Note B1: this is hard-coded
+  /// to `Extractor.defaultConfidenceThreshold` (0.7) today; the Settings
+  /// slider is cosmetic until Phase 11.
+  let confidenceThreshold: Double
   private let extractGunk: ExtractGunk
   private let reclassifySource: ReclassifySource
   private let loadRunTraces: LoadRunTraces

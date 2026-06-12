@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Changed
+- `gunk.app` approval folds into the Library (T-8.4): the Approval surface
+  is gone — needs-approval is now a state inside the Library. Queued cells
+  gain the mockup's 3px amber top edge (`.card.attn::before`,
+  `BrandColors.warning`, concentric with the card radius; the green
+  selection/arrival ring wins while present). The module detail gains a
+  review block above the actions row: confidence with threshold context
+  ("62% — below the 70% auto-accept threshold", derived from the same
+  `BrowseModel.confidenceThreshold` the queue rule gates on — B1: hard-coded
+  0.7 until Phase 11), **Approve** (primary; extracts in place and animates
+  the Agent-ready line to its success state with `BrandMotion`, keeping the
+  selection even when the active scope hides the cell) and **Reject**
+  (destructive; behind a confirmation dialog stating the module is
+  permanently deleted). Tapping the sidebar Library badge navigates to the
+  Library **and** applies the needs-approval scope, shown as one transient,
+  clearable amber chip ("Needs approval (N) ×") in the appbar's flexible
+  gap — no persistent filter UI. Approving the last queued module while
+  scoped lands on a friendly "All caught up" state and clears the chip.
+  `ApprovalQueueView` and the `ApprovalSectionView` wrapper are deleted.
+
 ### Fixed
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 

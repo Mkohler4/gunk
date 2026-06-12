@@ -474,51 +474,111 @@ Review stops being a separate room: needs-approval modules are a state in
 the Library, and approve/reject happen in the module detail with real
 feedback and safe destructive actions.
 
+### Design clarification — the "orange" in the mockup (resolved 2026-06-12)
+
+Mark's annotated screenshot shows two orange-ish marks; they are different
+things and only **one** belongs to this task:
+
+- The **coral corner badge** (`#D26D43`, the asterisk glyph) is the
+  **Anthropic provider badge** — already implemented (`ProviderBadge` +
+  `BrandColors.providerAccent`). It means "extracted by Claude," carries
+  **no approval meaning**, and T-8.4 must not touch it.
+- The **needs-approval treatment is amber, not coral**: the amber
+  `Needs approval` headline (already landed on `ModuleCell`) **plus a 3px
+  amber top edge** — mockup CSS `.card.attn::before` (`height: 3px`,
+  `border-radius: 17px 17px 0 0`, `background: var(--amber)` =
+  `#e7b765` = the existing `BrandColors.warning` token).
+- The **coral top edge** on the mockup's TTS Audio Stitcher card is a
+  **mockup artifact** — per the "Resolved" section of
+  `docs/design/explorations/toolbox-v2.md`, top edges exist only for
+  needs-attention (amber) and failed (red); **no provenance-colored edge
+  exists**. Do not invent one.
+
+### Updated for the landed T-8.3b follow-ups (2026-06-12)
+
+Written before the follow-up passes landed; the deltas that change this
+task's plan:
+
+- **The appbar has no filter UI by design** (Mark's direction — filters
+  return *inside the search bar* later, `[HOLD FOR ME]`). The original
+  item 4's "filter chip in the Library header" would violate that. The
+  needs-approval scope instead arrives via the **sidebar badge
+  tap-through**, with a **transient, clearable scope chip** shown only
+  while the scope is active (it sits in the appbar's flexible gap between
+  search and the model readout, and disappears when cleared).
+- The **inline detail pane only renders for a selected module** (no
+  resting placeholder) and is interim until T-8.6's glass sheet — the
+  review block lands inside `ModuleDetailView` and will move with it.
+- `ModuleCell` already renders the three verdict states; this task adds
+  the **top edge** for needs-approval, not the cell itself.
+
 ### Files
-- `app/Sources/GunkApp/Views/BrowseView.swift` (rows + detail pane)
-- `app/Sources/GunkApp/Views/AppShellView.swift` (badge, routing)
+- `app/Sources/GunkApp/Views/ModuleCell.swift` (amber top edge)
+- `app/Sources/GunkApp/Views/BrowseView.swift` (review block in
+  `ModuleDetailView`, scope chip, cleared-queue state)
+- `app/Sources/GunkApp/Views/AppShellView.swift` (badge tap-through
+  routing)
 - `app/Sources/GunkApp/Views/ApprovalQueueView.swift` (deleted at the end)
 - `app/Sources/GunkApp/Models/BrowseModel.swift` (read-only usage; the
   queue rule already lives here)
 
 ### Task execution (agent prompt)
 
-> 1. Module rows in the needs-approval state (use
->    `BrowseModel.approvalQueue` membership) get the needs-attention
->    treatment from toolbox-v1/v2 (colored top edge) and a "Needs
->    approval" badge instead of the neutral state.
+> 1. Module cells in the needs-approval state (use
+>    `BrowseModel.approvalQueue` membership — same rule the badge counts)
+>    get the **3px amber top edge** from the mockup `.card.attn::before`:
+>    `BrandColors.warning`, full cell width, rounded with the card's own
+>    top radius (concentric — never a square strip on a round card). The
+>    amber `Needs approval` headline already exists; the edge is the only
+>    cell change. Use amber/`warning` only — the coral provider badge is
+>    a different, unrelated mark (see Design clarification above).
 > 2. The detail pane for a needs-approval module gains a review block
 >    above the actions row: confidence shown *with threshold context*
->    ("62% — below the 70% auto-accept threshold") and two labeled
->    buttons: **Approve** (primary; calls `model.approve`) and **Reject**
->    (destructive; calls `model.reject` **behind a confirmation dialog**
->    that says it permanently deletes the module).
+>    ("62% — below the 70% auto-accept threshold" — derive the threshold
+>    from the **same constant `BrowseModel`'s queue rule actually gates
+>    on**, so copy and behavior can't disagree; note B1: the gate is
+>    hard-coded 0.7 today and the Settings slider is cosmetic until
+>    Phase 11) and two labeled buttons: **Approve** (primary; calls
+>    `model.approve`) and **Reject** (destructive; calls `model.reject`
+>    **behind a confirmation dialog** that says it permanently deletes
+>    the module).
 > 3. Approve gives feedback: the detail's Agent-ready line transitions to
 >    its success state in place (animate with `BrandMotion`); do not let
->    the row silently vanish if a filter hides it — keep selection on the
->    module.
-> 4. Add a "Needs approval (N)" filter chip or scoped control in the
->    Library header that applies the existing
->    `BrowseApprovalFilter.needsApproval`; wire the sidebar Library badge
->    count tap-through to it.
+>    the cell silently vanish if the scope hides it — keep selection on
+>    the module.
+> 4. **Needs-approval scope (not a filter UI).** Tapping the sidebar
+>    Library badge navigates to Library **and** applies the existing
+>    `BrowseApprovalFilter.needsApproval`. While that scope is active,
+>    show one clearable chip ("Needs approval (N) ×", amber-tinted) in
+>    the appbar's flexible gap; clearing it restores `.all`. Do **not**
+>    add a persistent filter row/popover — the appbar stays title /
+>    segmented / search / model readout (T-8.3b follow-ups).
 > 5. Delete `ApprovalQueueView.swift` and the `ApprovalSectionView`
->    wrapper. `swift build`, `swift test`, screenshots: a needs-approval
->    cell, the review block, the reject confirmation, and the
->    post-approve state.
+>    wrapper in `AppShellView`. `swift build`, `swift test`, screenshots:
+>    a needs-approval cell (edge + headline), the review block, the
+>    reject confirmation, the post-approve state, and the active scope
+>    chip.
 
 ### Refining loop
-- If approving the last queued module leaves the needs-approval filter
+- If approving the last queued module leaves the needs-approval scope
   showing an empty grid, land on a friendly cleared-queue state ("All
-  caught up") rather than the generic empty state.
+  caught up") rather than the generic empty state — and clear the scope
+  chip with it.
+- If the amber edge fights the selection/arrival green ring at the card's
+  top corners, the ring wins while present (the edge may fade under it);
+  never show two competing outlines.
 
 ### Human-in-the-loop (me)
-- `[HOLD FOR ME]` CP-B: I walk the full review journey (badge → filter →
+- `[HOLD FOR ME]` CP-B: I walk the full review journey (badge → scope →
   detail → approve and reject) on a real store before T-8.6 starts.
 
 ### Acceptance
-- No Approval tab; review is reachable from the badge, the filter, and any
-  needs-approval cell. Reject confirms before deleting. Approve animates
-  to Agent-ready. Build + tests green.
+- No Approval tab; review is reachable from the badge tap-through and any
+  needs-approval cell. The needs-approval treatment is the amber headline
+  + amber top edge (coral stays provider-only). Reject confirms before
+  deleting. Approve animates to Agent-ready. The appbar gains no
+  persistent filter UI — only the transient scope chip. Build + tests
+  green.
 
 ---
 

@@ -232,6 +232,23 @@ struct BrowseView: View {
         }
         .buttonStyle(.brandPrimary)
       }
+    } else if model.filters.approval == .needsApproval, model.approvalQueue.isEmpty {
+      // Cleared-queue state (T-8.4 refining loop): approving the last queued
+      // module lands here, not on the generic no-matches state. The scope
+      // chip is already gone (`showsScopeChip`); the button is the way out.
+      EmptyStateView(
+        "All caught up",
+        message: "No modules are waiting for review."
+      ) {
+        Button {
+          withAnimation(BrandMotion.standard) {
+            model.filters.approval = .all
+          }
+        } label: {
+          Label("Show all modules", systemImage: "square.grid.2x2")
+        }
+        .buttonStyle(.brandSecondary)
+      }
     } else {
       EmptyStateView(
         "No matches",
@@ -276,6 +293,12 @@ struct BrowseView: View {
 
       Spacer(minLength: BrandMetrics.Spacing.sm)
 
+      // Transient needs-approval scope chip (T-8.4): lives in the flexible
+      // gap only while the scope is active — never a persistent filter UI.
+      if showsScopeChip {
+        needsApprovalScopeChip
+      }
+
       modelSelector
     }
   }
@@ -293,8 +316,54 @@ struct BrowseView: View {
         groupPicker
         searchField
           .frame(maxWidth: Self.searchMaxWidth)
+
+        if showsScopeChip {
+          needsApprovalScopeChip
+        }
       }
     }
+  }
+
+  /// The chip rides with the scope, not the grid: it disappears with the
+  /// cleared-queue state (the empty grid already says "All caught up", and
+  /// "Needs approval (0)" would be noise).
+  private var showsScopeChip: Bool {
+    model.filters.approval == .needsApproval && !model.approvalQueue.isEmpty
+  }
+
+  /// "Needs approval (N) ×" — clearable, amber-tinted (amber is the
+  /// needs-attention color; this is scope state, not a control accent).
+  /// Clearing restores the unscoped Library.
+  private var needsApprovalScopeChip: some View {
+    Button {
+      withAnimation(BrandMotion.standard) {
+        model.filters.approval = .all
+      }
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.xs) {
+        Text("Needs approval (\(model.approvalQueue.count))")
+          .font(BrandTypography.callout.weight(.medium))
+          .monospacedDigit()
+
+        Image(systemName: "xmark")
+          .font(BrandTypography.caption.weight(.semibold))
+      }
+      .foregroundStyle(BrandColors.warning)
+      .lineLimit(1)
+      .padding(.horizontal, BrandMetrics.Spacing.md)
+      .padding(.vertical, BrandMetrics.Spacing.sm)
+      .background(
+        Capsule()
+          .fill(BrandColors.warning.opacity(BrandMetrics.Control.tintedFillOpacity))
+      )
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+    .transition(.opacity)
+    .help("Showing only modules that need approval — click to clear")
+    .accessibilityLabel(
+      "Scoped to \(model.approvalQueue.count) modules needing approval. Clear scope."
+    )
   }
 
   private var headerTitle: some View {
@@ -586,9 +655,22 @@ struct BrowseView: View {
   private func detailPane(for detail: BrowseModuleDetail) -> some View {
     ModuleDetailView(
       detail: detail,
+      // Same membership rule as `BrowseModel.approvalQueue` (and therefore
+      // the sidebar badge), so the review block can never disagree with
+      // either.
+      needsApproval: model.approvalFilter(for: detail.item) == .needsApproval,
+      approvalThreshold: model.confidenceThreshold,
       mcpNeedsSetup: mcpNeedsSetup,
       openBundle: openBundle,
       onShowSettings: onShowSettings,
+      onApprove: {
+        // Approve feedback (T-8.4): the Agent-ready line transitions to its
+        // success state in place; `settle` gives the landing overshoot.
+        withAnimation(BrandMotion.settle) {
+          model.approve(gunkId: detail.item.gunk.id)
+        }
+      },
+      onReject: { model.reject(gunkId: detail.item.gunk.id) },
       onRerun: { model.reclassify(sourceId: detail.item.source.id) },
       onDelete: { model.delete(gunkId: detail.item.gunk.id) }
     )
@@ -603,13 +685,16 @@ struct BrowseView: View {
     )
   }
 
-  /// ux §3.2: filter changes never steal or re-assign the selection. If the
-  /// selected module is no longer visible the selection clears, and the
-  /// inline detail pane collapses — the full-width grid is the resting state.
+  /// ux §3.2: filter changes never steal or re-assign the selection. The
+  /// selection survives the active scope hiding its cell (T-8.4: approving a
+  /// queued module under the needs-approval scope must keep the detail open
+  /// so its post-approve feedback stays visible — the cell never silently
+  /// vanishes from under the user). Selection clears only when the module no
+  /// longer exists (deleted or rejected), collapsing the inline pane back to
+  /// the full-width grid.
   private func synchronizeSelection() {
-    let visibleItems = model.sections.flatMap(\.items)
     if let selectedGunkId,
-       !visibleItems.contains(where: { $0.id == selectedGunkId }) {
+       !model.loadedGunkIds.contains(selectedGunkId) {
       self.selectedGunkId = nil
     }
   }
@@ -619,17 +704,28 @@ struct BrowseView: View {
 
 private struct ModuleDetailView: View {
   let detail: BrowseModuleDetail
+  /// Queue membership by `BrowseModel`'s rule — drives the review block.
+  let needsApproval: Bool
+  /// The auto-accept gate the queue rule computes from
+  /// (`BrowseModel.confidenceThreshold`), so the threshold copy below and
+  /// the queue behavior can never disagree.
+  let approvalThreshold: Double
   let mcpNeedsSetup: Bool
   let openBundle: (URL) -> Void
   let onShowSettings: () -> Void
+  let onApprove: () -> Void
+  let onReject: () -> Void
   let onRerun: () -> Void
   let onDelete: () -> Void
+
+  @State private var showRejectConfirmation = false
 
   var body: some View {
     ScrollView {
       VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
         header
         agentReadyLine
+        reviewSection
         actionsRow
         runabilitySection
         bundleSection
@@ -640,7 +736,67 @@ private struct ModuleDetailView: View {
       }
       .frame(maxWidth: .infinity, alignment: .topLeading)
       .padding(.bottom, BrandMetrics.Spacing.sm)
+      // Approve feedback in place: the review block leaves and the
+      // Agent-ready line lands its success state on the same surface.
+      .animation(BrandMotion.settle, value: needsApproval)
     }
+  }
+
+  // MARK: Review (T-8.4 — approval folded into the detail)
+
+  /// Approve/reject for a queued module, above the actions row. Interim
+  /// home: moves into the T-8.6 glass sheet with the rest of this view.
+  @ViewBuilder
+  private var reviewSection: some View {
+    if needsApproval {
+      DetailSection(title: "Needs approval", systemImage: "exclamationmark.triangle") {
+        Text(confidenceContextLine)
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textPrimary)
+
+        Text("Approving extracts the module and makes it available to your agent through MCP.")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+
+        HStack(spacing: BrandMetrics.Spacing.sm) {
+          Button(action: onApprove) {
+            Label("Approve", systemImage: "checkmark.circle")
+          }
+          .buttonStyle(.brandPrimary)
+          .help("Approve and extract \(detail.item.gunk.name)")
+
+          Button(role: .destructive) {
+            showRejectConfirmation = true
+          } label: {
+            Label("Reject", systemImage: "xmark.circle")
+          }
+          .buttonStyle(.brandDestructive)
+          .help("Reject and permanently delete \(detail.item.gunk.name)")
+          .confirmationDialog(
+            "Reject \(detail.item.gunk.name)?",
+            isPresented: $showRejectConfirmation,
+            titleVisibility: .visible
+          ) {
+            Button("Reject and delete", role: .destructive, action: onReject)
+            Button("Cancel", role: .cancel) {}
+          } message: {
+            Text("Rejecting permanently deletes this module from your library. This cannot be undone.")
+          }
+        }
+        .padding(.top, BrandMetrics.Spacing.xs)
+      }
+      .transition(.opacity)
+    }
+  }
+
+  /// "62% — below the 70% auto-accept threshold": confidence shown with the
+  /// context of the gate that actually queued it.
+  private var confidenceContextLine: String {
+    let confidence = (detail.item.gunk.confidence ?? 0)
+      .formatted(.percent.precision(.fractionLength(0)))
+    let threshold = approvalThreshold
+      .formatted(.percent.precision(.fractionLength(0)))
+    return "\(confidence) — below the \(threshold) auto-accept threshold"
   }
 
   private var header: some View {
