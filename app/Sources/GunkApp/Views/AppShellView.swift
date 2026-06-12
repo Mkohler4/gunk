@@ -301,11 +301,16 @@ struct AppShellView: View {
       // review merges land in T-8.3/T-8.4.
       ModulesSectionView(
         model: services.browseModel,
+        // Sources fold into the Library here (T-8.3): the source list, its
+        // status, "N modules" navigation, delete, and add-folder are all
+        // reachable from the Library header.
+        sourceListModel: services.sourceListModel,
+        processingModel: services.processingModel,
+        dropZoneHandler: services.dropZoneHandler,
         // The shell's MCP snapshot drives the Agent-ready needs-setup copy
         // (ux §4.5, D8) so the detail line and the status strip can't
         // disagree.
         mcpNeedsSetup: (mcpStatus ?? mcpStatusProvider.status()).state == .needsSetup,
-        onShowSources: { selection = .library },
         onShowSettings: { selection = .settings }
       )
     case .marketplace:
@@ -604,82 +609,12 @@ private struct ShellStatusStrip: View {
 // MARK: - Section wrappers
 
 @MainActor
-private struct SourcesSectionView: View {
-  let processingModel: ProcessingModel
-  let sourceListModel: GunkListModel
-  let dropZoneHandler: DropZoneHandler
-  let onShowModules: (Int64) -> Void
-
-  @State private var arrivedSourceIds: Set<Int64> = []
-  @State private var arrivalDecayTasks: [Int64: Task<Void, Never>] = [:]
-
-  /// How long a freshly arrived row keeps its highlight (ux §4.4).
-  private static let arrivalHighlightLifetime: Duration = .seconds(2)
-
-  /// The drop zone is the hero and never moves (ux §3.1, D15). The global
-  /// status block that used to inject above it is gone — global awareness
-  /// lives in the shell (sidebar indicator + status strip, T-7.6).
-  private static let dropZoneHeight: CGFloat = 170
-
-  var body: some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
-      BrandDropZone(handler: dropZoneHandler)
-        .frame(height: Self.dropZoneHeight)
-
-      SectionHeader("Sources (\(sourceListModel.sources.count))")
-
-      if let errorMessage = sourceListModel.errorMessage {
-        Text(errorMessage)
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.danger)
-          .textSelection(.enabled)
-      }
-
-      GunkListView(
-        model: sourceListModel,
-        processingModel: processingModel,
-        arrivedSourceIds: arrivedSourceIds,
-        onShowModules: onShowModules
-      )
-    }
-    .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
-    .onAppear {
-      sourceListModel.refresh()
-    }
-    .onReceive(NotificationCenter.default.publisher(for: .gunkInserted)) { notification in
-      sourceListModel.refresh()
-      if let source = notification.object as? Source {
-        markArrived(source.id)
-      }
-    }
-  }
-
-  /// Arrival treatment (ux §4.4): the new row appears already highlighted,
-  /// then the highlight decays after a beat.
-  private func markArrived(_ sourceId: Int64) {
-    withAnimation(BrandMotion.settle) {
-      _ = arrivedSourceIds.insert(sourceId)
-    }
-
-    arrivalDecayTasks[sourceId]?.cancel()
-    arrivalDecayTasks[sourceId] = Task {
-      try? await Task.sleep(for: Self.arrivalHighlightLifetime)
-      guard !Task.isCancelled else {
-        return
-      }
-      withAnimation(BrandMotion.smooth) {
-        _ = arrivedSourceIds.remove(sourceId)
-      }
-      arrivalDecayTasks.removeValue(forKey: sourceId)
-    }
-  }
-}
-
-@MainActor
 private struct ModulesSectionView: View {
   let model: BrowseModel
+  let sourceListModel: GunkListModel
+  let processingModel: ProcessingModel
+  let dropZoneHandler: DropZoneHandler
   let mcpNeedsSetup: Bool
-  let onShowSources: () -> Void
   let onShowSettings: () -> Void
 
   var body: some View {
@@ -693,8 +628,10 @@ private struct ModulesSectionView: View {
 
       BrowseView(
         model: model,
+        sourceListModel: sourceListModel,
+        processingModel: processingModel,
+        dropZoneHandler: dropZoneHandler,
         mcpNeedsSetup: mcpNeedsSetup,
-        onShowSources: onShowSources,
         onShowSettings: onShowSettings
       )
     }

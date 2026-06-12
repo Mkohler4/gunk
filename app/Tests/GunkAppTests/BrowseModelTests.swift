@@ -5,12 +5,13 @@ import XCTest
 
 @MainActor
 final class BrowseModelTests: XCTestCase {
-  func testGroupsByTag() throws {
+  func testGroupsByProjectByDefault() throws {
     let store = try makeStore()
-    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let apiSource = try store.insertSource(name: "api", path: "/tmp/api")
+    let cliSource = try store.insertSource(name: "cli", path: "/tmp/cli")
     let auth = try insertGunk(
       store: store,
-      source: source,
+      source: apiSource,
       name: "auth-module",
       tags: ["auth", "api"],
       confidence: 0.91,
@@ -18,7 +19,7 @@ final class BrowseModelTests: XCTestCase {
     )
     let cli = try insertGunk(
       store: store,
-      source: source,
+      source: cliSource,
       name: "cli-module",
       tags: ["cli"],
       confidence: 0.84,
@@ -35,9 +36,10 @@ final class BrowseModelTests: XCTestCase {
       (section.tag, section.items.map(\.gunk.id))
     })
 
+    XCTAssertEqual(model.filters.group, .project)
     XCTAssertEqual(itemsBySection["api"], [auth.id])
-    XCTAssertEqual(itemsBySection["auth"], [auth.id])
     XCTAssertEqual(itemsBySection["cli"], [cli.id])
+    XCTAssertEqual(model.totalModuleCount, 2)
     XCTAssertTrue(model.approvalQueue.isEmpty)
   }
 
@@ -70,7 +72,6 @@ final class BrowseModelTests: XCTestCase {
     model.filters.tag = "auth"
     model.filters.language = "Swift"
     model.filters.approval = .autoAccepted
-    model.filters.group = .source
 
     XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [apiModule.id])
     XCTAssertEqual(model.availableTags, ["auth", "reports", "sessions"])
@@ -78,57 +79,192 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertEqual(model.availableSources.map(\.name), ["api", "cli"])
   }
 
-  func testGroupsModulesBySourceLanguageAndApproval() throws {
-    let store = try makeStore(now: { 500 })
+  func testGroupsByExtractingModelWithUnknownBucket() throws {
+    let store = try makeStore()
     let source = try store.insertSource(name: "source", path: "/tmp/source")
-    let approved = try insertGunk(
+    let claudeModule = try insertGunk(
       store: store,
       source: source,
-      name: "approved-module",
-      tags: ["auth"],
-      language: "Swift",
-      confidence: 0.42
+      name: "claude-module",
+      tags: [],
+      confidence: 0.9,
+      extractedAt: 200
     )
-    let extracted = try insertGunk(
+    let untraced = try insertGunk(
       store: store,
       source: source,
-      name: "extracted-module",
-      tags: ["auth"],
-      language: "Go",
-      confidence: 0.93,
+      name: "untraced-module",
+      tags: [],
+      confidence: 0.8,
       extractedAt: 300
     )
-    let pending = try insertGunk(
+    // The untraced module's source has no trace either: insert the trace for
+    // a different source id so only the explicit gunk-id match applies.
+    let trace = makeTrace(
+      runId: "run-1",
+      sourceId: source.id + 99,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      gunkIds: [claudeModule.id]
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [trace] })
+
+    model.refresh()
+    model.filters.group = .model
+
+    XCTAssertEqual(
+      Dictionary(uniqueKeysWithValues: model.sections.map { ($0.tag, $0.items.map(\.gunk.id)) }),
+      [
+        "anthropic · claude-sonnet-4": [claudeModule.id],
+        "Unknown model": [untraced.id],
+      ]
+    )
+  }
+
+  func testProvenancePrefersGunkTraceAndFallsBackToSourceTrace() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let traced = try insertGunk(
       store: store,
       source: source,
-      name: "pending-module",
-      tags: ["queue"],
-      language: nil,
-      confidence: 0.35
+      name: "traced-module",
+      tags: [],
+      confidence: 0.9,
+      extractedAt: 200
+    )
+    let sourceFallback = try insertGunk(
+      store: store,
+      source: source,
+      name: "fallback-module",
+      tags: [],
+      confidence: 0.8,
+      extractedAt: 300
+    )
+    // Newest-first trace order: the recent openai run names `traced` only;
+    // an older anthropic source-level run covers the rest of the source.
+    let traces = [
+      makeTrace(
+        runId: "run-2",
+        sourceId: source.id,
+        provider: "openai",
+        model: "gpt-test",
+        gunkIds: [traced.id],
+        startedAtMs: 2
+      ),
+      makeTrace(
+        runId: "run-1",
+        sourceId: source.id,
+        provider: "anthropic",
+        model: "claude-sonnet-4",
+        gunkIds: [],
+        startedAtMs: 1
+      ),
+    ]
+    let model = BrowseModel(store: store, loadRunTraces: { traces })
+
+    model.refresh()
+    let items = model.sections.flatMap(\.items)
+    let tracedItem = try XCTUnwrap(items.first { $0.gunk.id == traced.id })
+    let fallbackItem = try XCTUnwrap(items.first { $0.gunk.id == sourceFallback.id })
+
+    XCTAssertEqual(
+      model.provenance(for: tracedItem),
+      BrowseProvenance(provider: "openai", model: "gpt-test")
+    )
+    // No gunk-level trace: the most recent trace for its source wins. (The
+    // newest run-2 also carries sourceId, so the source fallback is run-2.)
+    XCTAssertEqual(
+      model.provenance(for: fallbackItem),
+      BrowseProvenance(provider: "openai", model: "gpt-test")
+    )
+  }
+
+  func testSearchQueryMatchesNamePurposeAndTagsCaseInsensitively() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let auth = try insertGunk(
+      store: store,
+      source: source,
+      name: "OAuth-Login",
+      tags: ["sessions"],
+      confidence: 0.9,
+      extractedAt: 200
+    )
+    let parser = try insertGunk(
+      store: store,
+      source: source,
+      name: "epub-parser",
+      tags: ["audiobook"],
+      confidence: 0.8,
+      extractedAt: 300
     )
     let model = BrowseModel(store: store)
 
-    model.approve(gunkId: approved.id)
     model.refresh()
 
-    model.filters.group = .language
-    XCTAssertEqual(
-      Dictionary(uniqueKeysWithValues: model.sections.map { ($0.tag, $0.items.map(\.gunk.id)) }),
-      [
-        "Go": [extracted.id],
-        "Swift": [approved.id],
-        "Unknown language": [pending.id],
-      ]
-    )
+    model.filters.query = "oauth"
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [auth.id])
 
-    model.filters.group = .approval
+    // Purpose match (insertGunk writes "<name> purpose").
+    model.filters.query = "EPUB-PARSER PURPOSE"
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [parser.id])
+
+    // Tag match.
+    model.filters.query = "AudioBook"
+    XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [parser.id])
+
+    model.filters.query = "no-such-module"
+    XCTAssertTrue(model.sections.isEmpty)
+
+    model.filters.query = ""
+    XCTAssertEqual(model.sections.flatMap(\.items).count, 2)
+  }
+
+  func testHeroRankPutsAgentReadyBeforeConfidenceThenName() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    // Not extracted, but the highest confidence in the group.
+    let pendingHighConfidence = try insertGunk(
+      store: store,
+      source: source,
+      name: "a-pending-module",
+      tags: [],
+      confidence: 0.99
+    )
+    let readyLow = try insertGunk(
+      store: store,
+      source: source,
+      name: "b-ready-low",
+      tags: [],
+      confidence: 0.7,
+      extractedAt: 200
+    )
+    let readyHigh = try insertGunk(
+      store: store,
+      source: source,
+      name: "a-ready-high",
+      tags: [],
+      confidence: 0.9,
+      extractedAt: 300
+    )
+    let readyTied = try insertGunk(
+      store: store,
+      source: source,
+      name: "z-ready-tied",
+      tags: [],
+      confidence: 0.9,
+      extractedAt: 400
+    )
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+    let section = try XCTUnwrap(model.sections.first)
+
+    // Agent-ready first, then confidence desc, then name; the first item is
+    // the grid's hero.
     XCTAssertEqual(
-      Dictionary(uniqueKeysWithValues: model.sections.map { ($0.tag, $0.items.map(\.gunk.id)) }),
-      [
-        "Approved": [approved.id],
-        "Auto accepted": [extracted.id],
-        "Needs approval": [pending.id],
-      ]
+      section.items.map(\.gunk.id),
+      [readyHigh.id, readyTied.id, readyLow.id, pendingHighConfidence.id]
     )
   }
 
@@ -350,6 +486,36 @@ final class BrowseModelTests: XCTestCase {
 
   private func makeStore(now: @escaping () -> Int64 = { 100 }) throws -> Store {
     try Store(databaseQueue: DatabaseQueue(), now: now)
+  }
+
+  private func makeTrace(
+    runId: String,
+    sourceId: Int64?,
+    provider: String,
+    model: String,
+    gunkIds: [Int64],
+    startedAtMs: Double = 1
+  ) -> RunTrace {
+    RunTrace(
+      runId: runId,
+      sourceId: sourceId,
+      sourceName: "source",
+      provider: provider,
+      model: model,
+      startedAtMs: startedAtMs,
+      finishedAtMs: startedAtMs + 1,
+      status: "succeeded",
+      error: nil,
+      stages: [],
+      refinements: nil,
+      verification: nil,
+      summary: RunTrace.Summary(
+        accepted: gunkIds.count,
+        needsApproval: 0,
+        rejected: 0,
+        gunkIds: gunkIds
+      )
+    )
   }
 
   private func insertGunk(

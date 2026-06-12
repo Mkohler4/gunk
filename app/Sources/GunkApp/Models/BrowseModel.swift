@@ -77,11 +77,12 @@ private struct BrowseTraceModuleRecord: Equatable {
   let entrypoints: [BrowseEntrypoint]
 }
 
+/// The toolbox-v2 grouping toggle: by source project or by the model that
+/// extracted each module. (The old Tag/Source/Language/Approval *grouping*
+/// is replaced by this; those dimensions survive as filters.)
 enum BrowseGroup: String, CaseIterable, Identifiable, Sendable {
-  case tag
-  case source
-  case language
-  case approval
+  case project
+  case model
 
   var id: String {
     rawValue
@@ -89,15 +90,22 @@ enum BrowseGroup: String, CaseIterable, Identifiable, Sendable {
 
   var label: String {
     switch self {
-    case .tag:
-      return "Tag"
-    case .source:
-      return "Source"
-    case .language:
-      return "Language"
-    case .approval:
-      return "Approval"
+    case .project:
+      return "Project"
+    case .model:
+      return "Model"
     }
+  }
+}
+
+/// Which provider · model extracted a module, derived from `RunTrace` — no
+/// store schema involved.
+struct BrowseProvenance: Equatable, Sendable {
+  let provider: String
+  let model: String
+
+  var label: String {
+    "\(provider) · \(model)"
   }
 }
 
@@ -126,7 +134,8 @@ enum BrowseApprovalFilter: String, CaseIterable, Identifiable, Sendable {
 }
 
 struct BrowseFilters: Equatable, Sendable {
-  var group: BrowseGroup = .tag
+  var group: BrowseGroup = .project
+  var query: String = ""
   var sourceId: Int64?
   var tag: String?
   var language: String?
@@ -139,8 +148,6 @@ final class BrowseModel {
   typealias ExtractGunk = @MainActor (Gunk) throws -> Void
   typealias ReclassifySource = @MainActor (Int64) throws -> Void
   typealias LoadRunTraces = @MainActor () -> [RunTrace]
-
-  static let untaggedSection = "untagged"
 
   private let store: Store
   private let confidenceThreshold: Double
@@ -161,9 +168,19 @@ final class BrowseModel {
   }
 
   private var items: [BrowseItem] = []
+
+  /// Every loaded module id, regardless of the active filters. The Library
+  /// grid diffs this across a run to give freshly created modules the arrival
+  /// highlight (ux §4.4, moved here from the retired Sources surface).
+  var loadedGunkIds: Set<Int64> {
+    Set(items.map(\.id))
+  }
+
   private var traceModuleRecords: [Int64: BrowseTraceModuleRecord] = [:]
   private var selfContainmentByGunkId: [Int64: BrowseSelfContainmentResult] = [:]
   private var buildVerificationByBundlePath: [String: BrowseBuildVerificationResult] = [:]
+  private var provenanceByGunkId: [Int64: BrowseProvenance] = [:]
+  private var provenanceBySourceId: [Int64: BrowseProvenance] = [:]
 
   init(
     store: Store,
@@ -241,6 +258,18 @@ final class BrowseModel {
     }
   }
 
+  /// Total modules loaded, regardless of filters — the Library header's
+  /// count chip.
+  var totalModuleCount: Int {
+    items.count
+  }
+
+  /// The provider · model that extracted this module, from its most recent
+  /// `RunTrace`; falls back to the most recent trace for its source.
+  func provenance(for item: BrowseItem) -> BrowseProvenance? {
+    provenanceByGunkId[item.gunk.id] ?? provenanceBySourceId[item.source.id]
+  }
+
   func detail(for gunkId: Int64) -> BrowseModuleDetail? {
     guard let item = items.first(where: { $0.gunk.id == gunkId }) else {
       return nil
@@ -294,9 +323,21 @@ final class BrowseModel {
     traceModuleRecords = [:]
     selfContainmentByGunkId = [:]
     buildVerificationByBundlePath = [:]
+    provenanceByGunkId = [:]
+    provenanceBySourceId = [:]
 
+    // Traces arrive newest-first (`RunTraceStore.recentTraces`); first-wins
+    // below therefore means "most recent run".
     for trace in traces {
       indexBuildVerification(trace)
+
+      let provenance = BrowseProvenance(provider: trace.provider, model: trace.model)
+      if let sourceId = trace.sourceId, provenanceBySourceId[sourceId] == nil {
+        provenanceBySourceId[sourceId] = provenance
+      }
+      for gunkId in trace.summary.gunkIds where provenanceByGunkId[gunkId] == nil {
+        provenanceByGunkId[gunkId] = provenance
+      }
 
       let traceGunkIds = Set(trace.summary.gunkIds)
       let traceItems: [BrowseItem]
@@ -442,34 +483,47 @@ final class BrowseModel {
     return values
   }
 
+  static let unknownModelSection = "Unknown model"
+
   private func groupedSections(from items: [BrowseItem]) -> [BrowseSection] {
     var buckets: [String: [BrowseItem]] = [:]
 
     for item in items {
-      let groupNames: [String]
+      let groupName: String
       switch filters.group {
-      case .tag:
-        groupNames = item.tags.isEmpty ? [Self.untaggedSection] : item.tags
-      case .source:
-        groupNames = [item.source.name]
-      case .language:
-        groupNames = [languageLabel(for: item)]
-      case .approval:
-        groupNames = [approvalLabel(for: item)]
+      case .project:
+        groupName = item.source.name
+      case .model:
+        groupName = provenance(for: item)?.label ?? Self.unknownModelSection
       }
 
-      for groupName in groupNames {
-        buckets[groupName, default: []].append(item)
-      }
+      buckets[groupName, default: []].append(item)
     }
 
+    // Section items are hero-rank ordered: the grid promotes the first item
+    // of each group to the hero cell.
     return buckets
       .map { groupName, items in
-        BrowseSection(tag: groupName, items: items.sorted(by: itemSort))
+        BrowseSection(tag: groupName, items: items.sorted(by: heroRank))
       }
       .sorted { lhs, rhs in
         lhs.tag.localizedStandardCompare(rhs.tag) == .orderedAscending
       }
+  }
+
+  /// Hero election order within a group: agent-ready (extracted) first, then
+  /// confidence descending, then name. All-equal groups fall through to name
+  /// order; a single-item group makes that item the hero.
+  /// FUTURE: rank by uses/week once usage telemetry exists — swap only this
+  /// comparator.
+  func heroRank(_ lhs: BrowseItem, _ rhs: BrowseItem) -> Bool {
+    let lhsReady = lhs.gunk.extractedAt != nil
+    let rhsReady = rhs.gunk.extractedAt != nil
+    if lhsReady != rhsReady {
+      return lhsReady
+    }
+
+    return itemSort(lhs, rhs)
   }
 
   private func applyFilters() {
@@ -477,7 +531,13 @@ final class BrowseModel {
   }
 
   private func filteredItems() -> [BrowseItem] {
-    items.filter { item in
+    let query = filters.query.trimmingCharacters(in: .whitespaces)
+
+    return items.filter { item in
+      if !query.isEmpty, !matches(item, query: query) {
+        return false
+      }
+
       if let sourceId = filters.sourceId, item.source.id != sourceId {
         return false
       }
@@ -500,6 +560,18 @@ final class BrowseModel {
       case .needsApproval:
         return approvalFilter(for: item) == .needsApproval
       }
+    }
+  }
+
+  /// Case-insensitive search across name, purpose, and tags.
+  private func matches(_ item: BrowseItem, query: String) -> Bool {
+    var haystack = [item.gunk.name] + item.tags
+    if let purpose = item.gunk.purpose {
+      haystack.append(purpose)
+    }
+
+    return haystack.contains { value in
+      value.range(of: query, options: [.caseInsensitive, .diacriticInsensitive]) != nil
     }
   }
 
@@ -562,10 +634,6 @@ final class BrowseModel {
 
   func approvalLabel(for item: BrowseItem) -> String {
     approvalFilter(for: item).label
-  }
-
-  func extractionLabel(for item: BrowseItem) -> String {
-    item.gunk.extractedAt == nil ? "Not extracted" : "Extracted"
   }
 
   func languageLabel(for item: BrowseItem) -> String {

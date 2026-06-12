@@ -10,6 +10,27 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - `gunk-engine` no longer returns zero modules on real-world (notably Python) repositories. Three independent decomposition bugs are fixed: (1) Pass-1 survey kept discarding entire capability hypotheses when their `expectedCollaborators` were descriptive names (e.g. `logging`, `utils`) rather than exact repo file paths — unresolved collaborators are now dropped while the hypothesis (defined by its seed files) is retained; (2) self-containment flagged language standard-library / runtime-builtin imports (Python stdlib, Node builtins, `java.*`/`javax.*`, `kotlin.*`, `dart:`) as missing dependencies, failing the imports check — these are now treated as covered via a per-language allowlist; (3) Python symbol extraction never recorded exports, so every Python entrypoint failed the surface/self-containment gates — public top-level `def`/`class` definitions (excluding nested and underscore-prefixed names) are now recorded as exports.
 
 ### Changed
+- `gunk.app` Library grid restyle (T-8.3b Part B): the dense filter card is
+  replaced by the toolbox-v2 controls layer — `Library` title + count chip,
+  a **`Project | Model`** grouping segmented control, a search field
+  (case-insensitive across name/purpose/tags via the new `filters.query`),
+  and a compact **Filters** popover that preserves the old
+  source/tag/language/approval *filtering* (the segmented control replaces
+  only the old grouping). Modules render as **briefing cards**: one trust
+  verdict per cell (`Agent-ready` green / `Needs approval` amber /
+  `Not in toolbox` dimmed at 50%), provider-colored corner badge and a
+  `via <model>` provenance line derived from `RunTrace` (most recent trace
+  per gunk, falling back to its source's trace — no store changes), and tag
+  pills. Each group promotes its top-ranked module to a **hero cell**
+  spanning two columns (full-width below ~810pt content width, so the 960pt
+  window minimum reflows instead of clipping); ranking is agent-ready first,
+  then confidence, then name, isolated behind `BrowseModel.heroRank` with a
+  `FUTURE: rank by uses/week` seam. No usage numbers are rendered anywhere —
+  telemetry does not exist yet. The new `Model` grouping buckets by the
+  extracting `provider · model` with an "Unknown model" fallback. Glass is
+  confined to the floating controls layer; cards are solid
+  `backgroundElevated` on the new `backgroundSecondary` content surface and
+  scroll beneath the header.
 - `gunk.app` toolbox-v2 palette retune (T-8.3b Part A): `BrandColors` dark
   surfaces move from the green-tinted "ooze" near-black to the neutral
   graphite tokens read from the toolbox-v2 mockup — `#161618` window, a new
@@ -24,6 +45,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   `#639FA9`, Google indigo `#33508A`, neutral fallback) ship with a
   case-insensitive `BrandColors.providerAccent(for:)` resolver for the
   toolbox-v2 provider badges.
+- `gunk.app` sources fold into the Library (T-8.3): source management is no
+  longer a separate tab. The Library header gains a **Sources (N)** button that
+  opens a sources sheet reusing the existing source rows verbatim — processing
+  progress, the "N modules" affordance (which closes the sheet and applies the
+  Library's source filter), failures disclosed on the row, and delete — plus a
+  compact **Add folder** button that routes a folder picker (`NSOpenPanel`,
+  directories only) through the existing `DropZoneHandler` intake path (no
+  duplicated insert/processing logic). Source delete now requires a
+  confirmation whose copy matches the verified store behavior — "Removes the
+  source from gunk. Its modules remain until you delete them." (`removeSource`
+  only stamps `removed_at`; the source's gunks are left intact). The 2s arrival
+  highlight moves from the retired Sources surface to the module grid: modules
+  created during a run carry the accent treatment for a beat after the run
+  completes. `SourcesSectionView` is deleted (`BrandDropZone` stays until T-8.5).
 - `gunk.app` shell IA restructure (T-8.2): the five-section navigation
   (Sources/Modules/Approval/Runs/Settings) is replaced by a three-section IA
   — **Library / Marketplace / Settings**. Library renders the existing

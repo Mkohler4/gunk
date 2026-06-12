@@ -208,6 +208,170 @@ and management — no separate tab.
 
 ---
 
+## T-8.3b — Toolbox-v2 visual restyle (palette + Library grid)
+
+**Owner:** agent
+**Checkpoint:** CP-A (the approved target this implements)
+
+### Why this exists
+CP-A approved a *look* ([toolbox-v2](../design/explorations/toolbox-v2.md))
+but no task ever **implemented** it. T-8.2/T-8.3 shipped the IA on the *old*
+green-tinted "ooze" design system; every later task says "styled per
+toolbox-v2" while assuming the design system already encodes v2 — it does not.
+This task closes that gap: it retunes the palette and rebuilds the Library grid
+to match the approved screenshot, so the surfaces T-8.4+ touch inherit the
+right look instead of compounding the debt. It runs **next, before T-8.4**
+(T-8.4 then layers the needs-approval state onto the new cell).
+
+### Read first (non-negotiable)
+- [`docs/design/explorations/toolbox-v2-library.html`](../design/explorations/toolbox-v2-library.html)
+  — **the source of truth.** Open it in a browser and read its `<style>`
+  `:root`/CSS: every exact token, radius, grid, and material value below comes
+  from this file. When anything disagrees, the HTML wins.
+- [`docs/design/explorations/toolbox-v2.md`](../design/explorations/toolbox-v2.md)
+  and its screenshot `toolbox-v2-library.png` — the annotated spec (exact tokens,
+  geometry/type table, resolved questions, and the later-phase surfaces the
+  mockup also pins).
+- [`docs/design/explorations/toolbox-v1.md`](../design/explorations/toolbox-v1.md)
+  — the locked cell-content brief and the five "robotic futuristic" problems
+  this restyle must *not* reintroduce.
+
+### Files
+- `app/Sources/GunkApp/Design/BrandColors.swift` (palette retune + new
+  provider-accent art colors)
+- `app/Sources/GunkApp/Design/Components/TagChip.swift` (confirm system font,
+  neutral pill — no mono, no green tint)
+- `app/Sources/GunkApp/Views/BrowseView.swift` (header, search, grouping
+  segmented, the briefing-card cell, the usage-ranked hero cell, provider
+  badge)
+- `app/Sources/GunkApp/Models/BrowseModel.swift` (search query, `Project|Model`
+  grouping, per-gunk provenance + hero election — all model-layer, allowed)
+- New components are encouraged: e.g. `Design/Components/ProviderBadge.swift`,
+  `Views/ModuleCell.swift`. Keep them in `Design/`/`Views/`.
+
+### Hard data facts (verified — do not fight these)
+1. **No usage telemetry exists.** There is no "uses this week" column or table
+   anywhere, and `Store/Schema.swift` is **off-limits**. The screenshot's
+   "31 uses this week" is mockup data. You may **not** invent it.
+2. **Provenance is available without touching the store.** `RunTrace` carries
+   `provider` + `model`, and `BrowseModel.indexTraces` already loads traces per
+   source/gunk. Derive the `via <model>` line and the provider-badge color from
+   the most recent `RunTrace` for the gunk (fall back to its source's trace).
+3. **The model picker (top-right `provider · model`) is T-8.8's**, not yours.
+   Leave a stable slot for it; do not build the switcher here.
+
+### Task execution (agent prompt)
+
+> Implement the toolbox-v2 look in two landable parts. **Part A (palette) is
+> its own commit and must build/test green before Part B starts** — it is
+> low-risk and foundational; everything else inherits it.
+>
+> **PART A — Palette retune (de-green the *surfaces* to neutral graphite).**
+> 1. Retune `BrandColors` **dark** tokens to the graphite surfaces. These are
+>    **exact** values read from the source mockup
+>    (`docs/design/explorations/toolbox-v2-library.html` `:root`) — use them
+>    verbatim, not approximations:
+>    - `backgroundPrimary` (window/deepest): `#0B0D0C` → `#161618`
+>    - the content scrolling surface (behind cards): → `#1d1d20`
+>    - `backgroundElevated` (cards): `#121613` → `#27272b`
+>    - card hover step: → `#303036`
+>    - `surfaceGlass` (the floating controls layer): `#171C18` →
+>      `rgba(48,48,54,0.55)` over `blur(42) saturate(1.7)`, hairline
+>      `rgba(255,255,255,0.09)`
+>    - text ramp: primary `#f3f3f5`, muted `#9b9ba2`, faint `#6c6c74`;
+>      separators `rgba(255,255,255,0.07)`
+>    - **There is no separate dimmed-card or tag-pill token.** *Not in toolbox*
+>      is the standard card at `opacity 0.5` (hover → 1); tag chips are
+>      `rgba(255,255,255,0.06)` (language chip `0.09`) on the card.
+>    - **`accent` green stays `#5FE08C` (unchanged).** The de-green is surfaces
+>      only — do **not** re-tune the accent. `warning` → `#e7b765`, `danger` →
+>      `#e5786a`. Keep green-on-meaning-only.
+>    Re-derive the **light** values to stay legible; keep the resolver and the
+>    `Assets.xcassets` named-color path intact. Do not change the brand-mark
+>    art colors.
+> 2. Add a **provider-accent palette** as fixed art colors (like `Mark`):
+>    Anthropic ~`#D26D43` (coral), OpenAI ~`#639FA9` (teal), Google/Gemini
+>    ~`#33508A` (indigo), plus a neutral fallback. Add a
+>    `providerAccent(for provider: String) -> Color` resolver (case-insensitive
+>    on the `RunTrace.provider` string; `ollama`/unknown → neutral).
+> 3. Audit the existing screens for contrast against the lighter surfaces
+>    (rows, badges, separators) and fix anything that goes muddy or invisible.
+>    Confirm `TagChip` is system font on a neutral pill (no mono, no green).
+> 4. `swift build`, `swift test`, screenshot the Library + Settings on the new
+>    palette. Commit Part A.
+>
+> **PART B — Library grid as briefing cards with a usage-ranked hero.**
+> 5. **Header.** Replace the dense filter card with the v2 controls layer:
+>    `Library` title + a count chip (total capabilities), a **`Project |
+>    Model`** segmented control, and a **Search** field. Leave a trailing slot
+>    for T-8.8's model picker (do not build it). Glass on this controls layer
+>    only. **Do not delete existing filter power**: move
+>    tag/language/approval/source filtering into a compact "Filters" popover so
+>    nothing regresses (the segmented `Project|Model` replaces the old
+>    Tag/Source/Language/Approval *grouping*, not the filters).
+> 6. **Search.** Add `filters.query` to `BrowseModel`; match (case-insensitive)
+>    name + purpose + tags. Wire it to the field.
+> 7. **Grouping.** `Project` groups by source (existing `.source`); add a new
+>    `Model` grouping that buckets by the gunk's extracting `provider · model`
+>    (from `RunTrace`; gunks with no trace fall in an "Unknown model" bucket).
+>    Group headers show the bucket name + a right-aligned `N capabilities`
+>    count.
+> 8. **Cell = briefing card** (kill the instrument-panel row). Per cell: the
+>    one trust verdict as the headline state (`Agent-ready` green /
+>    `Needs approval` amber / `Not in toolbox` dimmed — `Not in toolbox` is the
+>    `extractedAt == nil` + below-threshold case, fully dimmed, no glyph);
+>    prominent name (system semibold); a purpose line (regular, truncated on
+>    standards, full on the hero); a quiet provenance line `via <model>`; the
+>    provider-colored corner badge (top-right, from step 2); tag pills. **Do
+>    not** render the confidence/containment/build readout on the cell — that
+>    stays in the detail pane (already there). **Do not** render a fake "uses"
+>    number: omit the usage line entirely until telemetry exists (leave a
+>    single clearly-marked `// FUTURE: usage telemetry` seam).
+> 9. **Usage-ranked hero.** Within each group, promote the top-ranked module to
+>    a hero cell spanning **2 columns and taller**, top-left; the rest are
+>    standard 1-column cells in a 3-column grid. Because real usage data does
+>    not exist yet, rank by this **documented fallback**: `extractedAt`/agent-
+>    ready first, then confidence desc, then name — and isolate it behind a
+>    single `heroRank` comparator with a `// FUTURE: rank by uses/week` note so
+>    it swaps cleanly when telemetry lands. Define the empty/tie behavior: a
+>    group with one module shows just the hero; an all-equal group falls
+>    through to name order; never crash on an empty group.
+> 10. **Geometry & material (the v1 fixes).** Large concentric radii, generous
+>     interior padding, separation by spacing/elevation not strokes; cards on
+>     solid `backgroundElevated`, scrolling beneath the glass controls layer;
+>     mono only for paths/code; accent green only on agent-ready/positive.
+> 11. Verify the grid still fits at the **960pt** minimum next to the 192pt
+>     sidebar (the hero must reflow, not clip). `swift build`, `swift test`,
+>     screenshot every cell state (hero, agent-ready, needs-approval, not-in-
+>     toolbox), both groupings, search active, and the 960pt + default widths.
+
+### Refining loop
+- If the 2-up hero + 3-col grid can't both hold at 960pt, drop the hero to
+  full-width-at-narrow (single column) rather than shrinking cells; screenshot
+  the breakpoint.
+- If de-greening the surfaces makes the accent feel disconnected, tune the
+  accent and `success`/`warning`/`danger` together against the new graphite —
+  do not re-tint the surfaces green to compensate (that's the v1 mistake).
+- Keep Part A and Part B as separate commits so the palette can land even if
+  the grid needs another pass.
+
+### Human-in-the-loop (me)
+- `[HOLD FOR ME]` I compare the running app side-by-side with
+  `toolbox-v2-library.png` and sign off on the palette and the cell/hero
+  before T-8.4 builds on it. I will provide exact source-file hex if my
+  approximations are off.
+
+### Acceptance
+- Surfaces are neutral graphite (no green-tinted backgrounds/borders/chips);
+  `BrandColors` retuned with a provider-accent palette + resolver.
+- Library renders briefing-card cells with one trust verdict, a provider badge,
+  `via <model>` provenance, and a usage-ranked hero per group; `Project|Model`
+  grouping + search work; existing filters preserved (not deleted).
+- No fabricated usage numbers; usage seam documented. Mono only for paths/code;
+  accent green only on meaningful state. Fits at 960pt. Build + tests green.
+
+---
+
 ## T-8.4 — Approval folds into Library
 
 **Owner:** agent
@@ -273,12 +437,19 @@ feedback and safe destructive actions.
 
 ### Goal
 Dragging a folder anywhere over the window raises a full-window overlay;
-nothing in the layout moves; drops work from any section.
+nothing in the layout moves; drops work from any section. Drag is the
+*accelerant*, never the only door: a persistent, no-gesture-required add
+affordance is always visible in both the empty and populated Library, so a
+user who skips onboarding still knows where to add a folder.
 
 ### Files
 - `app/Sources/GunkApp/Views/AppShellView.swift`
 - `app/Sources/GunkApp/Views/DropZoneView.swift` (`BrandDropZone` retired;
   `DropZoneHandler` unchanged)
+- `app/Sources/GunkApp/Views/BrowseView.swift` (module grid: persistent
+  add tile + first-run empty state)
+- `app/Sources/GunkApp/Views/EmptyStateView.swift` (empty-Library
+  click-or-drag zone)
 
 ### Task execution (agent prompt)
 
@@ -298,25 +469,52 @@ nothing in the layout moves; drops work from any section.
 >    layout.
 > 5. After a successful drop from any section, navigate to Library (same
 >    behavior as Dock drops).
-> 6. Remove `BrandDropZone` and its fixed 170pt slot. The Library "Add
->    folder" button from T-8.3 plus the whole-window target replace it.
-> 7. `swift build`, `swift test`, screen-record or screenshot the overlay
->    in both states from the Settings section to prove section-agnostic
->    drops.
+> 6. Remove `BrandDropZone` and its fixed 170pt slot.
+> 7. **Persistent add affordance (drag is never the only door).** Two
+>    no-gesture-required entry points replace the retired slot, so a user
+>    who skips onboarding always sees where to add a folder:
+>    - **First-run (empty Library):** the content area itself is a
+>      click-or-drag zone — a centered glass/dashed panel with a folder
+>      icon, "Drag a folder here, or click to browse," and an accent
+>      **Add folder** button (same `NSOpenPanel` →
+>      `DropZoneHandler.handleDrop` path as T-8.3). Share the visual
+>      language with the full-window overlay so the empty state *teaches*
+>      the drag gesture.
+>    - **Populated Library:** a persistent dashed **"+ Add folder"** tile
+>      is always the first cell of the module grid, so the door never
+>      disappears once modules exist. Same picker action; styled per
+>      toolbox-v2.
+>    Keep a single canonical add path: the grid tile is the primary
+>    persistent affordance. Reconcile with the T-8.3 header "Add folder"
+>    button — if toolbox-v2 keeps both, they must call the same handler,
+>    not diverge or duplicate logic.
+> 8. `swift build`, `swift test`, screen-record or screenshot: the overlay
+>    in both states from the Settings section (proves section-agnostic
+>    drops), the empty-Library click-or-drag zone, and the persistent
+>    "+ Add folder" grid tile in a populated Library.
 
 ### Refining loop
 - SwiftUI `.onDrop` + window-level overlays can fight `NSWindow` first
   responder during drags; if the overlay flickers, debounce the targeted
   state (~100ms) rather than restructuring views.
+- If the dashed add tile competes with module cells for scan attention,
+  keep it visually quiet (dashed outline, no accent fill) so it reads as
+  an affordance, not a module — accent green stays reserved for trust
+  state per the toolbox-v1 styling rules.
 
 ### Human-in-the-loop (me)
 - I drag real folders from Finder over every section and confirm nothing
   shifts.
+- I confirm the add affordance is findable without dragging in both the
+  empty and populated Library.
 
 ### Acceptance
 - Drops accepted over any part of the window from any section; overlay
   appears/dismisses cleanly; zero layout movement; `BrandDropZone` gone.
-  Build + tests green.
+- A persistent, labeled add-folder affordance is visible without a drag
+  gesture in both the empty Library (click-or-drag zone) and the populated
+  Library ("+ Add folder" grid tile); both route through
+  `DropZoneHandler`. Build + tests green.
 
 ---
 
@@ -601,6 +799,7 @@ flowchart LR
     t1[T-8.1 design gate CP-A]
     t2[T-8.2 sections]
     t3[T-8.3 sources fold]
+    t3b[T-8.3b v2 visual restyle]
     t4[T-8.4 approval fold CP-B]
     t5[T-8.5 drop overlay]
     t6[T-8.6 run inspector]
@@ -610,7 +809,8 @@ flowchart LR
     t10[T-8.10 MCP setup CP-C]
     t11[T-8.11 cleanup]
     t1 --> t3
-    t2 --> t3 --> t4 --> t6
+    t1 --> t3b
+    t2 --> t3 --> t3b --> t4 --> t6
     t2 --> t5
     t6 --> t7
     t9 --> t10
@@ -624,3 +824,8 @@ flowchart LR
 T-8.2 and T-8.9 are pure structure/logic and can start immediately —
 before CP-A clears. T-8.8 is independent and can slot anywhere after
 T-8.2.
+
+T-8.3b is the **implementation of the CP-A design** (the original plan only
+*produced* it). It runs after T-8.3 and **before T-8.4**, so the approval
+state in T-8.4 layers onto the new briefing-card cell rather than the old
+"ooze" row. It is the next task.
