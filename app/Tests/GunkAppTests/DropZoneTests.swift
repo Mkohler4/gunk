@@ -91,6 +91,42 @@ final class DropZoneTests: XCTestCase {
     XCTAssertEqual(processedSource?.path, temporaryDirectory.path)
   }
 
+  func testPayloadLoaderDeliversFileURLsInOneBatch() throws {
+    let fileURL = temporaryDirectory.appendingPathComponent("fixture.txt")
+    try Data("fixture".utf8).write(to: fileURL)
+    let providers = [
+      NSItemProvider(contentsOf: temporaryDirectory)!,
+      NSItemProvider(contentsOf: fileURL)!,
+    ]
+    let delivered = expectation(description: "payload delivered")
+    var loadedURLs: [URL]?
+
+    DropPayloadLoader.loadFileURLs(from: providers) { urls in
+      loadedURLs = urls
+      delivered.fulfill()
+    }
+
+    wait(for: [delivered], timeout: 5)
+    XCTAssertEqual(
+      Set(loadedURLs?.map(\.standardizedFileURL.path) ?? []),
+      Set([temporaryDirectory.standardizedFileURL.path, fileURL.standardizedFileURL.path])
+    )
+  }
+
+  func testPayloadLoaderDeliversEmptyBatchForNonFileProviders() {
+    let provider = NSItemProvider(object: "not a file" as NSString)
+    let delivered = expectation(description: "payload delivered")
+    var loadedURLs: [URL]?
+
+    DropPayloadLoader.loadFileURLs(from: [provider]) { urls in
+      loadedURLs = urls
+      delivered.fulfill()
+    }
+
+    wait(for: [delivered], timeout: 5)
+    XCTAssertEqual(loadedURLs, [])
+  }
+
   private func makeHandler() throws -> DropZoneHandler {
     DropZoneHandler(store: try Store(databaseQueue: DatabaseQueue()))
   }

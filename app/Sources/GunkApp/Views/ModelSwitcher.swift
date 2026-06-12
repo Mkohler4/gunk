@@ -1,0 +1,380 @@
+import SwiftUI
+
+/// One selectable model in the switcher menu.
+struct ModelOption: Equatable, Identifiable {
+  let provider: LLMProvider
+  let modelId: String
+  let displayName: String
+  let subtitle: String
+
+  var id: String {
+    "\(provider.rawValue)/\(modelId)"
+  }
+}
+
+/// The curated hosted-model catalog behind the shell's model switcher
+/// (toolbox-v2 `.model-menu`). Local/Ollama models are intentionally absent
+/// for now (Mark's direction) — the switcher only offers hosted providers
+/// whose API key is saved in Settings.
+enum ModelCatalog {
+  /// Providers the switcher can offer, in mockup order. A provider's
+  /// models only appear once its key exists in the Keychain.
+  static let hostedProviders: [LLMProvider] = [.anthropic, .openAI]
+
+  static func options(for provider: LLMProvider) -> [ModelOption] {
+    switch provider {
+    case .anthropic:
+      return [
+        ModelOption(
+          provider: .anthropic,
+          modelId: "claude-sonnet-4-20250514",
+          displayName: "Claude Sonnet 4",
+          subtitle: "Balanced · default"
+        ),
+        ModelOption(
+          provider: .anthropic,
+          modelId: "claude-opus-4-20250514",
+          displayName: "Claude Opus 4",
+          subtitle: "Deepest reasoning"
+        ),
+      ]
+    case .openAI:
+      return [
+        ModelOption(
+          provider: .openAI,
+          modelId: "gpt-4.1-mini",
+          displayName: "GPT-4.1 Mini",
+          subtitle: "Balanced · default"
+        ),
+        ModelOption(
+          provider: .openAI,
+          modelId: "gpt-4.1",
+          displayName: "GPT-4.1",
+          subtitle: "Most capable"
+        ),
+        ModelOption(
+          provider: .openAI,
+          modelId: "gpt-4.1-nano",
+          displayName: "GPT-4.1 Nano",
+          subtitle: "Fastest & cheapest"
+        ),
+      ]
+    case .ollama:
+      // Ignored for now: local models return when their UX is designed.
+      return []
+    }
+  }
+
+  /// Display form of a raw model id for models outside the catalog, e.g.
+  /// `claude-sonnet-4-20250514` → "Claude Sonnet 4", `gpt-4.1-mini` →
+  /// "GPT 4.1 Mini".
+  static func displayName(for modelId: String) -> String {
+    if let option = (hostedProviders + [.ollama])
+      .flatMap(options(for:))
+      .first(where: { $0.modelId == modelId }) {
+      return option.displayName
+    }
+
+    var name = modelId
+    if let snapshotSuffix = name.range(of: #"-\d{8}$"#, options: .regularExpression) {
+      name.removeSubrange(snapshotSuffix)
+    }
+    return name.split(separator: "-")
+      .map { $0.lowercased() == "gpt" ? "GPT" : String($0).capitalized }
+      .joined(separator: " ")
+  }
+}
+
+/// The shell-chrome model switcher (T-8.8, brought forward): the trailing
+/// `provider · model ⌄` readout is now a working menu. It reads and writes
+/// the exact same storage as Settings (`llm.provider` / `llm.model`) and
+/// never duplicates key entry — only providers whose API key is already
+/// saved in the Keychain offer their models; "Model settings…" routes to
+/// Settings for everything else.
+struct ModelSwitcher: View {
+  /// Same storage Settings writes — the readout and the configured
+  /// extraction model can never disagree.
+  @AppStorage("llm.provider") private var providerRawValue = LLMProvider.openAI.rawValue
+  @AppStorage("llm.model") private var model = LLMProvider.openAI.defaultModel
+
+  var secretStore: SecretStore = KeychainStore()
+  var onShowSettings: () -> Void = {}
+
+  @State private var isMenuPresented = false
+  /// Hosted providers with a saved key, refreshed every time the menu
+  /// opens so a key saved in Settings shows up without relaunching.
+  @State private var keyedProviders: [LLMProvider] = []
+
+  /// Mockup `.model-menu { width: 248px }`.
+  private static let menuWidth: CGFloat = 248
+
+  var body: some View {
+    Button {
+      refreshKeyedProviders()
+      isMenuPresented.toggle()
+    } label: {
+      switcherLabel
+    }
+    .buttonStyle(.plain)
+    .help(switcherHelp)
+    .accessibilityLabel("Extraction model: \(providerRawValue), \(modelDisplayName)")
+    .onAppear {
+      refreshKeyedProviders()
+      // Dev-only screenshot hook, like GUNK_DESIGN_GALLERY: opens the menu
+      // at launch so the open state can be captured scripted.
+      if ProcessInfo.processInfo.environment["GUNK_DEBUG_MODEL_MENU"] == "1" {
+        isMenuPresented = true
+      }
+    }
+    .popover(isPresented: $isMenuPresented, arrowEdge: .bottom) {
+      menu
+    }
+  }
+
+  // MARK: Trailing label (mockup `.model`)
+
+  private var switcherLabel: some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      Text(providerRawValue)
+        .foregroundStyle(BrandColors.textSecondary)
+      Text("·")
+        .foregroundStyle(BrandColors.textTertiary)
+      Text(modelDisplayName)
+        .foregroundStyle(BrandColors.textPrimary)
+
+      // T-8.8: the selected provider is missing its key — the switcher
+      // carries a quiet warning dot and Settings is the way out.
+      if selectedProviderNeedsKey {
+        Circle()
+          .fill(BrandColors.warning)
+          .frame(width: BrandMetrics.Spacing.xs + 2, height: BrandMetrics.Spacing.xs + 2)
+          .accessibilityLabel("API key missing for \(providerRawValue)")
+      }
+
+      Image(systemName: "chevron.down")
+        .font(BrandTypography.caption.weight(.semibold))
+        .foregroundStyle(BrandColors.textSecondary)
+    }
+    .font(BrandTypography.callout.weight(.medium))
+    .lineLimit(1)
+    .padding(.horizontal, BrandMetrics.Spacing.md)
+    .padding(.vertical, BrandMetrics.Spacing.sm)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(BrandColors.separator)
+    )
+    .contentShape(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+    )
+  }
+
+  private var switcherHelp: String {
+    selectedProviderNeedsKey
+      ? "No \(providerRawValue) API key saved — add one in Settings"
+      : "Switch the extraction model"
+  }
+
+  // MARK: Menu (mockup `.model-menu`)
+
+  private var menu: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
+      if keyedProviders.isEmpty {
+        Text("Add an API key in Settings to choose a model.")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+          .padding(.horizontal, BrandMetrics.Spacing.sm + 2)
+          .padding(.vertical, BrandMetrics.Spacing.sm)
+      } else {
+        ForEach(keyedProviders) { provider in
+          providerSection(provider)
+        }
+      }
+
+      Divider()
+        .padding(.vertical, BrandMetrics.Spacing.xs)
+
+      settingsRow
+    }
+    .padding(BrandMetrics.Spacing.sm - 2)
+    .frame(width: Self.menuWidth)
+  }
+
+  @ViewBuilder
+  private func providerSection(_ provider: LLMProvider) -> some View {
+    // Mockup `.mm-group`: small uppercase faint section header.
+    Text(provider.rawValue.uppercased())
+      .font(BrandTypography.caption.weight(.semibold))
+      .kerning(0.5)
+      .foregroundStyle(BrandColors.textTertiary)
+      .padding(.horizontal, BrandMetrics.Spacing.sm + 2)
+      .padding(.top, BrandMetrics.Spacing.sm)
+      .padding(.bottom, BrandMetrics.Spacing.xs / 2)
+
+    ForEach(menuOptions(for: provider)) { option in
+      ModelMenuRow(
+        title: option.displayName,
+        subtitle: option.subtitle,
+        isSelected: isSelected(option)
+      ) {
+        select(option)
+      }
+    }
+  }
+
+  private var settingsRow: some View {
+    ModelMenuRow(
+      title: "Model settings…",
+      subtitle: nil,
+      isSelected: false
+    ) {
+      isMenuPresented = false
+      onShowSettings()
+    }
+    .accessibilityLabel("Open model settings")
+  }
+
+  /// The provider's curated catalog, plus the currently-saved custom model
+  /// when Settings holds something off-catalog (T-8.8: the switcher never
+  /// hides what is actually configured).
+  private func menuOptions(for provider: LLMProvider) -> [ModelOption] {
+    var options = ModelCatalog.options(for: provider)
+
+    if provider == selectedProvider,
+       !options.contains(where: { $0.modelId == model }),
+       !model.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+      options.append(
+        ModelOption(
+          provider: provider,
+          modelId: model,
+          displayName: ModelCatalog.displayName(for: model),
+          subtitle: "Custom · from Settings"
+        )
+      )
+    }
+
+    return options
+  }
+
+  private func isSelected(_ option: ModelOption) -> Bool {
+    option.provider == selectedProvider && option.modelId == model
+  }
+
+  /// Selecting only selects (T-8.8): write the same two storage keys
+  /// Settings owns and get out of the way. Key entry stays in Settings.
+  private func select(_ option: ModelOption) {
+    providerRawValue = option.provider.rawValue
+    model = option.modelId
+    isMenuPresented = false
+  }
+
+  private var selectedProvider: LLMProvider {
+    LLMProvider(rawValue: providerRawValue) ?? .openAI
+  }
+
+  private var modelDisplayName: String {
+    ModelCatalog.displayName(for: model)
+  }
+
+  private var selectedProviderNeedsKey: Bool {
+    guard selectedProvider != .ollama else {
+      return false
+    }
+    return !hasKey(selectedProvider)
+  }
+
+  private func refreshKeyedProviders() {
+    keyedProviders = ModelCatalog.hostedProviders.filter(hasKey)
+  }
+
+  private func hasKey(_ provider: LLMProvider) -> Bool {
+    let secret = (try? secretStore.secret(for: provider.secretAccount)) ?? ""
+    return !secret.isEmpty
+  }
+}
+
+// MARK: - Menu row (mockup `.mm-item`)
+
+/// A two-line menu row: model name over a muted subtitle, with the accent
+/// check pinned trailing on the selected model.
+private struct ModelMenuRow: View {
+  let title: String
+  let subtitle: String?
+  let isSelected: Bool
+  let action: () -> Void
+
+  @State private var isHovering = false
+
+  var body: some View {
+    Button(action: action) {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
+          Text(title)
+            .font(BrandTypography.body.weight(.medium))
+            .foregroundStyle(BrandColors.textPrimary)
+            .lineLimit(1)
+
+          if let subtitle {
+            Text(subtitle)
+              .font(BrandTypography.caption)
+              .foregroundStyle(BrandColors.textSecondary)
+              .lineLimit(1)
+          }
+        }
+
+        Spacer(minLength: BrandMetrics.Spacing.sm)
+
+        if isSelected {
+          Image(systemName: "checkmark")
+            .font(BrandTypography.callout.weight(.semibold))
+            .foregroundStyle(BrandColors.accent)
+        }
+      }
+      .padding(.horizontal, BrandMetrics.Spacing.sm + 2)
+      .padding(.vertical, BrandMetrics.Spacing.sm)
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .background(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium - 2, style: .continuous)
+          .fill(
+            isHovering
+              ? BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity)
+              : .clear
+          )
+      )
+      .contentShape(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium - 2, style: .continuous)
+      )
+    }
+    .buttonStyle(.plain)
+    .onHover { hovering in
+      withAnimation(BrandMotion.quick) {
+        isHovering = hovering
+      }
+    }
+    .accessibilityLabel(subtitle.map { "\(title). \($0)" } ?? title)
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
+}
+
+// MARK: - Previews
+
+#Preview("Model switcher — keys saved") {
+  let secrets = InMemorySecretStore()
+  try? secrets.setSecret("sk-test", for: LLMProvider.openAI.secretAccount)
+  try? secrets.setSecret("sk-ant-test", for: LLMProvider.anthropic.secretAccount)
+  return ModelSwitcher(secretStore: secrets)
+    .padding(BrandMetrics.Spacing.xl)
+    .background(BrandColors.backgroundPrimary)
+    .preferredColorScheme(.dark)
+}
+
+#Preview("Model switcher — no keys") {
+  ModelSwitcher(secretStore: InMemorySecretStore())
+    .padding(BrandMetrics.Spacing.xl)
+    .background(BrandColors.backgroundPrimary)
+    .preferredColorScheme(.dark)
+}

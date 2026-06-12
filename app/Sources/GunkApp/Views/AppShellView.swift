@@ -1,4 +1,5 @@
 import SwiftUI
+import UniformTypeIdentifiers
 
 @MainActor
 struct AppLaunchView: View {
@@ -46,9 +47,23 @@ struct AppShellView: View {
   @State private var pendingReviewsAtRunStart = 0
   @State private var summaryDecayTask: Task<Void, Never>?
 
+  /// Whole-window drop target state (T-8.5): the overlay phase is owned
+  /// here, not by `isTargeted`, so it can outlive the drag to show the
+  /// invalid-drop error inside the overlay before dismissing.
+  @State private var dropPhase: WindowDropOverlay.Phase = .hidden
+  @State private var dropOverlayDismissTask: Task<Void, Never>?
+
   /// How long the transient completed summary stays in the status strip
   /// before decaying back to the idle MCP chip (ux §4.3).
   private static let completedStateLifetime: Duration = .seconds(8)
+
+  /// SwiftUI `.onDrop` + window-level overlays can fight `NSWindow` first
+  /// responder during drags; debounce the exit so the overlay never
+  /// flickers mid-drag (T-8.5 refining loop).
+  private static let dropExitDebounce: Duration = .milliseconds(100)
+  /// How long the invalid-drop error stays inside the overlay before it
+  /// dismisses.
+  private static let dropErrorLifetime: Duration = .milliseconds(1600)
 
   private let mcpStatusProvider = MCPStatusProvider()
 
@@ -56,8 +71,11 @@ struct AppShellView: View {
     self.services = services
     // Landing rule (T-8.2): always land on Library. Its empty state covers
     // first-run, so the old sources-vs-modules split dies with the Sources
-    // tab.
-    _selection = State(initialValue: .library)
+    // tab. Dev-only (like GUNK_DESIGN_GALLERY_SECTION): scripted screenshot
+    // runs can land on another section via GUNK_DEBUG_SECTION.
+    let debugSection = ProcessInfo.processInfo.environment["GUNK_DEBUG_SECTION"]
+      .flatMap(AppSection.init(rawValue:))
+    _selection = State(initialValue: debugSection ?? .library)
   }
 
   /// Fixed sidebar width — the toolbox-v2 mockup's 232pt (Mark's review:
@@ -83,10 +101,30 @@ struct AppShellView: View {
       .navigationTitle("gunk")
     }
     .background(BrandColors.backgroundPrimary)
+    // Whole-window drop target (T-8.5): one `.onDrop` on the shell's root —
+    // over sidebar *and* detail — so folders drop from any section. The
+    // overlay floats in a layer above everything; the layout beneath never
+    // reflows, resizes, or scrolls during a drag.
+    .onDrop(
+      of: [UTType.fileURL],
+      delegate: WindowDropDelegate(
+        dragEntered: handleDragEntered,
+        dragUpdated: handleDragUpdated,
+        dragExited: handleDragExited,
+        receiveDrop: receiveDrop
+      )
+    )
+    .overlay {
+      if dropPhase != .hidden {
+        WindowDropOverlay(phase: dropPhase)
+          .transition(.opacity)
+      }
+    }
     .onAppear {
       services.sourceListModel.refresh()
       services.browseModel.refresh()
       mcpStatus = mcpStatusProvider.status()
+      applyDropOverlayDebugOverride()
     }
     .onChange(of: selection) {
       mcpStatus = mcpStatusProvider.status()
@@ -276,6 +314,105 @@ struct AppShellView: View {
     }
   }
 
+  // MARK: Whole-window drop target (T-8.5)
+
+  private func handleDragEntered() {
+    dropOverlayDismissTask?.cancel()
+    dropOverlayDismissTask = nil
+    if dropPhase == .hidden {
+      withAnimation(BrandMotion.standard) {
+        dropPhase = .dragOver
+      }
+    }
+  }
+
+  /// `dropUpdated` is the system's drop-ready negotiation (the mockup's
+  /// `dragover` → `.drop.ready`): the card's dashed border goes solid green
+  /// with the "— let go" affordance.
+  private func handleDragUpdated() {
+    if dropPhase == .dragOver {
+      withAnimation(BrandMotion.standard) {
+        dropPhase = .ready
+      }
+    }
+  }
+
+  private func handleDragExited() {
+    scheduleDropOverlayDismissal(after: Self.dropExitDebounce)
+  }
+
+  private func receiveDrop(_ providers: [NSItemProvider]) -> Bool {
+    guard !providers.isEmpty else {
+      return false
+    }
+
+    // Keep the overlay up while the providers load; `finishDrop` decides
+    // between dismissal and the in-overlay error.
+    dropOverlayDismissTask?.cancel()
+    dropOverlayDismissTask = nil
+
+    DropPayloadLoader.loadFileURLs(from: providers) { urls in
+      finishDrop(urls: urls)
+    }
+
+    return true
+  }
+
+  private func finishDrop(urls: [URL]) {
+    do {
+      let inserted = try services.dropZoneHandler.handleDrop(urls: urls)
+      if inserted {
+        withAnimation(BrandMotion.standard) {
+          dropPhase = .hidden
+        }
+        // Same feedback as Dock drops (ux §4.4, D1): a successful drop from
+        // any section lands the user in the Library.
+        selection = .library
+      } else {
+        // Invalid drop (no directories): the error renders *inside* the
+        // overlay before it dismisses — never as injected layout.
+        withAnimation(BrandMotion.standard) {
+          dropPhase = .error("Only folders can be added.")
+        }
+        scheduleDropOverlayDismissal(after: Self.dropErrorLifetime)
+      }
+    } catch {
+      withAnimation(BrandMotion.standard) {
+        dropPhase = .error(error.localizedDescription)
+      }
+      scheduleDropOverlayDismissal(after: Self.dropErrorLifetime)
+    }
+  }
+
+  private func scheduleDropOverlayDismissal(after delay: Duration) {
+    dropOverlayDismissTask?.cancel()
+    dropOverlayDismissTask = Task {
+      try? await Task.sleep(for: delay)
+      guard !Task.isCancelled else {
+        return
+      }
+      withAnimation(BrandMotion.standard) {
+        dropPhase = .hidden
+      }
+    }
+  }
+
+  /// Dev-only screenshot hook, like `GUNK_DESIGN_GALLERY`: forces the drop
+  /// overlay phase so both drag states can be captured without a live drag
+  /// session. No-op in normal launches.
+  private func applyDropOverlayDebugOverride() {
+    switch ProcessInfo.processInfo.environment["GUNK_DEBUG_DROP_OVERLAY"] {
+    case "over":
+      dropPhase = .dragOver
+    case "ready":
+      dropPhase = .ready
+    case "error":
+      dropPhase = .error("Only folders can be added.")
+    default:
+      break
+    }
+  }
+
   // MARK: Detail
 
   private var detailContainer: some View {
@@ -342,6 +479,40 @@ struct AppShellView: View {
     case .settings:
       SettingsView(storePath: services.store.databasePath)
     }
+  }
+}
+
+// MARK: - Whole-window drop delegate (T-8.5)
+
+/// Bridges the shell's `.onDrop` to the overlay state machine. A delegate
+/// (instead of `isTargeted:`) because the overlay distinguishes the
+/// drag-over-window and drop-ready states, and must survive the drag's end
+/// to show invalid-drop feedback.
+private struct WindowDropDelegate: DropDelegate {
+  let dragEntered: () -> Void
+  let dragUpdated: () -> Void
+  let dragExited: () -> Void
+  let receiveDrop: ([NSItemProvider]) -> Bool
+
+  func validateDrop(info: DropInfo) -> Bool {
+    info.hasItemsConforming(to: [UTType.fileURL])
+  }
+
+  func dropEntered(info: DropInfo) {
+    dragEntered()
+  }
+
+  func dropUpdated(info: DropInfo) -> DropProposal? {
+    dragUpdated()
+    return DropProposal(operation: .copy)
+  }
+
+  func dropExited(info: DropInfo) {
+    dragExited()
+  }
+
+  func performDrop(info: DropInfo) -> Bool {
+    receiveDrop(info.itemProviders(for: [UTType.fileURL]))
   }
 }
 

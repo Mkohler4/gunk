@@ -109,6 +109,17 @@ enum BrandColors {
     dark: 0xE5786A
   )
 
+  // MARK: Overlays
+
+  /// Dimming scrim behind full-window overlays (the toolbox-v2 `.drop` /
+  /// `.overlay` background, `rgba(8,8,10,…)`). Dark in both appearances —
+  /// a scrim dims; opacity is applied at the use site.
+  static let scrim = token(
+    "BrandScrim",
+    light: 0x08080A,
+    dark: 0x08080A
+  )
+
   // MARK: Lines
 
   /// Hairlines and dividers. Dark: mockup `--line` `rgba(255,255,255,0.07)`;
@@ -242,6 +253,7 @@ struct BrandPaletteSwatches: View {
     ("success", BrandColors.success),
     ("warning", BrandColors.warning),
     ("danger", BrandColors.danger),
+    ("scrim", BrandColors.scrim),
     ("separator", BrandColors.separator),
     ("provider.anthropic", BrandColors.Provider.anthropic),
     ("provider.openAI", BrandColors.Provider.openAI),

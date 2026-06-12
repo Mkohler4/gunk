@@ -17,6 +17,8 @@ enum BrandMetrics {
     static let small: CGFloat = 6
     static let medium: CGFloat = 11
     static let large: CGFloat = 18
+    /// Shell-scale surfaces — the toolbox-v2 window and `.dropcard` radius.
+    static let xl: CGFloat = 24
     static let pill: CGFloat = 999
   }
 

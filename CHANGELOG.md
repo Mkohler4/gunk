@@ -7,6 +7,38 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Changed
+- `gunk.app` the Library appbar's `provider · model` readout is now a
+  working model switcher (T-8.8 brought forward, Mark's direction): a
+  toolbox-v2 `.model-menu` popover grouped by provider — uppercase section
+  headers, two-line rows (name over a muted subtitle), accent check on the
+  selected model — that writes the exact same `llm.provider` / `llm.model`
+  storage Settings owns. A provider's models only appear once its API key
+  is saved in the Keychain (set up a key in Settings → that provider's
+  models become available); local/Ollama models are intentionally absent
+  for now. The currently-saved custom model appears as an extra row when
+  it is off-catalog, a quiet warning dot marks a selected provider whose
+  key has gone missing, and a "Model settings…" item routes to Settings —
+  the switcher only selects, key entry stays in Settings. Curated catalog
+  under test (`ModelCatalogTests`).
+- `gunk.app` the whole window is now the drop target (T-8.5): one `.onDrop`
+  on the shell root accepts folder drags over every section — sidebar,
+  Library, Marketplace, Settings — and raises the toolbox-v2 full-window
+  overlay (dimmed scrim + centered glass card) in a floating layer, so
+  nothing in the underlying layout moves during a drag (D15 extended to the
+  drag gesture). The card mirrors the mockup's two drag states: dashed
+  border while drag-over, solid accent with a "— let go" affordance and
+  glow ring once drop-ready; invalid drops (no directories) show "Only
+  folders can be added." *inside* the overlay before it dismisses, and a
+  successful drop from any section lands in the Library (same feedback as
+  Dock drops). `BrandDropZone` and its fixed slot are retired; drops still
+  route through the unchanged `DropZoneHandler`, with the new
+  `DropPayloadLoader` collecting a drag's file URLs into one batch (under
+  test). Drag is never the only door: the empty Library is now a
+  click-or-drag zone (a centered glass/dashed panel sharing the overlay's
+  visual language, with an accent **Add folder** button) opening the same
+  `NSOpenPanel` → `DropZoneHandler` path. The spec's persistent
+  "+ Add folder" grid tile was built and then cut on Mark's review — once
+  modules exist, drag plus the Add module sidebar entry cover intake.
 - `gunk.app` approval folds into the Library (T-8.4): the Approval surface
   is gone — needs-approval is now a state inside the Library. Queued cells
   gain the mockup's 3px amber top edge (`.card.attn::before`,
