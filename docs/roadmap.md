@@ -248,9 +248,12 @@ Settings.
       accepted regardless of which section is showing, and it dismisses
       cleanly on drag-exit/drop (extends the existing no-layout-shift rule,
       D15, to the drag gesture itself)
-- [ ] Model switcher in the shell chrome (not behind Settings) — per-provider
+- [x] Model switcher in the shell chrome (not behind Settings) — per-provider
       keys already coexist in Keychain, so this is placement + a picker, not
-      new storage
+      new storage. Landed brought-forward in the T-8.5 PR (#153), closed out
+      in T-8.8: placement is the Library appbar's trailing slot (the
+      toolbox-v2 mockup's `.model` position, not the window toolbar), and
+      the menu lists only providers with a saved API key
 - [ ] MCP status front and center when not configured. (Reality check: this
       is *not* hardcoded today — `MCPStatusProvider` genuinely inspects
       `~/.cursor/mcp.json` for a `gunk-mcp` server entry. The work is
