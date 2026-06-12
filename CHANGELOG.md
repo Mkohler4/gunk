@@ -6,6 +6,22 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Removed
+- `gunk.app` phase-8 close-out (T-8.11): deleted the last dead code the
+  restructure orphaned — `MCPStatusProvider` and the unrendered
+  `SettingsStatusSnapshot.mcp` status item (both unconsumed since T-8.10;
+  `MCPClientConfigurator` is now the only MCP config-reading path, and the
+  `GUNK_MCP_CONFIG` dev override lives there). The earlier IA casualties
+  (`SourcesSectionView`, `ApprovalQueueView`, `RunsView`,
+  `ShellStatusStrip`, `BrandDropZone`) were already removed by their own
+  tasks. Docs: the phase-7 feature report is bannered as superseded (pages
+  01/02/04/05 describe the pre-phase-8 IA), Phase 8 is checked off in the
+  roadmap, and `docs/retros/phase-8.md` records what shipped, slipped, was
+  learned, and was cut. Regression pass at 960×600 and default width across
+  Library (hero reflow + one-row appbar hold), Settings, the MCP setup
+  sheet, drop overlay, run-end toast, run inspector, and Marketplace: no
+  clipped controls, no layout shifts.
+
 ### Added
 - `gunk.app` MCP front and center: one-click setup UI (T-8.10, CP-C). New
   `MCPSetupView` sheet lists every supported AI client (Cursor, Claude

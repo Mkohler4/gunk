@@ -236,40 +236,50 @@ Settings.
 > [docs/tasks/phase-8-shell-and-ia-restructure.md](tasks/phase-8-shell-and-ia-restructure.md)
 > (T-8.1 – T-8.11, with checkpoints CP-A/B/C).
 
-- [ ] New top-level IA: **Library**, **Marketplace** (placeholder tab),
+- [x] New top-level IA: **Library**, **Marketplace** (placeholder tab),
       **Settings**. Sources merges into Library (the drop zone lives there);
       Approval folds into Library as a review state/filter; Runs demotes to a
       run inspector opened from a source or module, not a tab. The
       [toolbox-v1 exploration](design/explorations/toolbox-v1.md) validated
-      this shell IA (sidebar: Toolbox / Runs / Settings + MCP chip)
-- [ ] The entire app is a drop target: dragging a folder anywhere over the
+      this shell IA (sidebar: Toolbox / Runs / Settings + MCP chip).
+      Landed across T-8.2/8.3/8.4/8.6 (plus an **Add module** sidebar entry
+      from the T-8.3b follow-ups); restyled to toolbox-v2 in T-8.3b
+- [x] The entire app is a drop target: dragging a folder anywhere over the
       window raises a full-window drop overlay, and **nothing in the layout
       moves** — the overlay floats above the current view, drops are
       accepted regardless of which section is showing, and it dismisses
       cleanly on drag-exit/drop (extends the existing no-layout-shift rule,
-      D15, to the drag gesture itself)
+      D15, to the drag gesture itself). Landed in T-8.5 (#153)
 - [x] Model switcher in the shell chrome (not behind Settings) — per-provider
       keys already coexist in Keychain, so this is placement + a picker, not
       new storage. Landed brought-forward in the T-8.5 PR (#153), closed out
       in T-8.8: placement is the Library appbar's trailing slot (the
       toolbox-v2 mockup's `.model` position, not the window toolbar), and
       the menu lists only providers with a saved API key
-- [ ] MCP status front and center when not configured. (Reality check: this
+- [x] MCP status front and center when not configured. (Reality check: this
       is *not* hardcoded today — `MCPStatusProvider` genuinely inspects
       `~/.cursor/mcp.json` for a `gunk-mcp` server entry. The work is
       surfacing it prominently and adding one-click setup, not inventing the
-      check)
-- [ ] Multi-client MCP wiring pulled in from the old AI-tool-wiring phase:
+      check.) Landed in T-8.7 (persistent MCP chip) + T-8.10 (one-click
+      `MCPSetupView` sheet); the provider generalized into
+      `MCPClientConfigurator` (T-8.9)
+- [x] Multi-client MCP wiring pulled in from the old AI-tool-wiring phase:
       Cursor, Claude Code, Claude Desktop, Codex, OpenCode — idempotent
-      config writers, per-tool toggle
-- [ ] Decompose the overloaded sidebar status strip (today it is MCP health +
+      config writers, per-tool toggle. Landed in T-8.9 (#160, configurator +
+      bundled gunk-mcp installed on wire) and T-8.10 (#161, setup sheet +
+      Settings toggles)
+- [x] Decompose the overloaded sidebar status strip (today it is MCP health +
       live progress + completion toast + failure alert in one chip with a
-      different click target per state)
-- [ ] Design-first: feed [docs/design/feature-report/](design/feature-report/README.md)
+      different click target per state). Landed in T-8.7 (#158): MCP chip +
+      transient processing element + run-end toast
+- [x] Design-first: feed [docs/design/feature-report/](design/feature-report/README.md)
       and the library-view prompt to design before implementing. Iterations
       land in [docs/design/explorations/](design/explorations/) with an
       approved/rejected verdict per iteration (see
-      [toolbox-v1](design/explorations/toolbox-v1.md))
+      [toolbox-v1](design/explorations/toolbox-v1.md)). CP-A approved
+      [toolbox-v2](design/explorations/toolbox-v2.md) (implemented in
+      T-8.3b); [module-run-v1](design/explorations/module-run-v1.md) feeds
+      Phase 10
 
 ---
 

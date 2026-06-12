@@ -19,23 +19,19 @@ struct SettingsStatusSnapshot: Equatable {
   let apiKey: SettingsStatusItem
   let store: SettingsStatusItem
   let engine: SettingsStatusItem
-  let mcp: SettingsStatusItem
 
   static func make(
     provider: LLMProvider,
     model: String,
     storePath: String?,
     secretStore: SecretStore,
-    resolveEngine: () -> ResolvedEngine?,
-    mcpConfigURL: URL,
-    fileManager: FileManager
+    resolveEngine: () -> ResolvedEngine?
   ) -> SettingsStatusSnapshot {
     SettingsStatusSnapshot(
       configuration: configurationStatus(provider: provider, model: model),
       apiKey: apiKeyStatus(provider: provider, secretStore: secretStore),
       store: storeStatus(path: storePath),
-      engine: engineStatus(resolveEngine: resolveEngine),
-      mcp: mcpStatus(configURL: mcpConfigURL, fileManager: fileManager)
+      engine: engineStatus(resolveEngine: resolveEngine)
     )
   }
 
@@ -132,11 +128,6 @@ struct SettingsStatusSnapshot: Equatable {
       state: .ready
     )
   }
-
-  private static func mcpStatus(configURL: URL, fileManager: FileManager) -> SettingsStatusItem {
-    // Shared with the shell's status strip (T-7.6); see MCPStatusProvider.
-    MCPStatusProvider.status(configURL: configURL, fileManager: fileManager)
-  }
 }
 
 @MainActor
@@ -158,8 +149,6 @@ struct SettingsView: View {
   private let testConnection: (LLMProvider, String, String) async throws -> Void
   private let storePath: String?
   private let resolveEngine: () -> ResolvedEngine?
-  private let mcpConfigURL: URL
-  private let fileManager: FileManager
   private let openConfig: (URL) -> Void
 
   init(
@@ -171,8 +160,6 @@ struct SettingsView: View {
     testConnection: @escaping (LLMProvider, String, String) async throws -> Void = SettingsView.liveTestConnection,
     storePath: String? = Store.defaultURL.path,
     resolveEngine: @escaping () -> ResolvedEngine? = { EngineBinary.resolve() },
-    mcpConfigURL: URL = MCPStatusProvider.defaultConfigURL,
-    fileManager: FileManager = .default,
     mcpSetup: MCPSetupModel? = nil,
     openConfig: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
   ) {
@@ -193,8 +180,6 @@ struct SettingsView: View {
     self.testConnection = testConnection
     self.storePath = storePath
     self.resolveEngine = resolveEngine
-    self.mcpConfigURL = mcpConfigURL
-    self.fileManager = fileManager
     self.mcpSetup = mcpSetup ?? MCPSetupModel()
     self.openConfig = openConfig
   }
@@ -448,9 +433,7 @@ struct SettingsView: View {
       model: model,
       storePath: storePath,
       secretStore: secretStore,
-      resolveEngine: resolveEngine,
-      mcpConfigURL: mcpConfigURL,
-      fileManager: fileManager
+      resolveEngine: resolveEngine
     )
     mcpSetup.refresh()
   }

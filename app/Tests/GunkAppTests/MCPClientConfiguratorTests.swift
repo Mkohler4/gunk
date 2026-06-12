@@ -472,55 +472,30 @@ final class MCPClientConfiguratorTests: XCTestCase {
     XCTAssertEqual(configurator.configURL(for: .codex).path, codexHome.appendingPathComponent("config.toml").path)
   }
 
-  // MARK: - Cursor provider parity (the shell's MCP chip + Settings read this)
+  // MARK: - Status semantics (the rule every MCP surface renders from)
 
-  func testCursorProviderKeepsLegacyStatusItemsByteIdentical() throws {
-    let fileManager = FileManager.default
-    let url = home.appendingPathComponent(".cursor/mcp.json")
-
-    let missing = MCPStatusProvider.status(configURL: url, fileManager: fileManager)
-    XCTAssertEqual(missing.title, "MCP config")
-    XCTAssertEqual(missing.value, "Not configured")
-    XCTAssertEqual(missing.message, "Cursor config was not found at \(url.path). Follow docs/integration/cursor.md to add gunk.")
-    XCTAssertEqual(missing.state, .needsSetup)
-
-    try seed(#"{"mcpServers": {}}"#, at: url)
-    let entryMissing = MCPStatusProvider.status(configURL: url, fileManager: fileManager)
-    XCTAssertEqual(entryMissing.value, "Missing gunk server")
-    XCTAssertEqual(entryMissing.message, "Add a `gunk` server entry under `mcpServers` in \(url.path).")
-    XCTAssertEqual(entryMissing.state, .needsSetup)
-
-    try seed(#"{"mcpServers": {"gunk": {"command": "/somewhere/else"}}}"#, at: url)
-    let mismatch = MCPStatusProvider.status(configURL: url, fileManager: fileManager)
-    XCTAssertEqual(mismatch.value, "Check command")
-    XCTAssertEqual(mismatch.message, "The `gunk` MCP server exists, but its command does not look like gunk-mcp.")
-    XCTAssertEqual(mismatch.state, .needsSetup)
-
-    try seed(#"{"mcpServers": {"gunk": {"type": "stdio", "command": "/Users/tester/.local/bin/gunk-mcp", "args": []}}}"#, at: url)
-    let ready = MCPStatusProvider.status(configURL: url, fileManager: fileManager)
-    XCTAssertEqual(ready.value, "Configured for Cursor")
-    XCTAssertEqual(ready.message, "Cursor can spawn gunk through /Users/tester/.local/bin/gunk-mcp.")
-    XCTAssertEqual(ready.state, .ready)
-
-    try seed("{ this is not json", at: url)
-    let unreadable = MCPStatusProvider.status(configURL: url, fileManager: fileManager)
-    XCTAssertEqual(unreadable.value, "Unreadable")
-    XCTAssertEqual(unreadable.state, .unavailable)
-    XCTAssertFalse(unreadable.message.isEmpty)
-  }
-
-  func testProviderStatusMatchesConfiguratorWireForCursor() throws {
+  func testCursorStatusDistinguishesEveryState() throws {
     let configurator = makeConfigurator()
     let url = configurator.configURL(for: .cursor)
 
+    XCTAssertEqual(configurator.status(for: .cursor), .configMissing)
+
+    try seed(#"{"mcpServers": {}}"#, at: url)
+    XCTAssertEqual(configurator.status(for: .cursor), .entryMissing)
+
+    try seed(#"{"mcpServers": {"gunk": {"command": "/somewhere/else"}}}"#, at: url)
+    XCTAssertEqual(configurator.status(for: .cursor), .commandMismatch)
+
     try configurator.wire(.cursor)
-    let item = MCPStatusProvider.status(configURL: url, fileManager: .default)
-    XCTAssertEqual(item.state, .ready)
-    XCTAssertEqual(item.value, "Configured for Cursor")
+    XCTAssertEqual(configurator.status(for: .cursor), .ready(command: binaryPath))
 
     try configurator.unwire(.cursor)
-    let after = MCPStatusProvider.status(configURL: url, fileManager: .default)
-    XCTAssertEqual(after.state, .needsSetup)
-    XCTAssertEqual(after.value, "Missing gunk server")
+    XCTAssertEqual(configurator.status(for: .cursor), .entryMissing)
+
+    try seed("{ this is not json", at: url)
+    guard case .unreadable(let message) = configurator.status(for: .cursor) else {
+      return XCTFail("expected .unreadable")
+    }
+    XCTAssertFalse(message.isEmpty)
   }
 }

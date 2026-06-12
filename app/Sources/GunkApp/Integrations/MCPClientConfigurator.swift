@@ -71,8 +71,7 @@ enum MCPClient: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// What the configurator found in a client's config. The shell maps this to
-/// user-facing status (for Cursor, `MCPStatusProvider` keeps the exact
-/// pre-T-8.9 strings).
+/// user-facing status (`MCPSetupModel.DisplayStatus`).
 enum MCPClientStatus: Equatable, Sendable {
   /// A `gunk` entry exists and its command looks like gunk-mcp.
   case ready(command: String)
@@ -204,8 +203,8 @@ enum MCPBinary {
 ///   not rewrite the file at all.
 struct MCPClientConfigurator {
   static let serverName = "gunk"
-  /// The status check matches the old `MCPStatusProvider` rule: the entry is
-  /// "ours" when its command mentions this binary name.
+  /// The status rule (since T-7.6): the entry is "ours" when its command
+  /// mentions this binary name.
   static let binaryMarker = "gunk-mcp"
 
   let home: URL
@@ -238,8 +237,9 @@ struct MCPClientConfigurator {
 
   // MARK: - Locations
 
-  /// Honors the same dev-only `GUNK_MCP_CONFIG` override `MCPStatusProvider`
-  /// established for Cursor, and Codex's documented `CODEX_HOME`.
+  /// Honors the dev-only `GUNK_MCP_CONFIG` Cursor override (established in
+  /// T-7.6 so scripted runs never touch the real `~/.cursor/mcp.json`), and
+  /// Codex's documented `CODEX_HOME`.
   func configURL(for client: MCPClient) -> URL {
     switch client {
     case .cursor:
@@ -304,8 +304,8 @@ struct MCPClientConfigurator {
     Self.status(of: client, configURL: configURL(for: client), fileManager: fileManager)
   }
 
-  /// Static so `MCPStatusProvider` can run the exact same check against its
-  /// own injected URL (keeping the `GUNK_MCP_CONFIG` contract).
+  /// Static so callers with their own config URL (tests, future tooling)
+  /// run the exact same check.
   static func status(of client: MCPClient, configURL: URL, fileManager: FileManager) -> MCPClientStatus {
     guard fileManager.fileExists(atPath: configURL.path) else {
       return .configMissing
