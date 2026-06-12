@@ -1,5 +1,25 @@
 # gunk — front-end feature report (for redesign)
 
+> **⚠️ Superseded in part by Phase 8 (shell & IA restructure, 2026-06).**
+> The IA this report documents no longer exists: pages
+> [01-app-shell](01-app-shell.md), [02-sources](02-sources.md),
+> [04-approval](04-approval.md), and [05-runs](05-runs.md) describe surfaces
+> that were restructured or dissolved. The sidebar is now **Library /
+> Marketplace / Add module / Settings**; sources fold into the Library
+> (sources panel sheet + whole-window drop target — `BrowseView.swift`,
+> `GunkListView.swift`, `DropZoneView.swift`); approval is a state in the
+> Library (amber-edged cells, review block in the module detail, badge
+> tap-through scope — `ModuleCell.swift`, `BrowseView.swift`); Runs became a
+> shell-owned inspector sheet (`RunInspectorView.swift`); the status strip
+> decomposed into the MCP chip + processing element + run-end toast, and the
+> chip opens the one-click MCP setup sheet (`AppShellView.swift`,
+> `MCPSetupView.swift`). Settings (06) gained per-client MCP toggles but is
+> otherwise current; 03-modules predates the toolbox-v2 briefing-card grid.
+> See [docs/tasks/phase-8-shell-and-ia-restructure.md](../../tasks/phase-8-shell-and-ia-restructure.md)
+> and [toolbox-v2.md](../explorations/toolbox-v2.md) for what replaced them.
+> The report below is kept as the phase-7 ground truth it was written to
+> be — do not treat it as current.
+
 Audience: a design agent (Claude) tasked with redesigning the entire layout
 of the gunk macOS app. The current app works but is confusing to use; this
 report is the complete, code-accurate inventory of every front-end feature
