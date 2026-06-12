@@ -292,6 +292,16 @@ struct ModelSwitcher: View {
   }
 
   private func hasKey(_ provider: LLMProvider) -> Bool {
+    // Dev-only screenshot hook (same family as GUNK_DEBUG_MODEL_MENU):
+    // skip the Keychain probe entirely. An unsigned debug binary changes
+    // identity on every rebuild, so this synchronous `SecItemCopyMatching`
+    // (reached from `body` via `selectedProviderNeedsKey` and from
+    // `refreshKeyedProviders`) raises a blocking Keychain consent dialog
+    // *before the first window exists* — scripted runs hang with zero
+    // windows until a human clicks.
+    if ProcessInfo.processInfo.environment["GUNK_DEBUG_NO_KEYCHAIN"] == "1" {
+      return false
+    }
     let secret = (try? secretStore.secret(for: provider.secretAccount)) ?? ""
     return !secret.isEmpty
   }

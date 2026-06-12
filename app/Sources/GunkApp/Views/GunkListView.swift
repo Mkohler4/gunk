@@ -10,6 +10,9 @@ struct GunkListView: View {
   /// the brief arrival highlight (ux §4.4).
   let arrivedSourceIds: Set<Int64>
   let onShowModules: (Int64) -> Void
+  /// Opens the run inspector pre-selected to this source's most recent run
+  /// (T-8.6 entry point a).
+  let onShowRuns: (Int64) -> Void
 
   /// Delete is destructive, so it routes through a confirmation
   /// (Phase 8: "no more one-click permanent deletes"). Held here so the
@@ -32,6 +35,7 @@ struct GunkListView: View {
                 status: status(for: source),
                 isArrived: arrivedSourceIds.contains(source.id),
                 onShowModules: { onShowModules(source.id) },
+                onShowRuns: { onShowRuns(source.id) },
                 onDelete: { pendingDeletion = source }
               )
             }
@@ -101,6 +105,9 @@ struct SourcesPanelView: View {
   let onAddFolder: () -> Void
   /// "N modules" closes the panel and applies the source filter on the grid.
   let onShowModules: (Int64) -> Void
+  /// "View runs" closes the panel and opens the shell's run inspector at
+  /// this source (T-8.6).
+  let onShowRuns: (Int64) -> Void
   let onClose: () -> Void
 
   var body: some View {
@@ -135,7 +142,8 @@ struct SourcesPanelView: View {
         // Arrival now lands on the module grid (T-8.3); the panel lists the
         // current sources without re-highlighting them.
         arrivedSourceIds: [],
-        onShowModules: onShowModules
+        onShowModules: onShowModules,
+        onShowRuns: onShowRuns
       )
     }
     .padding(BrandMetrics.Spacing.lg)
@@ -164,6 +172,7 @@ private struct SourceRow: View {
   let status: SourceRowStatus
   let isArrived: Bool
   let onShowModules: () -> Void
+  let onShowRuns: () -> Void
   let onDelete: () -> Void
 
   var body: some View {
@@ -199,6 +208,13 @@ private struct SourceRow: View {
         Spacer(minLength: BrandMetrics.Spacing.sm)
 
         statusSlot
+
+        Button(action: onShowRuns) {
+          Image(systemName: "clock.arrow.circlepath")
+        }
+        .buttonStyle(.brandIcon)
+        .help("View runs for \(source.name)")
+        .accessibilityLabel("View runs for \(source.name)")
 
         Button(action: onDelete) {
           Image(systemName: "trash")
