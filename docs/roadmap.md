@@ -289,6 +289,10 @@ Settings.
 keep browsing, then scan the library and instantly spot the one module that
 needs attention.
 
+> Task breakdown:
+> [docs/tasks/phase-9-library-v2-and-processing-states.md](tasks/phase-9-library-v2-and-processing-states.md)
+> (T-9.1 – T-9.7, with checkpoints CP-D/E).
+
 - [ ] Module cell redesign (per
       [library-view-prompt.md](design/feature-report/library-view-prompt.md)):
       purpose line, distinct trust states (confidence / self-containment /

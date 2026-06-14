@@ -57,6 +57,16 @@ struct ModuleCell: View {
   private static let attentionEdgeHeight: CGFloat = 3
   /// *Not in toolbox* is the standard card dimmed (hover restores it).
   private static let dimmedOpacity: Double = 0.5
+  /// Provider watermark glyph box — roughly card height so the mark anchors
+  /// the corner; the hero card carries a larger one.
+  private static let watermarkSize: CGFloat = 150
+  private static let heroWatermarkSize: CGFloat = 200
+  /// How far the watermark bleeds past the bottom-trailing corner before the
+  /// card's rounded rect clips it.
+  private static let watermarkBleed: CGFloat = 28
+  /// The watermark is faint at rest and warms a touch on hover.
+  private static let watermarkOpacity: Double = 0.06
+  private static let watermarkHoverOpacity: Double = 0.09
 
   private var showsRing: Bool {
     isSelected || isArrived
@@ -68,17 +78,9 @@ struct ModuleCell: View {
 
   var body: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-      HStack(alignment: .center, spacing: BrandMetrics.Spacing.sm) {
-        Text(state.label)
-          .font(BrandTypography.callout.weight(.semibold))
-          .foregroundStyle(state.color)
-
-        Spacer(minLength: 0)
-
-        if let provenance {
-          ProviderBadge(provider: provenance.provider)
-        }
-      }
+      Text(state.label)
+        .font(BrandTypography.callout.weight(.semibold))
+        .foregroundStyle(state.color)
 
       Text(item.gunk.name)
         .font(isHero ? BrandTypography.cardTitleHero : BrandTypography.cardTitle)
@@ -115,8 +117,23 @@ struct ModuleCell: View {
       alignment: .topLeading
     )
     .background(
-      RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
-        .fill(isHovering ? BrandColors.backgroundElevatedHover : BrandColors.backgroundElevated)
+      ZStack(alignment: .bottomTrailing) {
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+          .fill(isHovering ? BrandColors.backgroundElevatedHover : BrandColors.backgroundElevated)
+
+        // Provider provenance as a large brand watermark bleeding off the
+        // bottom-trailing corner (clipped to the card). Lifts slightly on
+        // hover so the card "warms up" with the rest of the surface.
+        if let provenance {
+          ProviderWatermark(
+            provider: provenance.provider,
+            size: isHero ? Self.heroWatermarkSize : Self.watermarkSize,
+            opacity: isHovering ? Self.watermarkHoverOpacity : Self.watermarkOpacity
+          )
+          .offset(x: Self.watermarkBleed, y: Self.watermarkBleed)
+        }
+      }
+      .clipShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous))
     )
     .overlay(alignment: .top) {
       // Needs-approval amber top edge (mockup `.card.attn::before`): the

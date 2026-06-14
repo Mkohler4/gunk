@@ -27,7 +27,8 @@ let package = Package(
         .product(name: "GRDB", package: "GRDB.swift")
       ],
       resources: [
-        .copy("Resources/Assets.xcassets")
+        .copy("Resources/Assets.xcassets"),
+        .copy("Resources/ProviderIcons")
       ]
     ),
     .testTarget(
