@@ -307,11 +307,15 @@ struct AppShellView: View {
     services.browseModel.refresh()
     services.sourceListModel.refresh()
 
+    let gunkIdsAfterRun = services.browseModel.loadedGunkIds
+    let addedIds = gunkIdsAfterRun.subtracting(gunkIdsBeforeRun)
+
     let summary = RunCompletionSummary(
       gunkIdsBeforeRun: gunkIdsBeforeRun,
-      gunkIdsAfterRun: services.browseModel.loadedGunkIds,
+      gunkIdsAfterRun: gunkIdsAfterRun,
       pendingReviewsAtRunStart: pendingReviewsAtRunStart,
-      pendingReviewsNow: services.browseModel.approvalQueue.count
+      pendingReviewsNow: services.browseModel.approvalQueue.count,
+      addedProjectNames: services.browseModel.projectNames(for: addedIds)
     )
 
     presentToast(
@@ -351,13 +355,23 @@ struct AppShellView: View {
 
   private func handleToastAction(_ toast: ShellRunToast) {
     switch toast {
-    case .success:
+    case .success(let summary):
       selection = .library
-      // Scope the Library to needs-approval only when the run queued
-      // reviews (M > 0) — the same wiring as the sidebar badge tap-through.
       if let filter = toast.approvalFilterForView {
+        // Reviews queued (M > 0): scope to needs-approval — the same wiring
+        // as the sidebar badge tap-through.
         services.browseModel.filters.approval = filter
+      } else if summary.addedProjectNames.count == 1,
+                let project = summary.addedProjectNames.first {
+        // Clean run, single project: reveal exactly what the run added by
+        // searching its project name (the search now matches the folder).
+        // Otherwise (multiple projects) View just lands on the Library.
+        services.browseModel.filters.approval = .all
+        services.browseModel.filters.query = project
       }
+    case .noModules:
+      // No action button is rendered for this state; nothing to do.
+      break
     case .failure:
       // Same target as the old strip's runFailed tap: the run inspector at
       // the most recent failure (T-8.6) — no new plumbing.
@@ -812,29 +826,43 @@ private struct SidebarProcessingIndicator: View {
 struct RunCompletionSummary: Equatable {
   let modulesAdded: Int
   let needsReview: Int
+  /// The source project/folder name(s) the run added modules to. The View
+  /// action uses this to scope the Library to exactly what the run produced
+  /// (the search already matches the project name).
+  let addedProjectNames: [String]
 
   init(
     gunkIdsBeforeRun: Set<Int64>,
     gunkIdsAfterRun: Set<Int64>,
     pendingReviewsAtRunStart: Int,
-    pendingReviewsNow: Int
+    pendingReviewsNow: Int,
+    addedProjectNames: [String] = []
   ) {
     modulesAdded = gunkIdsAfterRun.subtracting(gunkIdsBeforeRun).count
     needsReview = max(0, pendingReviewsNow - pendingReviewsAtRunStart)
+    self.addedProjectNames = addedProjectNames
   }
 }
 
 // MARK: - Run-end toast (T-8.7)
 
 /// The run-end toast's state, derived once when a run finishes. Success
-/// carries the truthful store-diff summary; failure carries no numbers —
-/// engine telemetry never becomes a completion claim.
+/// carries the truthful store-diff summary; a run that persisted nothing is
+/// its own state (no count to brag about, nothing to view); failure carries
+/// no numbers — engine telemetry never becomes a completion claim.
 enum ShellRunToast: Equatable {
   case success(RunCompletionSummary)
+  /// A run that ended cleanly but added no modules — distinct from success
+  /// because "0 modules added" with a View button is a contradiction: there
+  /// is nothing new to view.
+  case noModules
   case failure
 
   static func forRunEnd(errorMessage: String?, summary: RunCompletionSummary) -> ShellRunToast {
-    errorMessage == nil ? .success(summary) : .failure
+    if errorMessage != nil {
+      return .failure
+    }
+    return summary.modulesAdded == 0 ? .noModules : .success(summary)
   }
 
   var message: String {
@@ -845,15 +873,21 @@ enum ShellRunToast: Equatable {
         text += " · \(summary.needsReview) need\(summary.needsReview == 1 ? "s" : "") review"
       }
       return text
+    case .noModules:
+      return "Run finished — no new modules"
     case .failure:
       return "Run failed"
     }
   }
 
-  var actionLabel: String {
+  /// `nil` means the toast has no action button — the no-modules state has
+  /// nowhere to send the user (there is nothing new to view).
+  var actionLabel: String? {
     switch self {
     case .success:
       return "View"
+    case .noModules:
+      return nil
     case .failure:
       return "Inspect"
     }
@@ -861,12 +895,13 @@ enum ShellRunToast: Equatable {
 
   /// The success View action scopes the Library to needs-approval only when
   /// the run actually queued reviews (M > 0) — the same wiring as the
-  /// sidebar badge tap-through (T-8.4). A clean run's View applies nothing.
+  /// sidebar badge tap-through (T-8.4). A clean run's View instead reveals
+  /// the run's additions by their project (see `handleToastAction`).
   var approvalFilterForView: BrowseApprovalFilter? {
     switch self {
     case .success(let summary):
       return summary.needsReview > 0 ? .needsApproval : nil
-    case .failure:
+    case .noModules, .failure:
       return nil
     }
   }
@@ -891,8 +926,10 @@ private struct RunToastView: View {
         .foregroundStyle(BrandColors.textPrimary)
         .lineLimit(1)
 
-      Button(toast.actionLabel, action: onAction)
-        .buttonStyle(.brandSecondary)
+      if let actionLabel = toast.actionLabel {
+        Button(actionLabel, action: onAction)
+          .buttonStyle(.brandSecondary)
+      }
 
       Button(action: onDismiss) {
         Image(systemName: "xmark")
@@ -919,6 +956,12 @@ private struct RunToastView: View {
       Image(systemName: "sparkles")
         .font(BrandTypography.callout)
         .foregroundStyle(BrandColors.accent)
+    case .noModules:
+      // Neutral: the run worked, it just produced nothing new — not a
+      // success to celebrate, not a failure to flag.
+      Image(systemName: "checkmark.circle")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textSecondary)
     case .failure:
       Image(systemName: "xmark.circle")
         .font(BrandTypography.callout)

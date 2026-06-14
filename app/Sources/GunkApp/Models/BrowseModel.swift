@@ -270,6 +270,18 @@ final class BrowseModel {
     items.count
   }
 
+  /// The distinct source project/folder names for a set of loaded gunk ids,
+  /// sorted for stable copy. Used by the run-end toast's View action to scope
+  /// the Library to the project(s) a run actually added modules to.
+  func projectNames(for gunkIds: Set<Int64>) -> [String] {
+    let names = items
+      .filter { gunkIds.contains($0.id) }
+      .map(\.source.name)
+    return Array(Set(names)).sorted {
+      $0.localizedStandardCompare($1) == .orderedAscending
+    }
+  }
+
   /// The provider · model that extracted this module, from its most recent
   /// `RunTrace`; falls back to the most recent trace for its source.
   func provenance(for item: BrowseItem) -> BrowseProvenance? {
@@ -569,9 +581,12 @@ final class BrowseModel {
     }
   }
 
-  /// Case-insensitive search across name, purpose, and tags.
+  /// Case-insensitive search across name, purpose, tags, and the source
+  /// project/folder name (so typing a folder name scopes the grid to that
+  /// project — the same string the project grouping headers and the run-end
+  /// View action use).
   private func matches(_ item: BrowseItem, query: String) -> Bool {
-    var haystack = [item.gunk.name] + item.tags
+    var haystack = [item.gunk.name, item.source.name] + item.tags
     if let purpose = item.gunk.purpose {
       haystack.append(purpose)
     }

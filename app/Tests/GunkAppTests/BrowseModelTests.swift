@@ -179,7 +179,7 @@ final class BrowseModelTests: XCTestCase {
     )
   }
 
-  func testSearchQueryMatchesNamePurposeAndTagsCaseInsensitively() throws {
+  func testSearchQueryMatchesNamePurposeTagsAndProjectCaseInsensitively() throws {
     let store = try makeStore()
     let source = try store.insertSource(name: "source", path: "/tmp/source")
     let auth = try insertGunk(
@@ -213,11 +213,39 @@ final class BrowseModelTests: XCTestCase {
     model.filters.query = "AudioBook"
     XCTAssertEqual(model.sections.flatMap(\.items).map(\.gunk.id), [parser.id])
 
+    // Project/folder match: typing the source name scopes to its modules.
+    model.filters.query = "SOURCE"
+    XCTAssertEqual(
+      Set(model.sections.flatMap(\.items).map(\.gunk.id)),
+      [auth.id, parser.id]
+    )
+
     model.filters.query = "no-such-module"
     XCTAssertTrue(model.sections.isEmpty)
 
     model.filters.query = ""
     XCTAssertEqual(model.sections.flatMap(\.items).count, 2)
+  }
+
+  func testProjectNamesForAddedGunkIdsAreDistinctAndSorted() throws {
+    let store = try makeStore()
+    let api = try store.insertSource(name: "api", path: "/tmp/api")
+    let cli = try store.insertSource(name: "cli", path: "/tmp/cli")
+    let auth = try insertGunk(store: store, source: api, name: "auth", tags: [], confidence: 0.9, extractedAt: 1)
+    let routing = try insertGunk(store: store, source: api, name: "routing", tags: [], confidence: 0.9, extractedAt: 2)
+    let parser = try insertGunk(store: store, source: cli, name: "parser", tags: [], confidence: 0.9, extractedAt: 3)
+    let model = BrowseModel(store: store)
+
+    model.refresh()
+
+    // Two ids from the same project collapse to one name; the cli id adds a
+    // second, returned sorted.
+    XCTAssertEqual(
+      model.projectNames(for: [auth.id, routing.id, parser.id]),
+      ["api", "cli"]
+    )
+    XCTAssertEqual(model.projectNames(for: [auth.id, routing.id]), ["api"])
+    XCTAssertEqual(model.projectNames(for: []), [])
   }
 
   func testHeroRankPutsAgentReadyBeforeConfidenceThenName() throws {

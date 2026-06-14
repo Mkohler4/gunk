@@ -467,43 +467,15 @@ struct BrowseView: View {
     ModelSwitcher(onShowSettings: onShowSettings)
   }
 
+  /// The search field commits through `LibrarySearchField`, which keeps the
+  /// typed text in local state and pushes it to the model on a short debounce
+  /// — so the grid refresh that follows a query change can't tear the field's
+  /// first responder down mid-keystroke (the "one letter at a time" bug).
   private var searchField: some View {
-    HStack(spacing: BrandMetrics.Spacing.xs) {
-      Image(systemName: "magnifyingglass")
-        .font(BrandTypography.callout)
-        .foregroundStyle(BrandColors.textTertiary)
-
-      TextField("Search", text: queryBinding)
-        .textFieldStyle(.plain)
-        .font(BrandTypography.body)
-        .foregroundStyle(BrandColors.textPrimary)
-
-      if !model.filters.query.isEmpty {
-        Button {
-          model.filters.query = ""
-        } label: {
-          Image(systemName: "xmark.circle.fill")
-            .font(BrandTypography.callout)
-            .foregroundStyle(BrandColors.textTertiary)
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel("Clear search")
-      }
-    }
-    // Taller than the mockup's 8pt input padding per Mark's review — the
-    // field carries the appbar's vertical weight.
-    .padding(.horizontal, BrandMetrics.Spacing.md)
-    .padding(.vertical, BrandMetrics.Spacing.md)
-    .background(
-      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    LibrarySearchField(
+      query: model.filters.query,
+      onCommit: { model.filters.query = $0 }
     )
-    .overlay(
-      // Mockup `.search input` hairline border.
-      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-        .strokeBorder(BrandColors.separator)
-    )
-    .frame(maxWidth: .infinity)
   }
 
   // MARK: Grouped grid (usage-ranked hero per group)
@@ -656,14 +628,7 @@ struct BrowseView: View {
     )
   }
 
-  // MARK: Filter bindings (unchanged BrowseModel contract)
-
-  private var queryBinding: Binding<String> {
-    Binding(
-      get: { model.filters.query },
-      set: { model.filters.query = $0 }
-    )
-  }
+  // MARK: Selection
 
   /// ux §3.2: filter changes never steal or re-assign the selection. The
   /// selection survives the active scope hiding its cell (T-8.4: approving a
@@ -676,6 +641,103 @@ struct BrowseView: View {
     if let selectedGunkId,
        !model.loadedGunkIds.contains(selectedGunkId) {
       self.selectedGunkId = nil
+    }
+  }
+}
+
+// MARK: - Library search field
+
+/// The Library search field, isolated into its own view so its first
+/// responder survives the grid refreshing beneath it. Typing only mutates
+/// local state; the model (and therefore `sections`, and therefore the whole
+/// `BrowseView` body) is committed on a short debounce. That keeps the
+/// field's `NSTextField` from being rebuilt on every keystroke — the cause
+/// of the "search loses focus, one letter at a time" report. External query
+/// changes (the run-end View action's project scope, a programmatic clear)
+/// flow back in without disturbing in-flight typing.
+private struct LibrarySearchField: View {
+  /// The model's current query — the source of truth the field reconciles to.
+  let query: String
+  /// Pushes a committed query back to the model.
+  let onCommit: (String) -> Void
+
+  @State private var text: String
+  @State private var commitTask: Task<Void, Never>?
+  @FocusState private var isFocused: Bool
+
+  /// Short enough to feel live, long enough to batch a burst of keystrokes
+  /// into a single grid refresh.
+  private static let commitDebounce: Duration = .milliseconds(200)
+
+  init(query: String, onCommit: @escaping (String) -> Void) {
+    self.query = query
+    self.onCommit = onCommit
+    _text = State(initialValue: query)
+  }
+
+  var body: some View {
+    HStack(spacing: BrandMetrics.Spacing.xs) {
+      Image(systemName: "magnifyingglass")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textTertiary)
+
+      TextField("Search", text: $text)
+        .textFieldStyle(.plain)
+        .font(BrandTypography.body)
+        .foregroundStyle(BrandColors.textPrimary)
+        .focused($isFocused)
+        .onChange(of: text) { _, newValue in
+          scheduleCommit(newValue)
+        }
+
+      if !text.isEmpty {
+        Button {
+          commitTask?.cancel()
+          text = ""
+          onCommit("")
+          isFocused = true
+        } label: {
+          Image(systemName: "xmark.circle.fill")
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textTertiary)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel("Clear search")
+      }
+    }
+    // Taller than the mockup's 8pt input padding per Mark's review — the
+    // field carries the appbar's vertical weight.
+    .padding(.horizontal, BrandMetrics.Spacing.md)
+    .padding(.vertical, BrandMetrics.Spacing.md)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .overlay(
+      // Mockup `.search input` hairline border.
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(BrandColors.separator)
+    )
+    .frame(maxWidth: .infinity)
+    // Reconcile to external query changes (View-action project scope, a
+    // model-side clear) without clobbering the user's in-progress typing.
+    .onChange(of: query) { _, newValue in
+      guard newValue != text else {
+        return
+      }
+      commitTask?.cancel()
+      text = newValue
+    }
+  }
+
+  private func scheduleCommit(_ newValue: String) {
+    commitTask?.cancel()
+    commitTask = Task {
+      try? await Task.sleep(for: Self.commitDebounce)
+      guard !Task.isCancelled else {
+        return
+      }
+      onCommit(newValue)
     }
   }
 }

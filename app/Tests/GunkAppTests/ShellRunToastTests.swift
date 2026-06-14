@@ -37,6 +37,17 @@ final class ShellRunToastTests: XCTestCase {
     XCTAssertEqual(toast, .failure)
   }
 
+  func testRunThatAddedNothingDerivesNoModulesNotSuccess() {
+    // "0 modules added" with a View button is a contradiction — a clean run
+    // that persisted nothing is its own state.
+    let toast = ShellRunToast.forRunEnd(
+      errorMessage: nil,
+      summary: summary(added: 0, needsReview: 0)
+    )
+
+    XCTAssertEqual(toast, .noModules)
+  }
+
   // MARK: Copy
 
   func testSuccessMessageReadsAddedAndReviewCounts() {
@@ -56,6 +67,14 @@ final class ShellRunToastTests: XCTestCase {
     let toast = ShellRunToast.success(summary(added: 3, needsReview: 0))
 
     XCTAssertEqual(toast.message, "3 modules added")
+  }
+
+  func testNoModulesMessageHasNoActionToView() {
+    let toast = ShellRunToast.noModules
+
+    XCTAssertEqual(toast.message, "Run finished — no new modules")
+    // No action button: there is nothing new to view.
+    XCTAssertNil(toast.actionLabel)
   }
 
   func testFailureMessageAndActionLabel() {
