@@ -292,6 +292,13 @@ needs attention.
 > Task breakdown:
 > [docs/tasks/phase-9-library-v2-and-processing-states.md](tasks/phase-9-library-v2-and-processing-states.md)
 > (T-9.1 – T-9.7, with checkpoints CP-D/E).
+>
+> Design (CP-D, **approved**): the list-view + global-processing-animation
+> exploration is
+> [docs/design/explorations/library-v2.md](design/explorations/library-v2.md)
+> (from the
+> [revision instruction](design/explorations/library-v2-instruction.md)). It
+> unblocks T-9.3 and T-9.4 visual work.
 
 - [ ] Module cell redesign (per
       [library-view-prompt.md](design/feature-report/library-view-prompt.md)):

@@ -185,8 +185,9 @@ final class BrowseModel {
   private var traceModuleRecords: [Int64: BrowseTraceModuleRecord] = [:]
   private var selfContainmentByGunkId: [Int64: BrowseSelfContainmentResult] = [:]
   private var buildVerificationByBundlePath: [String: BrowseBuildVerificationResult] = [:]
-  private var provenanceByGunkId: [Int64: BrowseProvenance] = [:]
-  private var provenanceBySourceId: [Int64: BrowseProvenance] = [:]
+  /// Trace-derived provenance, used only as the fallback when a module has no
+  /// durable stored value (T-9.2). Shared resolution with `ProvenanceBackfill`.
+  private var traceProvenance = RunTraceProvenanceIndex(traces: [])
 
   init(
     store: Store,
@@ -282,10 +283,16 @@ final class BrowseModel {
     }
   }
 
-  /// The provider · model that extracted this module, from its most recent
-  /// `RunTrace`; falls back to the most recent trace for its source.
+  /// The provider · model that extracted this module. Prefers the **durable
+  /// stored value** (T-9.2) so attribution survives trace pruning; falls back
+  /// to the trace-derived lookup (gunk-id, then the source's most recent run)
+  /// so nothing regresses for modules not yet attributed.
   func provenance(for item: BrowseItem) -> BrowseProvenance? {
-    provenanceByGunkId[item.gunk.id] ?? provenanceBySourceId[item.source.id]
+    if let provider = item.gunk.provider, let model = item.gunk.model {
+      return BrowseProvenance(provider: provider, model: model)
+    }
+
+    return traceProvenance.provenance(gunkId: item.gunk.id, sourceId: item.source.id)
   }
 
   func detail(for gunkId: Int64) -> BrowseModuleDetail? {
@@ -341,21 +348,12 @@ final class BrowseModel {
     traceModuleRecords = [:]
     selfContainmentByGunkId = [:]
     buildVerificationByBundlePath = [:]
-    provenanceByGunkId = [:]
-    provenanceBySourceId = [:]
+    traceProvenance = RunTraceProvenanceIndex(traces: traces)
 
     // Traces arrive newest-first (`RunTraceStore.recentTraces`); first-wins
     // below therefore means "most recent run".
     for trace in traces {
       indexBuildVerification(trace)
-
-      let provenance = BrowseProvenance(provider: trace.provider, model: trace.model)
-      if let sourceId = trace.sourceId, provenanceBySourceId[sourceId] == nil {
-        provenanceBySourceId[sourceId] = provenance
-      }
-      for gunkId in trace.summary.gunkIds where provenanceByGunkId[gunkId] == nil {
-        provenanceByGunkId[gunkId] = provenance
-      }
 
       let traceGunkIds = Set(trace.summary.gunkIds)
       let traceItems: [BrowseItem]

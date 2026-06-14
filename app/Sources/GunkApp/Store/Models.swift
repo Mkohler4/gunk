@@ -18,6 +18,12 @@ struct Gunk: Equatable, Identifiable, Sendable {
   let extractedAt: Int64?
   let approvedAt: Int64?
   let removedAt: Int64?
+  /// Durable model attribution (T-9.2): the provider/model that created this
+  /// module, written at extraction time (or backfilled from a `RunTrace`).
+  /// `nil` for modules with no resolvable run — they render the neutral mark.
+  /// Defaulted so the many existing `Gunk(...)` call sites are unaffected.
+  var provider: String? = nil
+  var model: String? = nil
 }
 
 struct Tag: Equatable, Identifiable, Sendable {
