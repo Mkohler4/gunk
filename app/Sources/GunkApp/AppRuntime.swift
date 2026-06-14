@@ -81,6 +81,14 @@ final class AppRuntime: ObservableObject {
       let storeURL = ProcessInfo.processInfo.environment["GUNK_DB_PATH"]
         .map(URL.init(fileURLWithPath:)) ?? Store.defaultURL
       let store = try Store(path: storeURL)
+      // Durable model attribution backfill (T-9.2): fill the new provider/model
+      // columns for modules that predate them, from the same `RunTrace` data
+      // the Library shows. Best-effort and once-on-open — a slow or failed
+      // backfill must never block launch.
+      try? ProvenanceBackfill.run(
+        store: store,
+        traces: RunTraceStore().recentTraces(limit: 250)
+      )
       let dockIconController = DockIconController()
       let processingModel = ProcessingModel(
         dockIconController: dockIconController,

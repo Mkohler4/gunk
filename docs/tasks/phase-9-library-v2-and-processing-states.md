@@ -166,6 +166,42 @@ Each module durably states which model created it, with the provider's
 **logo** — provenance that survives trace pruning and does not depend on a
 view-time trace lookup. Closes audit finding **D9**.
 
+### Representation decision (CP-E) — agent write-up
+
+**Chosen: a denormalized `provider` / `model` pair on `gunks`** (two nullable
+`TEXT` columns), not a `runId` foreign key.
+
+Why denormalized:
+- **Survives trace pruning with no join.** The whole point of D9 is that a
+  module knows its model even when traces/runs are gone. A `runId` FK would
+  re-introduce a dependency on a row that can be pruned (`llm_runs.source_id`
+  is even `ON DELETE SET NULL`); the denormalized pair is self-contained.
+- **`llm_runs` is not a reliable per-module source.** `recordLLMRun` is
+  unused in production today — the engine writes gunks directly and provenance
+  lives in the `RunTrace` JSON files, which is what `BrowseModel` already reads.
+  So a FK to `llm_runs` would point at mostly-absent rows. Storing the strings
+  is the faithful move.
+- **Matches the view contract.** `provenance(for:)` returns a
+  `provider · model` pair; storing exactly that means the stored path and the
+  trace fallback produce identical values.
+
+Migration shape (the one sanctioned schema change this phase):
+- **App-only Schema v5**: `ALTER TABLE gunks ADD COLUMN provider TEXT; ADD
+  COLUMN model TEXT;` (nullable, additive, non-destructive). Old stores open
+  unchanged; rows that predate the column read `NULL`.
+- **mcp divergence (flag for CP-E):** earlier migrations are mirrored
+  byte-for-byte from `mcp/src/schema/vN.sql`, but `mcp/` is off-limits this
+  phase, so **v5 has no mcp counterpart**. Verified safe: the MCP migrator
+  early-returns when `from >= LATEST_VERSION` (4) so it never trips on a v5
+  store, and every MCP read uses an explicit column list, so the extra columns
+  are invisible to it. The byte-for-byte test still only asserts v0–v4.
+- **Backfill** reads the same `RunTrace` resolution `BrowseModel.indexTraces`
+  uses (gunk-id first, then the source's most recent trace) and runs once on
+  open; unresolvable modules stay `NULL` (neutral mark).
+- **Extraction-time write** happens app-side in `SourceProcessingRunner` after
+  the engine reports its `gunkIds` (it already spawns with `llm.provider` /
+  `llm.model`), so `engine/` is untouched.
+
 ### Files
 - `app/Sources/GunkApp/Store/Schema.swift` (migration — **the one sanctioned
   schema change this phase**)

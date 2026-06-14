@@ -1,12 +1,13 @@
 enum Schema {
-  static let version = 4
+  static let version = 5
 
   static let migrations = [
     (version: 0, sql: v0),
     (version: 1, sql: v1),
     (version: 2, sql: v2),
     (version: 3, sql: v3),
-    (version: 4, sql: v4)
+    (version: 4, sql: v4),
+    (version: 5, sql: v5)
   ]
 
   // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
@@ -190,4 +191,20 @@ INSERT INTO tags (name) VALUES ('mobile')
 ON CONFLICT(name) DO NOTHING;
 """ + "\n"
   // schema:v4:end
+
+  // Durable model attribution (T-9.2, audit finding D9). The one sanctioned
+  // schema change of Phase 9: a module records the provider/model that created
+  // it so its `via <model>` provenance survives `RunTrace` pruning and no
+  // longer depends on a view-time trace lookup. Two nullable, additive columns
+  // — old stores open unchanged and pre-existing rows read NULL until backfill.
+  //
+  // APP-ONLY — intentionally has NO mcp/src/schema/v5.sql counterpart. mcp/ is
+  // off-limits this phase, and it doesn't need these columns: the gunk-mcp
+  // migrator early-returns once a store is at/above its latest known version,
+  // so it never trips on a v5 store, and every MCP read uses an explicit column
+  // list, so the extra columns are invisible to it.
+  static let v5 = """
+ALTER TABLE gunks ADD COLUMN provider TEXT;
+ALTER TABLE gunks ADD COLUMN model TEXT;
+""" + "\n"
 }

@@ -148,7 +148,9 @@ final class Store {
     bundlePath: String? = nil,
     manifestPath: String? = nil,
     extractedAt: Int64? = nil,
-    approvedAt: Int64? = nil
+    approvedAt: Int64? = nil,
+    provider: String? = nil,
+    model: String? = nil
   ) throws -> Gunk {
     try databaseQueue.write { db in
       try db.execute(
@@ -162,9 +164,11 @@ final class Store {
             bundle_path,
             manifest_path,
             extracted_at,
-            approved_at
+            approved_at,
+            provider,
+            model
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
           sourceId,
@@ -175,7 +179,9 @@ final class Store {
           bundlePath,
           manifestPath,
           extractedAt,
-          approvedAt
+          approvedAt,
+          provider,
+          model
         ]
       )
 
@@ -190,9 +196,34 @@ final class Store {
         manifestPath: manifestPath,
         extractedAt: extractedAt,
         approvedAt: approvedAt,
-        removedAt: nil
+        removedAt: nil,
+        provider: provider,
+        model: model
       )
     }
+  }
+
+  /// Durable model attribution (T-9.2): record which provider/model created a
+  /// set of modules. Called at extraction time (`SourceProcessingRunner`, once
+  /// the engine reports its `gunkIds`) and by the one-time backfill. Writes are
+  /// unconditional for the given ids — the most recent run is the attribution.
+  func setGunkProvenance(gunkIds: [Int64], provider: String, model: String) throws {
+    guard !gunkIds.isEmpty else {
+      return
+    }
+
+    try databaseQueue.write { db in
+      for id in gunkIds {
+        try db.execute(
+          sql: "UPDATE gunks SET provider = ?, model = ? WHERE id = ?",
+          arguments: [provider, model, id]
+        )
+      }
+    }
+  }
+
+  func setGunkProvenance(gunkId: Int64, provider: String, model: String) throws {
+    try setGunkProvenance(gunkIds: [gunkId], provider: provider, model: model)
   }
 
   func listGunks() throws -> [Gunk] {
@@ -211,7 +242,9 @@ final class Store {
             manifest_path,
             extracted_at,
             approved_at,
-            removed_at
+            removed_at,
+            provider,
+            model
           FROM gunks
           WHERE removed_at IS NULL
           ORDER BY id DESC
@@ -238,7 +271,9 @@ final class Store {
             manifest_path,
             extracted_at,
             approved_at,
-            removed_at
+            removed_at,
+            provider,
+            model
           FROM gunks
           WHERE id = ? AND removed_at IS NULL
           """,
@@ -264,7 +299,9 @@ final class Store {
             manifest_path,
             extracted_at,
             approved_at,
-            removed_at
+            removed_at,
+            provider,
+            model
           FROM gunks
           WHERE source_id = ? AND removed_at IS NULL
           ORDER BY id DESC
@@ -593,7 +630,9 @@ final class Store {
       manifestPath: row["manifest_path"],
       extractedAt: row["extracted_at"],
       approvedAt: row["approved_at"],
-      removedAt: row["removed_at"]
+      removedAt: row["removed_at"],
+      provider: row["provider"],
+      model: row["model"]
     )
   }
 

@@ -61,6 +61,46 @@ final class SourceProcessingRunnerTests: XCTestCase {
     XCTAssertEqual(launcher.lastEnvironment?["GUNK_API_KEY"], "sk-test")
   }
 
+  func testPersistsProvenanceForExtractedModules() async throws {
+    let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
+    let store = try Store(path: databaseURL)
+    let source = try store.insertSource(name: "fixture", path: "/tmp/fixture")
+    // The engine writes the gunk rows directly; stand them in here so the
+    // result ids reference real rows the runner can attribute.
+    let first = try store.insertGunk(sourceId: source.id, name: "module-a", confidence: 0.9, extractedAt: 1)
+    let second = try store.insertGunk(sourceId: source.id, name: "module-b", confidence: 0.9, extractedAt: 2)
+    let processingModel = makeProcessingModel(store: store)
+    let userDefaults = try temporaryUserDefaults()
+    userDefaults.set(LLMProvider.anthropic.rawValue, forKey: "llm.provider")
+    userDefaults.set("claude-sonnet-4", forKey: "llm.model")
+
+    let launcher = FakeEngineLauncher(events: [
+      .progress(stage: "refine", fraction: 0.8, modulesFound: 2),
+      .result(runId: "r1", gunkIds: [first.id, second.id], accepted: 2, needsApproval: 0, rejected: 0, tracePath: nil),
+    ])
+
+    let runner = SourceProcessingRunner(
+      store: store,
+      processingModel: processingModel,
+      secretStore: FakeSecretStore(secrets: [LLMProvider.anthropic.secretAccount: "sk-test"]),
+      userDefaults: userDefaults,
+      gunkHome: temporaryDirectory.appendingPathComponent("gunk-home"),
+      launcher: launcher
+    )
+
+    await runner.process(source: source)
+
+    XCTAssertNil(processingModel.errorMessage)
+    // Stored provenance matches the strings the engine was launched with
+    // (the cli provider name + the selected model).
+    let storedFirst = try XCTUnwrap(try store.gunk(id: first.id))
+    XCTAssertEqual(storedFirst.provider, "anthropic")
+    XCTAssertEqual(storedFirst.model, "claude-sonnet-4")
+    let storedSecond = try XCTUnwrap(try store.gunk(id: second.id))
+    XCTAssertEqual(storedSecond.provider, "anthropic")
+    XCTAssertEqual(storedSecond.model, "claude-sonnet-4")
+  }
+
   func testEngineErrorEventFailsRun() async throws {
     let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
     let store = try Store(path: databaseURL)

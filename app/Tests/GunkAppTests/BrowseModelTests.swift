@@ -179,6 +179,40 @@ final class BrowseModelTests: XCTestCase {
     )
   }
 
+  /// T-9.2: a durable stored provider/model wins over the trace-derived
+  /// lookup, so attribution survives even when traces disagree or are pruned.
+  func testProvenancePrefersStoredValueOverTrace() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    // Stored attribution says anthropic…
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "stored-module",
+      purpose: "stored purpose",
+      confidence: 0.9,
+      extractedAt: 200,
+      provider: "anthropic",
+      model: "claude-sonnet-4"
+    )
+    // …while the trace says openai. The stored value must win.
+    let trace = makeTrace(
+      runId: "run-1",
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-test",
+      gunkIds: [gunk.id]
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [trace] })
+
+    model.refresh()
+    let item = try XCTUnwrap(model.sections.flatMap(\.items).first { $0.gunk.id == gunk.id })
+
+    XCTAssertEqual(
+      model.provenance(for: item),
+      BrowseProvenance(provider: "anthropic", model: "claude-sonnet-4")
+    )
+  }
+
   func testSearchQueryMatchesNamePurposeTagsAndProjectCaseInsensitively() throws {
     let store = try makeStore()
     let source = try store.insertSource(name: "source", path: "/tmp/source")

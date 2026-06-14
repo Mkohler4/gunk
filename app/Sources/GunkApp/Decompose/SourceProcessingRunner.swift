@@ -43,7 +43,16 @@ final class SourceProcessingRunner {
     processingModel.begin(sourceId: source.id)
 
     do {
-      try await run(source: source)
+      let outcome = try await run(source: source)
+      // Durable model attribution (T-9.2): the engine wrote the gunk rows but
+      // doesn't know the run's provider/model — write it app-side now that the
+      // run reported its ids, so new modules are attributed without a trace
+      // lookup. Best-effort: a provenance write must never fail the run.
+      try? store.setGunkProvenance(
+        gunkIds: outcome.gunkIds,
+        provider: outcome.provider,
+        model: outcome.model
+      )
       processingModel.complete(sourceId: source.id)
       notificationCenter.post(name: .gunkInserted, object: source)
     } catch {
@@ -51,7 +60,16 @@ final class SourceProcessingRunner {
     }
   }
 
-  private func run(source: Source) async throws {
+  /// What a completed run produced: the persisted module ids plus the
+  /// provider/model that made them (the same strings handed to the engine), so
+  /// the caller can record durable attribution (T-9.2).
+  private struct RunOutcome {
+    let gunkIds: [Int64]
+    let provider: String
+    let model: String
+  }
+
+  private func run(source: Source) async throws -> RunOutcome {
     let provider = selectedProvider()
     let model = selectedModel(for: provider)
 
@@ -75,6 +93,7 @@ final class SourceProcessingRunner {
     let stream = launcher.launch(arguments: arguments, environment: try environment(for: provider))
 
     var sawResult = false
+    var resultGunkIds: [Int64] = []
     for try await event in stream {
       switch event {
       case .progress(_, let fraction, let modulesFound):
@@ -83,6 +102,7 @@ final class SourceProcessingRunner {
         break
       case .result(_, let gunkIds, _, _, _, _):
         sawResult = true
+        resultGunkIds = gunkIds
         processingModel.update(sourceId: source.id, progress: 1, modulesFound: gunkIds.count)
       case .error(let message, _):
         throw EngineLaunchError.engineFailed(message)
@@ -92,6 +112,10 @@ final class SourceProcessingRunner {
     if !sawResult {
       throw EngineLaunchError.missingResult
     }
+
+    // Store the same provider/model strings the engine was launched with, so a
+    // stored value matches what the trace-derived fallback would have produced.
+    return RunOutcome(gunkIds: resultGunkIds, provider: provider.cliName, model: model)
   }
 
   private func environment(for provider: LLMProvider) throws -> [String: String] {
