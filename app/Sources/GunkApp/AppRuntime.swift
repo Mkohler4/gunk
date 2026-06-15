@@ -68,9 +68,9 @@ final class AppRuntime: ObservableObject {
       return
     }
 
-    Task {
-      await services.sourceProcessingRunner.process(source: source)
-    }
+    // One-at-a-time queue (T-9.4): enqueue rather than spawning a per-drop
+    // Task — the runner serializes so a second folder waits for the first.
+    services.sourceProcessingRunner.enqueue(source: source)
   }
 
   private func bootstrap() {
@@ -105,9 +105,9 @@ final class AppRuntime: ObservableObject {
             return
           }
 
-          Task {
-            await sourceProcessingRunner.process(source: source)
-          }
+          // Re-run enqueues through the same serial queue (T-9.4) so a
+          // re-classify never runs concurrently with an active drop.
+          sourceProcessingRunner.enqueue(source: source)
         }
       )
       let sourceListModel = GunkListModel(store: store)

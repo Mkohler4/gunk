@@ -101,6 +101,54 @@ final class SourceProcessingRunnerTests: XCTestCase {
     XCTAssertEqual(storedSecond.model, "claude-sonnet-4")
   }
 
+  func testEnqueueRunsSourcesStrictlyOneAtATime() async throws {
+    let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
+    let store = try Store(path: databaseURL)
+    let first = try store.insertSource(name: "first", path: "/tmp/first")
+    let second = try store.insertSource(name: "second", path: "/tmp/second")
+    let processingModel = makeProcessingModel(store: store)
+    let userDefaults = try temporaryUserDefaults()
+
+    // A gated launcher: each run blocks at its result until the gate opens, so
+    // the test can observe the queue mid-flight. If runs were concurrent, both
+    // sources would launch before the gate opens.
+    let gate = LaunchGate()
+    let launcher = GatedEngineLauncher(
+      gate: gate,
+      events: [
+        .progress(stage: "refine", fraction: 0.5, modulesFound: 1),
+        .result(runId: "r", gunkIds: [], accepted: 0, needsApproval: 0, rejected: 0, tracePath: nil),
+      ]
+    )
+
+    let runner = SourceProcessingRunner(
+      store: store,
+      processingModel: processingModel,
+      secretStore: FakeSecretStore(secrets: [:]),
+      userDefaults: userDefaults,
+      gunkHome: temporaryDirectory.appendingPathComponent("gunk-home"),
+      launcher: launcher
+    )
+
+    runner.enqueue(source: first)
+    runner.enqueue(source: second)
+
+    // Once the first run is in flight, exactly one source has launched and the
+    // second is reported as waiting (queue depth, library-v2 §2).
+    await waitUntil { launcher.launchedSourceIds.count == 1 && processingModel.isProcessing }
+    XCTAssertEqual(launcher.launchedSourceIds, [first.id])
+    XCTAssertEqual(processingModel.waitingCount, 1)
+    XCTAssertEqual(processingModel.nextWaitingName, "second")
+
+    await gate.open()
+
+    // Both run, in drop order, and the queue drains to empty.
+    await waitUntil { launcher.launchedSourceIds.count == 2 && !processingModel.isProcessing }
+    XCTAssertEqual(launcher.launchedSourceIds, [first.id, second.id])
+    XCTAssertEqual(processingModel.waitingCount, 0)
+    XCTAssertNil(processingModel.nextWaitingName)
+  }
+
   func testEngineErrorEventFailsRun() async throws {
     let databaseURL = temporaryDirectory.appendingPathComponent("store.db")
     let store = try Store(path: databaseURL)
@@ -174,6 +222,18 @@ final class SourceProcessingRunnerTests: XCTestCase {
     return try XCTUnwrap(UserDefaults(suiteName: suiteName))
   }
 
+  /// Polls a main-actor condition until it holds or the timeout elapses,
+  /// sleeping (not busy-spinning) so the gated launch task can make progress.
+  private func waitUntil(
+    timeout: Duration = .seconds(5),
+    _ condition: @MainActor () -> Bool
+  ) async {
+    let deadline = ContinuousClock.now + timeout
+    while !condition(), ContinuousClock.now < deadline {
+      try? await Task.sleep(for: .milliseconds(5))
+    }
+  }
+
   private func timestamps(_ values: Int64...) -> () -> Int64 {
     var values = values
     var last = values.last ?? 0
@@ -206,6 +266,71 @@ private final class FakeEngineLauncher: EngineLauncher {
         continuation.yield(event)
       }
       continuation.finish()
+    }
+  }
+}
+
+/// A one-shot gate the gated launcher awaits before completing a run, so a
+/// test can hold the active run open and inspect the queue mid-flight.
+private actor LaunchGate {
+  private var isOpen = false
+  private var waiters: [CheckedContinuation<Void, Never>] = []
+
+  func wait() async {
+    if isOpen {
+      return
+    }
+    await withCheckedContinuation { waiters.append($0) }
+  }
+
+  func open() {
+    isOpen = true
+    let pending = waiters
+    waiters = []
+    for waiter in pending {
+      waiter.resume()
+    }
+  }
+}
+
+/// Records the order in which sources launch and blocks each run at the gate,
+/// so serialization (one launch at a time) and queue depth are observable.
+private final class GatedEngineLauncher: EngineLauncher, @unchecked Sendable {
+  private let gate: LaunchGate
+  private let events: [EngineEvent]
+  private let lock = NSLock()
+  private var _launchedSourceIds: [Int64] = []
+
+  var launchedSourceIds: [Int64] {
+    lock.lock()
+    defer { lock.unlock() }
+    return _launchedSourceIds
+  }
+
+  init(gate: LaunchGate, events: [EngineEvent]) {
+    self.gate = gate
+    self.events = events
+  }
+
+  func launch(arguments: [String], environment: [String: String]) -> AsyncThrowingStream<EngineEvent, Error> {
+    if let index = arguments.firstIndex(of: "--source-id"),
+       index + 1 < arguments.count,
+       let sourceId = Int64(arguments[index + 1]) {
+      lock.lock()
+      _launchedSourceIds.append(sourceId)
+      lock.unlock()
+    }
+
+    let events = events
+    let gate = gate
+    return AsyncThrowingStream { continuation in
+      Task {
+        await gate.wait()
+        for event in events {
+          continuation.yield(event)
+        }
+        continuation.finish()
+      }
     }
   }
 }

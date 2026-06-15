@@ -15,6 +15,14 @@ final class SourceProcessingRunner {
   private let contextBudgetTokens: Int
   private let launcher: EngineLauncher
 
+  /// The one-at-a-time queue (library-v2 §2; T-9.4): sources waiting to
+  /// process, in drop order. Drained serially by `drain()` so a second dropped
+  /// folder waits for the first to finish instead of running concurrently
+  /// (the old behavior spawned one `Task` per drop — genuinely parallel).
+  private var pendingSources: [Source] = []
+  /// True while a run is in flight; the drain loop owns the single active run.
+  private var isDraining = false
+
   /// Default confidence threshold below which a module needs manual approval.
   /// Matches the engine's `confidenceThreshold` default.
   static let defaultConfidenceThreshold = 0.7
@@ -37,6 +45,41 @@ final class SourceProcessingRunner {
     self.gunkHome = gunkHome
     self.contextBudgetTokens = contextBudgetTokens
     self.launcher = launcher
+  }
+
+  /// The one true intake for a folder run (T-9.4): every drop / re-run /
+  /// Dock-open enqueues here. Returns immediately; the source runs as soon as
+  /// the active run (if any) finishes. Multiple folders dropped at once
+  /// enqueue in drop order and run strictly one at a time.
+  func enqueue(source: Source) {
+    pendingSources.append(source)
+    publishWaitingDepth()
+    drain()
+  }
+
+  /// Drains the queue serially: at most one `process(source:)` runs at a time.
+  /// Re-entrant-safe via `isDraining` — concurrent `enqueue` calls just append.
+  private func drain() {
+    guard !isDraining, !pendingSources.isEmpty else {
+      return
+    }
+
+    isDraining = true
+    Task { @MainActor in
+      while !pendingSources.isEmpty {
+        let source = pendingSources.removeFirst()
+        // The dequeued source is now the active run, not "waiting".
+        publishWaitingDepth()
+        await process(source: source)
+      }
+      isDraining = false
+    }
+  }
+
+  /// Mirrors the waiting queue (excluding the active run) onto
+  /// `ProcessingModel` so the run panel can show "N waiting" / "next:".
+  private func publishWaitingDepth() {
+    processingModel.setWaitingSourceNames(pendingSources.map(\.name))
   }
 
   func process(source: Source) async {

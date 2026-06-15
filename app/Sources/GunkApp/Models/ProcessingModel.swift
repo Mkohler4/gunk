@@ -12,6 +12,12 @@ final class ProcessingModel {
   private(set) var progressBySource: [Int64: Double] = [:]
   private(set) var modulesFound = 0
   private(set) var errorMessage: String?
+  /// Ordered names of the sources **waiting** to process behind the active run
+  /// (library-v2 §2; T-9.4). Processing is strictly one-at-a-time: this never
+  /// includes the running source — it is the queue depth the run panel reads
+  /// for its "N waiting" / "next: <source>" copy. Owned by
+  /// `SourceProcessingRunner`, which drives the serial queue.
+  private(set) var waitingSourceNames: [String] = []
   /// Source-level failures, kept per row so the Sources list can disclose
   /// the error on the affected row (ux §3.1, D5). Cleared when that source
   /// begins a new run; `errorMessage` stays the run-level signal (D4).
@@ -25,14 +31,33 @@ final class ProcessingModel {
     self.gunkCount = gunkCount
   }
 
+  /// Number of sources queued behind the active run (library-v2 §2).
+  var waitingCount: Int {
+    waitingSourceNames.count
+  }
+
+  /// The next source that will process when the active run finishes, if any.
+  var nextWaitingName: String? {
+    waitingSourceNames.first
+  }
+
+  /// The serial queue (`SourceProcessingRunner`) publishes its waiting depth
+  /// here so the one global run panel can show it without owning the queue.
+  /// Independent of the `isProcessing` / `progressBySource` contract the
+  /// run-end toast's store-diff summary (T-8.7) relies on.
+  func setWaitingSourceNames(_ names: [String]) {
+    waitingSourceNames = names
+  }
+
   func begin(sourceId: Int64) {
     activeSourceIds.insert(sourceId)
     progressBySource[sourceId] = 0
     isProcessing = true
     errorMessage = nil
     errorsBySource.removeValue(forKey: sourceId)
-    dockIconController.setState(.processing)
-    dockIconController.badge(count: modulesFound)
+    // Atomic state+badge apply (B2): a fresh run badges `modulesFound` (0) on
+    // the processing icon in one pass, so the previous idle count never flashes.
+    dockIconController.transition(to: .processing, badgeCount: modulesFound)
   }
 
   func update(sourceId: Int64, progress: Double, modulesFound: Int? = nil) {
@@ -46,8 +71,7 @@ final class ProcessingModel {
       self.modulesFound = max(0, modulesFound)
     }
 
-    dockIconController.setState(.processing)
-    dockIconController.badge(count: self.modulesFound)
+    dockIconController.transition(to: .processing, badgeCount: self.modulesFound)
   }
 
   func moduleFound(sourceId: Int64) {
@@ -56,8 +80,7 @@ final class ProcessingModel {
     }
 
     modulesFound += 1
-    dockIconController.setState(.processing)
-    dockIconController.badge(count: modulesFound)
+    dockIconController.transition(to: .processing, badgeCount: modulesFound)
   }
 
   func complete(sourceId: Int64) {
@@ -65,8 +88,7 @@ final class ProcessingModel {
     progressBySource.removeValue(forKey: sourceId)
 
     guard activeSourceIds.isEmpty else {
-      dockIconController.setState(.processing)
-      dockIconController.badge(count: modulesFound)
+      dockIconController.transition(to: .processing, badgeCount: modulesFound)
       return
     }
 
@@ -82,8 +104,7 @@ final class ProcessingModel {
     errorsBySource[sourceId] = error.localizedDescription
 
     guard activeSourceIds.isEmpty else {
-      dockIconController.setState(.processing)
-      dockIconController.badge(count: modulesFound)
+      dockIconController.transition(to: .processing, badgeCount: modulesFound)
       return
     }
 

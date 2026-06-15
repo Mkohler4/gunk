@@ -60,4 +60,6 @@ private final class RecordingDockIconApplicator: DockIconApplying {
   func setBadgeLabel(_ label: String?) {
     badgeLabel = label
   }
+
+  func displayDockTile() {}
 }

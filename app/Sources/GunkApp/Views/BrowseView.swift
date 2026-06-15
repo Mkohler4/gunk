@@ -1,6 +1,38 @@
 import AppKit
 import SwiftUI
 
+/// How the Library lays out its modules (library-v2 §1): the briefing-card
+/// grid (default) or a denser list. The choice persists in the same
+/// Settings-defaults (`@AppStorage`) pattern the app already uses for the
+/// model picker — no store schema.
+enum LibraryViewMode: String, CaseIterable, Identifiable {
+  case grid
+  case list
+
+  var id: String {
+    rawValue
+  }
+
+  /// The appbar toggle's icon-pair glyphs (library-v2 §1).
+  var systemImage: String {
+    switch self {
+    case .grid:
+      return "square.grid.2x2"
+    case .list:
+      return "list.bullet"
+    }
+  }
+
+  var label: String {
+    switch self {
+    case .grid:
+      return "Grid"
+    case .list:
+      return "List"
+    }
+  }
+}
+
 @MainActor
 struct BrowseView: View {
   let model: BrowseModel
@@ -24,6 +56,14 @@ struct BrowseView: View {
 
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
+
+  /// Persisted grid/list choice (library-v2 §1; T-9.3): defaults to grid,
+  /// stored in the same `@AppStorage` Settings-defaults the model picker uses.
+  @AppStorage("library.viewMode") private var viewModeRawValue = LibraryViewMode.grid.rawValue
+
+  private var viewMode: LibraryViewMode {
+    LibraryViewMode(rawValue: viewModeRawValue) ?? .grid
+  }
 
   /// Arrival highlight (ux §4.4), moved from the retired Sources surface to the
   /// module grid: modules created during a run carry the accent treatment for
@@ -197,12 +237,18 @@ struct BrowseView: View {
       if model.sections.isEmpty {
         emptyState
       } else {
-        // Cards scroll beneath the floating glass controls layer (the
-        // safe-area inset header below).
+        // Cards/rows scroll beneath the floating glass controls layer (the
+        // safe-area inset header below). Both modes share the same sections,
+        // ordering, selection, and arrival behavior — only the layout forks.
         ScrollView {
           LazyVStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
             ForEach(model.sections) { section in
-              sectionView(section, columns: columns, cellWidth: cellWidth)
+              switch viewMode {
+              case .grid:
+                sectionView(section, columns: columns, cellWidth: cellWidth)
+              case .list:
+                listSectionView(section)
+              }
             }
           }
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -289,6 +335,7 @@ struct BrowseView: View {
   private var singleRowHeader: some View {
     HStack(spacing: BrandMetrics.Spacing.sm) {
       headerTitle
+      viewModePicker
       groupPicker
       searchField
         .frame(minWidth: 160, maxWidth: Self.searchMaxWidth)
@@ -311,6 +358,7 @@ struct BrowseView: View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
       HStack(spacing: BrandMetrics.Spacing.sm) {
         headerTitle
+        viewModePicker
         Spacer(minLength: BrandMetrics.Spacing.sm)
         sourcesButton
         modelSelector
@@ -405,6 +453,64 @@ struct BrowseView: View {
   /// Inset of the segment buttons inside their well (mockup `.seg`
   /// `padding: 2px`); the inner radius stays concentric with the well.
   private static let segmentInset: CGFloat = 2
+
+  /// The grid/list toggle (library-v2 §1): an icon-pair segmented control in
+  /// the appbar, immediately right of the count chip and left of the
+  /// `Project | Model` grouping. Same neutral graphite well as `groupPicker`
+  /// — view mode carries no meaning-state, so no green.
+  private var viewModePicker: some View {
+    HStack(spacing: Self.segmentInset) {
+      ForEach(LibraryViewMode.allCases) { mode in
+        viewModeSegment(mode)
+      }
+    }
+    .padding(Self.segmentInset)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity / 2))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(BrandColors.separator)
+    )
+    .help("Switch between the grid and list layout")
+  }
+
+  private func viewModeSegment(_ mode: LibraryViewMode) -> some View {
+    let isSelected = viewMode == mode
+    return Button {
+      withAnimation(BrandMotion.quick) {
+        viewModeRawValue = mode.rawValue
+      }
+    } label: {
+      Image(systemName: mode.systemImage)
+        .font(BrandTypography.callout.weight(.medium))
+        .foregroundStyle(isSelected ? BrandColors.textPrimary : BrandColors.textSecondary)
+        .frame(width: BrandMetrics.Mark.small, height: BrandMetrics.Mark.small)
+        .padding(.horizontal, BrandMetrics.Spacing.sm)
+        .padding(.vertical, BrandMetrics.Spacing.xs)
+        .background(
+          RoundedRectangle(
+            cornerRadius: BrandMetrics.Radius.medium - Self.segmentInset,
+            style: .continuous
+          )
+          .fill(
+            isSelected
+              ? BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity)
+              : .clear
+          )
+        )
+        .contentShape(
+          RoundedRectangle(
+            cornerRadius: BrandMetrics.Radius.medium - Self.segmentInset,
+            style: .continuous
+          )
+        )
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel("\(mode.label) view")
+    .accessibilityAddTraits(isSelected ? .isSelected : [])
+  }
 
   /// Custom-built segmented (mockup `.seg`, scaled to the appbar's weight —
   /// the system control reads too thin). Neutral graphite selection: green
@@ -579,6 +685,47 @@ struct BrowseView: View {
       isSelected: selectedGunkId == slot.item.id,
       isArrived: arrivedGunkIds.contains(slot.item.id),
       onSelect: { selectedGunkId = slot.item.id }
+    )
+  }
+
+  // MARK: List (library-v2 §1 — one group = one solid card, flattened hero)
+
+  /// A group rendered as a single solid graphite card of hairline-divided
+  /// rows (library-v2 §1). The section header and the `Project | Model`
+  /// grouping carry over from the grid unchanged — only the body layout forks.
+  private func listSectionView(_ section: BrowseSection) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      sectionHeader(section)
+
+      VStack(spacing: 0) {
+        ForEach(Array(section.items.enumerated()), id: \.element.id) { index, item in
+          if index > 0 {
+            Divider()
+              .overlay(BrandColors.separator)
+          }
+
+          moduleRow(for: item, isMostUsed: index == 0)
+        }
+      }
+      .background(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous)
+          .fill(BrandColors.backgroundElevated)
+      )
+      .clipShape(RoundedRectangle(cornerRadius: BrandMetrics.Radius.large, style: .continuous))
+    }
+  }
+
+  private func moduleRow(for item: BrowseItem, isMostUsed: Bool) -> some View {
+    ModuleRow(
+      item: item,
+      state: cellState(for: item),
+      provenance: model.provenance(for: item),
+      // The usage-ranked first row of a group is the flattened hero
+      // (library-v2 §1): the quiet `MOST USED` marker, never extra size.
+      isMostUsed: isMostUsed,
+      isSelected: selectedGunkId == item.id,
+      isArrived: arrivedGunkIds.contains(item.id),
+      onSelect: { selectedGunkId = item.id }
     )
   }
 
