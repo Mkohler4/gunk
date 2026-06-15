@@ -1,8 +1,9 @@
 import SwiftUI
 
-/// The brand glyphs that ride the `ProviderBadge` provenance corner. Only the
-/// providers we ship artwork for resolve here; everything else (Google, custom
-/// gateways, …) falls back to the badge's initial-letter glyph.
+/// The brand glyphs that ride the provider provenance marks (`ProviderMark`,
+/// `ProviderWatermark`). Only the providers we ship artwork for resolve here;
+/// everything else (Google, custom gateways, …) falls back to the mark's
+/// initial-letter glyph.
 enum ProviderIcon {
   case openAI
   case anthropic

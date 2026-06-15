@@ -222,7 +222,8 @@ and Dock tile — and the shell, Sources, and Modules pages wear them.
       view
 - [ ] Approval and Runs re-skins (deferred — absorbed by Phases 8–9)
 - [ ] Dock badge render bug (B2) and threshold bug (B1) (carried to Phases 9
-      and 11)
+      and 11). B2 **fixed** in Phase 9 (T-9.5 #167); B1 (the threshold
+      slider) still open for Phase 11
 
 ---
 
@@ -300,33 +301,41 @@ needs attention.
 > [revision instruction](design/explorations/library-v2-instruction.md)). It
 > unblocks T-9.3 and T-9.4 visual work.
 
-- [ ] Module cell redesign (per
+- [x] Module cell redesign (per
       [library-view-prompt.md](design/feature-report/library-view-prompt.md)):
       purpose line, distinct trust states (confidence / self-containment /
       build / approval), agent-ready axis — not one ambiguous checkmark.
-      Status: the cell *content* is solved —
-      [toolbox-v1](design/explorations/toolbox-v1.md) locked the IA but its
-      "robotic futuristic" styling was rejected; the next iteration restyles
-      to native macOS Tahoe per the five constraints in that doc (no mono
-      outside paths, neutral surfaces, one trust verdict per cell, no HUD
-      glyphs, glass on the controls layer only)
-- [ ] Model attribution: each module states which model created it, with the
-      provider's logo (OpenAI / Anthropic / Ollama). Store wiring needed:
-      `gunks` carries no provider/model today — only the run record does —
-      so this adds a module→run link (closing audit finding D9) or a
-      denormalized provider/model field on the module
-- [ ] Grid + list view toggle, module search
-- [ ] Single-folder processing rule: enforce a one-at-a-time queue (the
+      Shipped in [toolbox-v2](design/explorations/toolbox-v2.md) (T-8.3b): one
+      trust verdict, prominent name, purpose line, `via <model>` provenance,
+      provider corner, usage-ranked hero. Phase 9 reuses `ModuleCell` as-is
+      and adds the dense list-row variant (T-9.3)
+- [x] Model attribution: each module states which model created it, with the
+      provider's logo (OpenAI / Anthropic / Ollama). Landed in T-9.2 (#166,
+      #165): a denormalized `provider`/`model` pair on `gunks` (Schema v5,
+      forward migration + backfill from traces, closing audit finding D9),
+      preferred by `provenance(for:)` with a trace fallback; provider brand
+      glyphs render as a quiet `ProviderMark`/`ProviderWatermark` (neutral
+      fallback for unshipped brands)
+- [x] Grid + list view toggle, module search (toggle in T-9.3 #167, persisted
+      via Settings defaults; search shipped in Phase 8)
+- [x] Single-folder processing rule: enforce a one-at-a-time queue (the
       processing model technically allows concurrency today), with a global
-      animated processing state; the app stays fully browsable during a run
+      animated processing state; the app stays fully browsable during a run.
+      Landed in T-9.4 (#167): a serial queue in `SourceProcessingRunner`, a
+      queue-depth signal on `ProcessingModel`, and one global animated state
+      reconciled with the T-8.7 chip (resolves to the existing run-end toast)
 - [ ] Dependencies + versions panel in module detail (parsed from bundle
       manifests) — *moved to Phase 10* as the "requirements readout"
       (reshaped from a path list into "to run this elsewhere you need")
-- [ ] Fix the Dock badge render bug (B2) while in the processing/feedback
-      area
-- [ ] Stretch (looks-good-only, explicitly low value): graph view of module
+- [x] Fix the Dock badge render bug (B2) while in the processing/feedback
+      area (T-9.5 #167: forced `dockTile.display()` at transitions +
+      regression test)
+- [→] Stretch (looks-good-only, explicitly low value): graph view of module
       relationships — same-repo modules cluster as one entity, click-through
-      morphs the graph into the module's files
+      morphs the graph into the module's files. **Moved to Phase 13** (T-9.6
+      deferred, not built) — lowest-value item, kept for a later phase rather
+      than cut (see [phase-9 retro](retros/phase-9.md) and
+      [Phase 13 task doc](tasks/phase-13-walkthrough-onboarding.md))
 
 ---
 
@@ -336,6 +345,12 @@ needs attention.
 the output streaming in a terminal block, and the module earns a "Tested"
 badge.
 
+> Task breakdown:
+> [docs/tasks/phase-10-run-and-test-modules.md](tasks/phase-10-run-and-test-modules.md)
+> (T-10.1 – T-10.15, with checkpoints CP-F…CP-K). It empowers **both** the
+> developer (run, judge, pin a golden example) **and the AI system** (an MCP
+> run/test tool so the agent verifies a module before it uses it).
+>
 > Product definition + design prompt:
 > [smoke-run-prompt.md](design/feature-report/smoke-run-prompt.md) — the
 > developer trust loop. MCP is the agent's door into a module; this phase is
@@ -349,9 +364,9 @@ badge.
 > the proof loop: a synthesized before/after Proof card with developer
 > verdicts and pinned golden examples, a **real terminal** with developer
 > and example inputs (sandbox-bounded), and the Tested-badge leveling rule
-> as the honest metric — one passing example never reads "Proven." This
-> phase needs its own task-list doc once the design HTML lands; items below
-> are the original (still-valid) skeleton, with two revisions inline.
+> as the honest metric — one passing example never reads "Proven." Broken
+> into its own task-list doc (linked above); items below are the original
+> (still-valid) skeleton the tasks expand, with two revisions inline.
 
 - [ ] **Smoke run ("Try it")**: execute a module's entrypoint against its
       extracted bundle in a sandbox, persist the receipt (when, pass/fail,
@@ -429,6 +444,12 @@ screen with exactly two choices: drop a folder, or browse the marketplace.
       config writers)
 - [ ] Built last on purpose: it needs marketplace content and the final IA to
       point at
+- [ ] Stretch (carried from Phase 9, looks-good-only, explicitly low value):
+      graph view of module relationships — same-repo modules cluster as one
+      entity, click-through morphs the graph into the module's files. Deferred
+      from Phase 9 (was T-9.6); built strictly on existing data, behind a quiet
+      affordance, cut without ceremony if it competes with the Library for scan
+      attention (see [Phase 13 task doc](tasks/phase-13-walkthrough-onboarding.md))
 
 ---
 

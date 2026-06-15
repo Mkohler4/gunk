@@ -69,9 +69,9 @@ Each task has the same shape:
   not build or pre-build it.
 - The **dependencies + versions panel moved to Phase 10** (it became the
   "requirements readout"). It is not a Phase 9 task.
-- The **module relationship graph view is an explicit stretch** (looks-good,
-  low value); it ships only if it never competes with the cells for scan
-  attention, and is cut without ceremony if it does.
+- The **module relationship graph view has moved out of Phase 9** to
+  [Phase 13](phase-13-walkthrough-onboarding.md) as a carried-over,
+  looks-good-only stretch. It is no longer a Phase 9 task.
 
 ## Hard data facts (verified — do not fight these)
 
@@ -445,50 +445,6 @@ The Dock badge renders correctly during the processing/feedback window
 
 ---
 
-## T-9.6 — Stretch: module relationship graph view
-
-**Owner:** agent
-**Checkpoint:** none (explicit stretch — cut freely)
-
-### Goal
-A graph view where same-repo modules cluster as one entity and clicking a
-cluster morphs it into that module's files. **Explicitly low value**
-(roadmap: "looks-good-only") — time-boxed, behind a toggle, and cut the
-moment it competes with the Library for attention.
-
-### Files
-- `app/Sources/GunkApp/Views/` (new graph view, opened from a Library
-  affordance — not a new top-level section)
-- `app/Sources/GunkApp/Models/BrowseModel.swift` (read-only: existing
-  source/module/files relationships; no new data)
-
-### Task execution (agent prompt)
-
-> 1. `[HOLD FOR ME]` Confirm with me that this is worth starting before any
->    code — it is the lowest-priority item in the phase and ships only if
->    T-9.2–T-9.5 are done and solid.
-> 2. Build a graph from data that **already exists** (sources → modules →
->    owned files); invent no new store state and no usage edges.
-> 3. Open it from a quiet Library affordance (not a new sidebar section).
->    Same-repo modules cluster; click-through morphs a cluster into the
->    module's files.
-> 4. `swift build`, `swift test`, screenshot the graph and the
->    cluster→files morph.
-
-### Refining loop
-- If it reads as a tech demo rather than something useful, **stop and cut
-  it** — say so plainly in the summary. This item has no acceptance pressure.
-
-### Human-in-the-loop (me)
-- I decide go/no-go up front, and again on the first screenshot.
-
-### Acceptance
-- Either a graph view built strictly on existing data behind a quiet
-  affordance, or a documented decision to cut it. No new store state. Build +
-  tests green.
-
----
-
 ## T-9.7 — Cleanup, regression pass, retro
 
 **Owner:** agent
@@ -499,9 +455,9 @@ moment it competes with the Library for attention.
 > 1. Delete any dead code this phase orphaned (e.g. a superseded view-time-
 >    only provenance path if T-9.2 replaced it). `rg` for references first.
 > 2. Full pass at 960×600 and default window size: Library in both grid and
->    list, mid-run animation and queued state, provider logos, Dock badge
->    cycle, and (if shipped) the graph view — no layout shifts, no clipped
->    controls.
+>    list, mid-run animation and queued state, provider logos, and the Dock
+>    badge cycle — no layout shifts, no clipped controls. (The graph-view
+>    stretch moved to Phase 13, so it is out of scope for this pass.)
 > 3. Confirm the toolbox-v2 styling constraints still hold (no green-tinted
 >    surfaces, mono only for paths/code, accent green only on meaningful
 >    state, glass on the controls layer only).
@@ -523,7 +479,6 @@ flowchart LR
     t3[T-9.3 grid/list toggle]
     t4[T-9.4 processing queue + animation]
     t5[T-9.5 Dock badge B2]
-    t6[T-9.6 graph view - stretch]
     t7[T-9.7 cleanup + retro]
     t1 --> t3
     t1 --> t4
@@ -531,11 +486,10 @@ flowchart LR
     t3 --> t7
     t4 --> t7
     t5 --> t7
-    t6 --> t7
 ```
 
 T-9.2 (store/data model) and T-9.5 (the Dock badge bug) are independent of
 the CP-D design gate and can start immediately. T-9.3 and T-9.4 are the only
 tasks that wait on CP-D (they implement the approved list-view + processing
-animation). T-9.6 is a cut-freely stretch and only starts once the core
-(T-9.2–T-9.5) is solid. T-9.7 closes the phase.
+animation). The former T-9.6 graph-view stretch has moved to
+[Phase 13](phase-13-walkthrough-onboarding.md). T-9.7 closes the phase.

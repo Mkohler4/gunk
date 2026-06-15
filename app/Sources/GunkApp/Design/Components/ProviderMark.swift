@@ -3,12 +3,12 @@ import SwiftUI
 /// A compact provider provenance mark for dense surfaces (the Library list
 /// row, library-v2 §1 `pmark`): a small provider-accent squircle carrying the
 /// provider's brand glyph, or its initial when no artwork ships. Quiet
-/// provenance, never a state signal — the louder `ProviderBadge` is for the
-/// briefing card's corner; this is the 20pt inline mark for a row.
+/// provenance, never a state signal — this is the 20pt inline mark for a row;
+/// the briefing card uses the faint `ProviderWatermark` instead.
 ///
-/// The provider→color/glyph resolution is shared with `ProviderBadge`
-/// (`BrandColors.providerAccent` + `ProviderIcon`), so a real provider logo
-/// (T-9.2) drops into this same slot without a relayout.
+/// The provider→color/glyph resolution (`BrandColors.providerAccent` +
+/// `ProviderIcon`) is shared with `ProviderWatermark`, so the stored provider
+/// (T-9.2) drives both marks from one source of truth.
 struct ProviderMark: View {
   let provider: String
   /// library-v2 §1 locks the list `pmark` at 20×20.

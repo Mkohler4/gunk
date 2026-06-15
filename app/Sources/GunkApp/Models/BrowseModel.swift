@@ -98,8 +98,9 @@ enum BrowseGroup: String, CaseIterable, Identifiable, Sendable {
   }
 }
 
-/// Which provider · model extracted a module, derived from `RunTrace` — no
-/// store schema involved.
+/// Which provider · model extracted a module. Prefers the durable stored
+/// value (T-9.2); falls back to the `RunTrace`-derived lookup when a module
+/// predates attribution.
 struct BrowseProvenance: Equatable, Sendable {
   let provider: String
   let model: String
