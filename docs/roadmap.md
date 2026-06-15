@@ -367,6 +367,16 @@ badge.
 > as the honest metric — one passing example never reads "Proven." Broken
 > into its own task-list doc (linked above); items below are the original
 > (still-valid) skeleton the tasks expand, with two revisions inline.
+>
+> **CP-F cleared (2026-06-15):** the design gate is settled by
+> [module-run-v2.md](design/explorations/module-run-v2.md) (+ the landed
+> [`module-run-v2.html`](design/explorations/module-run-v2.html) export,
+> which wins over v1). "Proven by you" is dead — the page hero is a
+> **run console** paired with an honest **coverage ledger** (happy path ·
+> your own inputs · edge cases · adversarial; coverage, **not** a tier
+> ladder), and all ten open questions are resolved there. Runtime scope is
+> **terminal-only** this phase; the improve loop is **capture-and-queue**
+> (re-extraction deferred).
 
 - [ ] **Smoke run ("Try it")**: execute a module's entrypoint against its
       extracted bundle in a sandbox, persist the receipt (when, pass/fail,
@@ -402,6 +412,15 @@ badge.
 ## Phase 11 — Settings v2 (Weeks 15–16)
 
 **Demo:** See exactly what you've spent, across every key and model.
+
+> Task breakdown:
+> [docs/tasks/phase-11-settings-v2.md](tasks/phase-11-settings-v2.md)
+> (T-11.1 – T-11.10, with checkpoints CP-L…CP-P). Each roadmap item below
+> is expanded into design-gated, human-in-the-loop tasks with the architect
+> decisions called out — notably that **cost is *estimated*, not stored**
+> (the `cost_usd` column exists but is always `NULL`; only token counts are
+> real), so the spend view derives USD from a versioned price table and
+> never fabricates a figure.
 
 - [ ] Token + cost meter — presentation only: per-run `input_tokens` /
       `output_tokens` / `cost_usd` already land in the store (this closes the
