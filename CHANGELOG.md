@@ -7,6 +7,20 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Removed
+- `gunk.app` phase-9 close-out (T-9.7): removed the orphaned `ProviderBadge`
+  component. T-9.2 (#165) reworked it into a brand "token" and kept it "for
+  reuse", but the card switched to `ProviderWatermark` and the list row to
+  `ProviderMark`, so nothing consumed it (only its own `#Preview` referenced
+  it). Its provider→color/glyph resolution lives on in `ProviderIcon` +
+  `BrandColors.providerAccent`, which both surviving marks share. Docstrings
+  that pointed at it were updated. Roadmap Phase 9 checked off (graph-view
+  stretch T-9.6 deferred to Phase 13, not built — see
+  `docs/tasks/phase-13-walkthrough-onboarding.md`), `docs/retros/phase-9.md`
+  written. Regression pass at
+  960×600 and default width across the Library grid and list views: solid
+  graphite content, glass on the controls layer only, accent green only on
+  state, provider marks reading as quiet provenance — no clipped controls,
+  no layout shifts. Build + tests green (147 tests).
 - `gunk.app` phase-8 close-out (T-8.11): deleted the last dead code the
   restructure orphaned — `MCPStatusProvider` and the unrendered
   `SettingsStatusSnapshot.mcp` status item (both unconsumed since T-8.10;
@@ -23,6 +37,37 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipped controls, no layout shifts.
 
 ### Added
+- `gunk.app` durable model attribution (T-9.2, #166; closes audit finding
+  D9). A module now records the `provider`/`model` that created it, so its
+  `via <model>` provenance survives `RunTrace` pruning instead of depending
+  on a view-time trace lookup. Schema **v5** adds two nullable
+  `provider`/`model` columns to `gunks` (additive, non-destructive — old
+  stores open unchanged; app-only, with no `mcp/` counterpart, verified safe
+  against the gunk-mcp migrator/reader). `SourceProcessingRunner` writes the
+  attribution at extraction time from the same provider/model handed to the
+  engine (`engine/` untouched); `ProvenanceBackfill` fills pre-existing
+  modules once on open from the shared `RunTrace` resolution (unresolvable
+  modules stay null → neutral mark); `BrowseModel.provenance(for:)` prefers
+  the stored value and falls back to the trace lookup so nothing regresses.
+- `gunk.app` provider brand marks on module cards (T-9.2 Part B, #165).
+  Ships OpenAI, Anthropic, and Ollama SVGs as `Bundle.module` resources
+  (`Resources/ProviderIcons/`) resolved through `ProviderIcon`; the grid
+  card renders a large, faint `ProviderWatermark` bleeding off its
+  bottom-trailing corner and the list row a compact `ProviderMark`
+  squircle. Unshipped brands (e.g. Google) fall back to a neutral
+  provider-accent mark; dropdowns and Settings stay name-only by design.
+  Subtle provenance, never a second trust badge.
+- `gunk.app` grid + list view toggle (T-9.3, #167), implementing the
+  CP-D-approved [library-v2](../design/explorations/library-v2.md)
+  exploration. An icon-pair segmented control in the Library appbar (right
+  of the count) switches the grid for a denser list, persisted via
+  `@AppStorage("library.viewMode")` (grid default). Each group renders as
+  one solid graphite card of hairline-divided `ModuleRow`s reusing the
+  cell's resolved data (verdict, name + purpose, `via <model>` +
+  `ProviderMark`, tags); the grid hero flattens to a quiet `MOST USED`
+  marker on the group's usage-ranked first row. Search, grouping, the
+  needs-approval scope, selection, and the arrival highlight are shared
+  across both modes — only the layout forks. Both fit the 960pt minimum.
 - `gunk.app` MCP front and center: one-click setup UI (T-8.10, CP-C). New
   `MCPSetupView` sheet lists every supported AI client (Cursor, Claude
   Code, Claude Desktop, Codex, OpenCode) with its live status — Connected /
@@ -72,6 +117,28 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   covered by tests that run only against temp directories.
 
 ### Changed
+- `gunk.app` single-folder processing queue + one global run panel (T-9.4,
+  #167). `SourceProcessingRunner` now owns a serial enqueue/drain queue, so
+  a second dropped folder waits for the first instead of spawning a parallel
+  run (the old per-drop `Task` ran them concurrently); drops enqueue in drop
+  order. Queue depth is surfaced through `ProcessingModel.waitingSourceNames`
+  without disturbing its `isProcessing`/progress contract that the run-end
+  toast's store-diff summary (T-8.7) relies on. The T-8.7 transient
+  processing chip is extended into the single `ShellRunPanel` — a spinner
+  ring (static ¾ arc under Reduce Motion), determinate progress,
+  "decomposing · N found", and "N waiting · next:" — reconciled with the
+  nav-row live-dot echo and resolving into the existing run-end toast (no
+  second indicator). The app stays fully browsable during a run with zero
+  layout shift (D15). Dev hook `GUNK_DEBUG_PROCESSING=running|queued` stages
+  the panel for screenshots.
+- `gunk.app` Dock badge render bug **B2** fixed (T-9.5, #167; carried from
+  Phase 7 through Phase 8). Root cause: each processing transition applied
+  `setState(.processing)` then `badge(count:)` as two separate render
+  passes, so a run beginning from a badged idle state flashed the stale idle
+  count on the new processing icon before the second pass cleared it. Fixed
+  with an atomic `DockIconController.transition(to:badgeCount:)` plus an
+  explicit `dockTile.display()` on each apply so the badge can never lag the
+  icon; a regression test covers the no-stale-flash + forced-redraw path.
 - `gunk.app` model switcher close-out (T-8.8; the switcher itself landed
   brought-forward in #153): the model name now sits in a fixed-width slot
   (`BrandMetrics.Control.modelLabelWidth`, sized so the longest catalog
