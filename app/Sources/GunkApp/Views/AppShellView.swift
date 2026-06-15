@@ -152,6 +152,7 @@ struct AppShellView: View {
       applyRunInspectorDebugOverride()
       applyToastDebugOverride()
       applyMCPSetupDebugOverride()
+      applyProcessingDebugOverride()
       // Appearing mid-run: snapshot what already exists so the completion
       // summary only counts what this run actually adds (mirrors
       // BrowseView's arrival-highlight snapshot).
@@ -199,10 +200,18 @@ struct AppShellView: View {
       // feedback is the toast over the detail area, not a sidebar state.
       VStack(spacing: BrandMetrics.Spacing.sm) {
         if services.processingModel.isProcessing {
-          ShellProcessingChip(
+          // The one global live-run element (library-v2 §2; T-9.4): the
+          // T-8.7 processing chip extended into a run panel that owns queue
+          // depth. There is no second indicator — the pulsing Library-row
+          // dot is its quiet echo, and the run-end toast is its terminal
+          // frame. A flex spacer above absorbs the panel's height
+          // (GlassSidebar), so nothing else moves when it appears (D15).
+          ShellRunPanel(
             subject: processingStatus.subject,
             fractionComplete: processingStatus.fraction,
-            modulesFound: services.processingModel.modulesFound
+            modulesFound: services.processingModel.modulesFound,
+            waitingCount: services.processingModel.waitingCount,
+            nextWaitingName: services.processingModel.nextWaitingName
           ) {
             // Library owns processing visibility (T-8.2+).
             selection = .library
@@ -271,18 +280,17 @@ struct AppShellView: View {
 
   // MARK: Processing element (T-8.7)
 
-  /// Subject + averaged progress for the live processing element. The
-  /// subject comes from `progressBySource` plus a store lookup; the fraction
-  /// is the average across active sources (the old strip's computation,
-  /// reused as-is).
+  /// Subject + progress for the live run panel. Processing is strictly
+  /// one-at-a-time now (T-9.4), so there is exactly one active source — the
+  /// old "N sources" branch is gone (queue depth lives in the panel's
+  /// "N waiting" copy instead). The subject is that source's name; the
+  /// fraction is its progress.
   private var processingStatus: (subject: String, fraction: Double) {
     let progress = services.processingModel.progressBySource
 
     let subject: String
-    if progress.count > 1 {
-      subject = "\(progress.count) sources"
-    } else if let sourceId = progress.keys.first,
-              let source = try? services.store.source(id: sourceId) {
+    if let sourceId = progress.keys.first,
+       let source = try? services.store.source(id: sourceId) {
       subject = source.name
     } else {
       subject = "Processing"
@@ -505,6 +513,25 @@ struct AppShellView: View {
   private func applyMCPSetupDebugOverride() {
     if ProcessInfo.processInfo.environment["GUNK_DEBUG_MCP_SETUP"] == "1" {
       showMCPSetup = true
+    }
+  }
+
+  /// Dev-only screenshot hook (same family as `GUNK_DEBUG_TOAST`): stages the
+  /// live run panel (library-v2 §2; T-9.4) at launch against the first real
+  /// source, without spawning the engine. `GUNK_DEBUG_PROCESSING=running`
+  /// shows a single active run; `=queued` adds the "N waiting / next:" depth.
+  /// No-op in normal launches, or when the store has no sources to attribute.
+  private func applyProcessingDebugOverride() {
+    guard let value = ProcessInfo.processInfo.environment["GUNK_DEBUG_PROCESSING"],
+          let source = try? services.store.listSources().first else {
+      return
+    }
+
+    services.processingModel.begin(sourceId: source.id)
+    services.processingModel.update(sourceId: source.id, progress: 0.58, modulesFound: 2)
+
+    if value == "queued" {
+      services.processingModel.setWaitingSourceNames(["tts-playground", "audio-utils"])
     }
   }
 
@@ -1063,35 +1090,56 @@ private struct ShellMCPChip: View {
   }
 }
 
-// MARK: - Processing element (T-8.7)
+// MARK: - Run panel (library-v2 §2; T-9.4 — the one global live-run element)
 
-/// Transient processing element stacked above the MCP chip: one job — show
-/// the live run. Source name, linear progress, modules found ("found" is
-/// engine telemetry, allowed only here, never in the completion claim).
-/// Click lands in the Library; the chip disappears when idle — completion
-/// feedback is the toast's job.
-private struct ShellProcessingChip: View {
+/// The single global live-run element (library-v2 §2): the T-8.7 processing
+/// element extended into a sidebar run panel that also owns **queue depth**.
+/// It animates while a folder decomposes and reads as "alive" without stealing
+/// the window. One job — show the live run + what's waiting behind it. Source
+/// name, a spinner ring, determinate linear progress, modules found ("found"
+/// is engine telemetry, allowed only here, never in the completion claim), and
+/// "N waiting · next:" when the queue has more. Click lands in the Library;
+/// the panel disappears when idle — completion feedback is the toast's job.
+/// Glass-on-glass inside the already-glass sidebar (never on a content card).
+private struct ShellRunPanel: View {
   let subject: String
   let fractionComplete: Double
   let modulesFound: Int
+  /// Sources waiting behind the active run (library-v2 §2 queue depth).
+  let waitingCount: Int
+  let nextWaitingName: String?
   let onOpen: () -> Void
 
   @State private var isHovering = false
 
   var body: some View {
     Button(action: onOpen) {
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
         HStack(spacing: BrandMetrics.Spacing.sm) {
-          ProgressView()
-            .controlSize(.small)
+          RunSpinnerRing()
+            .frame(width: 18, height: 18)
 
-          Text(subject)
-            .font(BrandTypography.callout)
-            .foregroundStyle(BrandColors.textPrimary)
-            .lineLimit(1)
-            .truncationMode(.middle)
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
+            Text(subject)
+              .font(BrandTypography.callout)
+              .foregroundStyle(BrandColors.textPrimary)
+              .lineLimit(1)
+              .truncationMode(.middle)
 
-          Spacer(minLength: 0)
+            Text("decomposing · \(modulesFound) found")
+              .font(BrandTypography.caption)
+              .foregroundStyle(BrandColors.textSecondary)
+              .lineLimit(1)
+          }
+
+          Spacer(minLength: BrandMetrics.Spacing.xs)
+
+          // Green reads the positive progress (library-v2 §2): accent is
+          // meaningful here — a live run advancing.
+          Text("\(Int(fractionComplete * 100))%")
+            .font(BrandTypography.callout.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(BrandColors.accent)
         }
 
         ProgressView(value: fractionComplete)
@@ -1099,21 +1147,21 @@ private struct ShellProcessingChip: View {
           .controlSize(.small)
           .tint(BrandColors.accent)
 
-        Text("\(Int(fractionComplete * 100))% · \(modulesFound) found")
-          .font(BrandTypography.caption)
-          .monospacedDigit()
-          .foregroundStyle(BrandColors.textSecondary)
+        if waitingCount > 0 {
+          queueDepth
+        }
       }
       .padding(BrandMetrics.Spacing.sm)
       .frame(maxWidth: .infinity, alignment: .leading)
       .background(
+        // Glass-on-glass: the run panel floats on the sidebar's controls
+        // layer (library-v2 §2). A hover tint warms it without leaving glass.
         RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
-          .fill(
-            isHovering
-              ? BrandColors.backgroundElevatedHover
-              : BrandColors.backgroundElevated
-          )
+          .fill(BrandColors.textPrimary.opacity(
+            isHovering ? BrandMetrics.Control.hoverHighlightOpacity : 0
+          ))
       )
+      .brandGlass(cornerRadius: BrandMetrics.Radius.medium, elevated: false)
       .contentShape(
         RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
       )
@@ -1124,7 +1172,80 @@ private struct ShellProcessingChip: View {
         isHovering = hovering
       }
     }
-    .accessibilityLabel("Processing \(subject), \(Int(fractionComplete * 100)) percent, \(modulesFound) modules found. Open Library.")
+    .accessibilityLabel(accessibilityLabel)
+  }
+
+  /// "N waiting · next: <source>" (library-v2 §2): the queue depth, only when
+  /// something is actually waiting. There is no "N sources running" — runs are
+  /// strictly one-at-a-time (T-9.4).
+  private var queueDepth: some View {
+    HStack(spacing: BrandMetrics.Spacing.xs) {
+      Text(waitingCount == 1 ? "1 waiting" : "\(waitingCount) waiting")
+        .monospacedDigit()
+        .fixedSize()
+
+      if let nextWaitingName {
+        Text("· next: \(nextWaitingName)")
+          .lineLimit(1)
+          .truncationMode(.middle)
+      }
+    }
+    .font(BrandTypography.caption)
+    .foregroundStyle(BrandColors.textTertiary)
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var accessibilityLabel: String {
+    var label = "Processing \(subject), \(Int(fractionComplete * 100)) percent, \(modulesFound) modules found."
+    if waitingCount > 0 {
+      label += " \(waitingCount) waiting."
+      if let nextWaitingName {
+        label += " Next: \(nextWaitingName)."
+      }
+    }
+    label += " Open Library."
+    return label
+  }
+}
+
+/// A quiet spinner ring for the run panel (library-v2 §2): a 3/4 accent arc
+/// that rotates while a run is live and reads as "working". Honors Reduce
+/// Motion — it holds as a **static 3/4 arc** (presence without spin), the
+/// locked reduced-motion fallback.
+private struct RunSpinnerRing: View {
+  @State private var isSpinning = false
+
+  /// Track + arc weight, sized for the panel's compact ring.
+  private static let lineWidth: CGFloat = 2
+  /// The arc covers 3/4 of the circle (reads "working").
+  private static let arcLength: CGFloat = 0.75
+  private static let spinDuration: TimeInterval = 0.9
+
+  var body: some View {
+    ZStack {
+      Circle()
+        .stroke(
+          BrandColors.textPrimary.opacity(BrandMetrics.Control.hoverHighlightOpacity),
+          lineWidth: Self.lineWidth
+        )
+
+      Circle()
+        .trim(from: 0, to: Self.arcLength)
+        .stroke(
+          BrandColors.accent,
+          style: StrokeStyle(lineWidth: Self.lineWidth, lineCap: .round)
+        )
+        .rotationEffect(.degrees(isSpinning ? 360 : 0))
+    }
+    .onAppear {
+      guard !BrandMotion.reduceMotion else {
+        return
+      }
+      withAnimation(.linear(duration: Self.spinDuration).repeatForever(autoreverses: false)) {
+        isSpinning = true
+      }
+    }
+    .accessibilityHidden(true)
   }
 }
 

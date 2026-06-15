@@ -4,6 +4,11 @@ import AppKit
 protocol DockIconApplying: AnyObject {
   func setApplicationIconImage(_ image: NSImage?)
   func setBadgeLabel(_ label: String?)
+  /// Forces the Dock tile to redraw now (B2): setting `badgeLabel` /
+  /// `applicationIconImage` does not reliably repaint the on-screen badge
+  /// during the rapid processing→feedback transitions, so each apply ends
+  /// with an explicit `display()`.
+  func displayDockTile()
 }
 
 @MainActor
@@ -20,6 +25,10 @@ final class ApplicationDockIconApplicator: DockIconApplying {
 
   func setBadgeLabel(_ label: String?) {
     application.dockTile.badgeLabel = label
+  }
+
+  func displayDockTile() {
+    application.dockTile.display()
   }
 }
 
@@ -102,6 +111,20 @@ final class DockIconController {
     applyCurrentState()
   }
 
+  /// Applies a new icon state **and** badge in a single render pass (B2 fix).
+  ///
+  /// The processing/feedback call sites used to call `setState(_:)` then
+  /// `badge(count:)` — two separate `applyCurrentState()` passes. At the start
+  /// of a run the first pass rendered the new **processing** icon while the
+  /// badge still held the **previous idle count**, so a stale count flashed on
+  /// the processing icon for one pass before the second pass cleared it.
+  /// Setting both before a single apply removes that intermediate.
+  func transition(to state: State, badgeCount count: Int) {
+    self.state = state
+    badgeCount = max(0, count)
+    applyCurrentState()
+  }
+
   func reflectGunkCount(_ count: Int) {
     state = count > 0 ? .full : .empty
     badgeCount = max(0, count)
@@ -123,6 +146,9 @@ final class DockIconController {
 
     applicator.setApplicationIconImage(image(for: state))
     applicator.setBadgeLabel(currentDescriptor.badgeLabel)
+    // Force the redraw so the badge never lags the icon during the rapid
+    // begin → moduleFound → complete transitions (B2).
+    applicator.displayDockTile()
   }
 
   private func image(for state: State) -> NSImage? {
