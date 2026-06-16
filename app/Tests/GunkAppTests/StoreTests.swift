@@ -65,7 +65,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(try store.listSources().map(\.name), ["active"])
   }
 
-  func testMigrationsAreIdempotentThroughV5() throws {
+  func testMigrationsAreIdempotentThroughV6() throws {
     let queue = try DatabaseQueue()
 
     _ = try Store(databaseQueue: queue, now: { 100 })
@@ -75,10 +75,10 @@ final class StoreTests: XCTestCase {
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
   }
 
-  func testV0ToV5UpgradePreservesSources() throws {
+  func testV0ToLatestUpgradePreservesSources() throws {
     let queue = try DatabaseQueue()
 
     try queue.write { db in
@@ -116,7 +116,7 @@ final class StoreTests: XCTestCase {
       try Row.fetchOne(db, sql: "SELECT source_id, relpath, size FROM files")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
     XCTAssertEqual(
       source,
       Source(
@@ -442,7 +442,7 @@ final class StoreTests: XCTestCase {
     let versions = try queue.read { db in
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
 
     // The old row opens cleanly with null attribution (it renders the neutral
     // mark) until backfill resolves it.
@@ -462,6 +462,315 @@ final class StoreTests: XCTestCase {
     let stored = try XCTUnwrap(try store.gunk(id: gunk.id))
     XCTAssertEqual(stored.provider, "anthropic")
     XCTAssertEqual(stored.model, "claude-sonnet-4")
+  }
+
+  // MARK: - T-10.3 (v6): smoke-run receipts & examples
+
+  func testV5StoreUpgradesToV6WithEmptyProofTables() throws {
+    let queue = try DatabaseQueue()
+
+    // Build a store at v5 (pre-proof-loop) with one module, then open it.
+    try queue.write { db in
+      for migration in Schema.migrations where migration.version <= 5 {
+        try db.execute(sql: migration.sql)
+        try db.execute(
+          sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+          arguments: [migration.version, 100]
+        )
+      }
+
+      try db.execute(
+        sql: "INSERT INTO sources (id, name, path, dropped_at) VALUES (?, ?, ?, ?)",
+        arguments: [1, "legacy", "/code/legacy", 100]
+      )
+      try db.execute(
+        sql: "INSERT INTO gunks (id, source_id, name) VALUES (?, ?, ?)",
+        arguments: [1, 1, "legacy-module"]
+      )
+    }
+
+    let store = try Store(databaseQueue: queue, now: { 200 })
+
+    let versions = try queue.read { db in
+      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
+    }
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
+
+    // The new tables exist and start empty on an upgraded store.
+    XCTAssertEqual(try store.smokeRuns(gunkId: 1), [])
+    XCTAssertEqual(try store.listExamples(gunkId: 1), [])
+    XCTAssertNil(try store.mostRecentSmokeRun(gunkId: 1))
+  }
+
+  func testInsertSmokeRunRoundTrips() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let run = try store.insertSmokeRun(
+      gunkId: gunk.id,
+      command: "python parser.py:parse_epub",
+      runnability: .terminalRunnable,
+      origin: .human,
+      exitCode: 0,
+      passed: true,
+      durationMs: 412,
+      outputArtifactPath: "/tmp/run/out.json",
+      log: "parsed 12 chapters"
+    )
+
+    XCTAssertEqual(try store.mostRecentSmokeRun(gunkId: gunk.id), run)
+    XCTAssertEqual(
+      run,
+      SmokeRunRecord(
+        id: run.id,
+        gunkId: gunk.id,
+        exampleId: nil,
+        command: "python parser.py:parse_epub",
+        runnability: .terminalRunnable,
+        origin: .human,
+        exitCode: 0,
+        passed: true,
+        timedOut: false,
+        durationMs: 412,
+        outputArtifactPath: "/tmp/run/out.json",
+        log: "parsed 12 chapters",
+        verdict: nil,
+        createdAt: 100
+      )
+    )
+  }
+
+  func testRecordSmokeRunFromResultStoresNilPassedWhenNotExecuted() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let notRun = SmokeRunResult(
+      runnability: .needsNetwork,
+      command: nil,
+      exitCode: nil,
+      stdout: "",
+      stderr: "",
+      durationMs: 0,
+      timedOut: false,
+      outputArtifacts: [],
+      startedAt: Date(timeIntervalSince1970: 0),
+      isolation: .notRun,
+      origin: .agent
+    )
+
+    let receipt = try store.recordSmokeRun(gunkId: gunk.id, result: notRun)
+
+    XCTAssertEqual(receipt.runnability, .needsNetwork)
+    XCTAssertEqual(receipt.origin, .agent)
+    XCTAssertNil(receipt.passed)
+  }
+
+  func testRecordSmokeRunFromResultJoinsOutputAndExecutedPass() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let ran = SmokeRunResult(
+      runnability: .terminalRunnable,
+      command: "node index.js",
+      exitCode: 0,
+      stdout: "hello",
+      stderr: "warn: deprecated",
+      durationMs: 90,
+      timedOut: false,
+      outputArtifacts: [URL(fileURLWithPath: "/tmp/run/a.txt")],
+      startedAt: Date(timeIntervalSince1970: 0),
+      isolation: .sandboxExec,
+      origin: .human
+    )
+
+    let receipt = try store.recordSmokeRun(gunkId: gunk.id, result: ran)
+
+    XCTAssertEqual(receipt.passed, true)
+    XCTAssertEqual(receipt.log, "hello\nwarn: deprecated")
+    XCTAssertEqual(receipt.outputArtifactPath, "/tmp/run/a.txt")
+  }
+
+  func testSmokeRunsReturnNewestFirstAndRespectLimit() throws {
+    var timestamp: Int64 = 100
+    let queue = try DatabaseQueue()
+    let store = try Store(databaseQueue: queue) {
+      defer { timestamp += 100 }
+      return timestamp
+    }
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "mod")
+
+    for index in 0..<3 {
+      _ = try store.insertSmokeRun(
+        gunkId: gunk.id,
+        command: "run \(index)",
+        runnability: .terminalRunnable,
+        origin: .human
+      )
+    }
+
+    XCTAssertEqual(
+      try store.smokeRuns(gunkId: gunk.id).map(\.command),
+      ["run 2", "run 1", "run 0"]
+    )
+    XCTAssertEqual(
+      try store.smokeRuns(gunkId: gunk.id, limit: 2).map(\.command),
+      ["run 2", "run 1"]
+    )
+  }
+
+  func testAttachVerdictToRun() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+    let run = try store.insertSmokeRun(
+      gunkId: gunk.id,
+      command: "python main.py",
+      runnability: .terminalRunnable,
+      origin: .human,
+      exitCode: 0,
+      passed: true
+    )
+    XCTAssertNil(run.verdict)
+
+    try store.attachVerdict(smokeRunId: run.id, verdict: .right)
+
+    XCTAssertEqual(try store.mostRecentSmokeRun(gunkId: gunk.id)?.verdict, .right)
+  }
+
+  func testInsertExampleRoundTrips() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let example = try store.insertExample(
+      gunkId: gunk.id,
+      name: "Footnote-heavy EPUB",
+      input: "--in footnotes.epub",
+      inputClass: .yours,
+      verdict: .right
+    )
+
+    XCTAssertEqual(
+      try store.listExamples(gunkId: gunk.id),
+      [
+        ModuleExample(
+          id: example.id,
+          gunkId: gunk.id,
+          name: "Footnote-heavy EPUB",
+          input: "--in footnotes.epub",
+          inputClass: .yours,
+          isGolden: false,
+          verdict: .right,
+          expectedOutput: nil,
+          note: nil,
+          createdAt: 100
+        )
+      ]
+    )
+  }
+
+  func testPinnedFailingCaseStoresExpectedOutputAndNote() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let failing = try store.insertExample(
+      gunkId: gunk.id,
+      name: "Empty file",
+      input: "--in empty.epub",
+      inputClass: .adversarial,
+      verdict: .wrong,
+      expectedOutput: "{\"chapters\": []}",
+      note: "crashed instead of returning an empty result"
+    )
+
+    let stored = try XCTUnwrap(try store.listExamples(gunkId: gunk.id).first)
+    XCTAssertEqual(stored, failing)
+    XCTAssertEqual(stored.verdict, .wrong)
+    XCTAssertEqual(stored.expectedOutput, "{\"chapters\": []}")
+    XCTAssertEqual(stored.note, "crashed instead of returning an empty result")
+  }
+
+  func testGoldenIsExclusivePerInputClass() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+
+    let firstHappy = try store.insertExample(
+      gunkId: gunk.id,
+      name: "demo-a",
+      input: "a",
+      inputClass: .happy,
+      isGolden: true
+    )
+    let yours = try store.insertExample(
+      gunkId: gunk.id,
+      name: "mine",
+      input: "b",
+      inputClass: .yours,
+      isGolden: true
+    )
+
+    // A second golden in the *same* class displaces the first.
+    let secondHappy = try store.insertExample(
+      gunkId: gunk.id,
+      name: "demo-b",
+      input: "c",
+      inputClass: .happy,
+      isGolden: true
+    )
+
+    let golden = try store.listExamples(gunkId: gunk.id)
+      .filter(\.isGolden)
+      .map(\.id)
+
+    // One golden per class: the newest happy + the lone yours; the first
+    // happy was displaced.
+    XCTAssertEqual(Set(golden), [secondHappy.id, yours.id])
+    XCTAssertFalse(golden.contains(firstHappy.id))
+  }
+
+  func testMarkExampleGoldenClearsClassSiblings() throws {
+    let (store, gunk) = try makeStoreWithGunk(now: 100)
+    let a = try store.insertExample(
+      gunkId: gunk.id, name: "a", input: "a", inputClass: .edge, isGolden: true
+    )
+    let b = try store.insertExample(
+      gunkId: gunk.id, name: "b", input: "b", inputClass: .edge
+    )
+
+    try store.markExampleGolden(id: b.id)
+
+    let goldenIds = try store.listExamples(gunkId: gunk.id)
+      .filter(\.isGolden)
+      .map(\.id)
+    XCTAssertEqual(goldenIds, [b.id])
+    XCTAssertFalse(goldenIds.contains(a.id))
+  }
+
+  func testDeletingExampleNullsRunInputRef() throws {
+    let (store, queue) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "module")
+    let example = try store.insertExample(
+      gunkId: gunk.id, name: "case", input: "x", inputClass: .yours
+    )
+    let run = try store.insertSmokeRun(
+      gunkId: gunk.id,
+      exampleId: example.id,
+      command: "run",
+      runnability: .terminalRunnable,
+      origin: .human
+    )
+    XCTAssertEqual(run.exampleId, example.id)
+
+    // Deleting an example must not erase its receipts — the FK is
+    // ON DELETE SET NULL, so the run survives with a null input ref.
+    try queue.write { db in
+      try db.execute(
+        sql: "DELETE FROM module_examples WHERE id = ?",
+        arguments: [example.id]
+      )
+    }
+
+    XCTAssertNil(try store.mostRecentSmokeRun(gunkId: gunk.id)?.exampleId)
+  }
+
+  private func makeStoreWithGunk(now: Int64) throws -> (Store, Gunk) {
+    let (store, _) = try makeStore(now: now)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "module")
+    return (store, gunk)
   }
 
   private func makeStore(now: Int64) throws -> (Store, DatabaseQueue) {
