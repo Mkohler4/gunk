@@ -348,6 +348,10 @@ final class BrowseModel {
   private let extractGunk: ExtractGunk
   private let reclassifySource: ReclassifySource
   private let loadRunTraces: LoadRunTraces
+  /// The sandbox runner that executes a module's entrypoint (T-10.2). Injected
+  /// so the smoke-run orchestration is testable with a canned executor; the
+  /// production default wraps runs in `sandbox-exec` (ADR-0016).
+  private let smokeRunner: SmokeRunner
 
   private(set) var sections: [BrowseSection] = []
   private(set) var approvalQueue: [BrowseItem] = []
@@ -384,7 +388,8 @@ final class BrowseModel {
     reclassifySource: @escaping ReclassifySource = { _ in },
     loadRunTraces: @escaping LoadRunTraces = {
       RunTraceStore().recentTraces(limit: 250)
-    }
+    },
+    smokeRunner: SmokeRunner = SmokeRunner()
   ) {
     self.store = store
     self.confidenceThreshold = confidenceThreshold
@@ -396,6 +401,7 @@ final class BrowseModel {
     }
     self.reclassifySource = reclassifySource
     self.loadRunTraces = loadRunTraces
+    self.smokeRunner = smokeRunner
   }
 
   func refresh() {
@@ -519,6 +525,104 @@ final class BrowseModel {
       language: detail.item.gunk.language,
       purpose: detail.item.gunk.purpose
     )
+  }
+
+  // MARK: - Smoke run ("Try it") orchestration (T-10.7)
+
+  /// Assembles the runner's `RunInput` for a module's smoke run from its stored
+  /// bundle, language, entrypoints, and declared packages (the dependency list
+  /// the classifier keys on — never installed here). Returns `nil` when the
+  /// module has no extracted bundle to stage, so the page shows nothing to run
+  /// rather than guessing.
+  func smokeRunInput(for detail: BrowseModuleDetail, origin: RunOrigin = .human) -> RunInput? {
+    guard let bundlePath = detail.bundlePath else {
+      return nil
+    }
+
+    return RunInput(
+      gunkId: detail.item.gunk.id,
+      bundlePath: URL(fileURLWithPath: bundlePath),
+      language: ModuleLanguage(rawLanguage: detail.item.gunk.language ?? ""),
+      entrypoints: detail.entrypoints.map { Entrypoint(path: $0.path, symbol: $0.symbol) },
+      dependencies: detail.requirements?.packages ?? [],
+      origin: origin
+    )
+  }
+
+  /// The runnability classification (T-10.2) for a module, computed up front so
+  /// the page offers a Run button only for `.terminalRunnable` modules and
+  /// renders an honest, neutral "runnable here: not yet" state for everything
+  /// else (never a failure). `nil` bundle → `.cannotDetermine`.
+  func runnability(for detail: BrowseModuleDetail) -> Runnability {
+    guard let input = smokeRunInput(for: detail) else {
+      return .cannotDetermine
+    }
+
+    return RunnabilityClassifier.classify(input)
+  }
+
+  /// The resolved command line a smoke run would execute, for the first-run
+  /// consent treatment. `nil` when no command can be derived.
+  func resolvedRunCommand(for detail: BrowseModuleDetail) -> String? {
+    guard let input = smokeRunInput(for: detail) else {
+      return nil
+    }
+
+    return EntrypointResolver.resolve(input)?.display
+  }
+
+  /// The most recent smoke-run receipt for a module — the resting state shown
+  /// on re-visit (T-10.3). `nil` when the module has never been tried.
+  func lastSmokeRun(for gunkId: Int64) -> SmokeRunRecord? {
+    (try? store.mostRecentSmokeRun(gunkId: gunkId)) ?? nil
+  }
+
+  /// Whether the developer has already consented to and run this module, so the
+  /// first-run consent treatment is not shown again. Inferred from the presence
+  /// of any persisted receipt — which only exists *after* a consented run — so
+  /// consent survives an app relaunch without a separate consent table.
+  func hasRunBefore(gunkId: Int64) -> Bool {
+    lastSmokeRun(for: gunkId) != nil
+  }
+
+  /// Runs a module's smoke test in **streaming** mode: forwards every runner
+  /// event to `emit` (incremental stdout/stderr for the live terminal), then
+  /// persists the receipt (T-10.3) and returns it. Returns `nil` only when
+  /// there is nothing to run (no bundle). The runner itself does no store
+  /// writes — persistence lives here (the console's door) and in the MCP tool
+  /// (T-10.12).
+  @discardableResult
+  func runSmokeTest(
+    for detail: BrowseModuleDetail,
+    origin: RunOrigin = .human,
+    emit: @escaping (RunStreamEvent) -> Void
+  ) async -> SmokeRunRecord? {
+    guard let input = smokeRunInput(for: detail, origin: origin) else {
+      return nil
+    }
+
+    var finalResult: SmokeRunResult?
+    do {
+      for try await event in smokeRunner.runStreaming(input) {
+        emit(event)
+        if case .finished(let result) = event {
+          finalResult = result
+        }
+      }
+    } catch {
+      errorMessage = error.localizedDescription
+    }
+
+    guard let result = finalResult else {
+      return nil
+    }
+
+    do {
+      return try store.recordSmokeRun(gunkId: detail.item.gunk.id, result: result)
+    } catch {
+      errorMessage = error.localizedDescription
+      return nil
+    }
   }
 
   private func loadItems() throws -> [BrowseItem] {

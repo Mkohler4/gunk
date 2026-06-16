@@ -72,6 +72,7 @@ struct ModulePageView: View {
         reviewSection(detail)
         trustReadout(detail)
         callItSection(detail)
+        runConsoleSection(detail)
         bundleSection(detail)
         filesSection(detail)
         requirementsSection(detail)
@@ -282,6 +283,20 @@ struct ModulePageView: View {
     let snippets = model.callItSnippets(for: detail)
     if !snippets.isEmpty {
       CallItView(snippets: snippets)
+    }
+  }
+
+  // MARK: Try it (T-10.7 — smoke run console)
+
+  /// The smoke-run console: the developer's "Try it" door (T-10.7). Shown only
+  /// once a module has an extracted bundle to stage; until then there is
+  /// nothing to run. This is the *smoke run* — it never merges with the
+  /// `view run →` extraction inspector (the two-surfaces rule).
+  @ViewBuilder
+  private func runConsoleSection(_ detail: BrowseModuleDetail) -> some View {
+    if detail.bundlePath != nil {
+      RunConsoleView(model: model, detail: detail)
+        .id(detail.item.gunk.id)
     }
   }
 
