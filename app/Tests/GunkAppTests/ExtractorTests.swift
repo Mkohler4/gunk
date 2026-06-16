@@ -102,6 +102,12 @@ final class ExtractorTests: XCTestCase {
     XCTAssertTrue(manifest.contains("language: \"Swift\""))
     XCTAssertTrue(manifest.contains("purpose: \"Handles sign in callbacks.\""))
     XCTAssertTrue(manifest.contains("deps:"))
+    XCTAssertTrue(manifest.contains("requirements:"))
+    // No dependency manifest in the fixture, so the runtime falls back to the
+    // module's language and packages/env are honestly empty.
+    XCTAssertTrue(manifest.contains("  runtime: \"Swift\""))
+    XCTAssertTrue(manifest.contains("  packages: []"))
+    XCTAssertTrue(manifest.contains("  env: []"))
     XCTAssertTrue(manifest.contains("entrypoints:"))
     XCTAssertTrue(manifest.contains("provenance:"))
     XCTAssertTrue(manifest.contains("source_path: \"~/Documents/project\""))

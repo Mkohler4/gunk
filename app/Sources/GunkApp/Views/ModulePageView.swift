@@ -74,7 +74,7 @@ struct ModulePageView: View {
         callItSection(detail)
         bundleSection(detail)
         filesSection(detail)
-        sharedDependenciesSection(detail)
+        requirementsSection(detail)
         entrypointsSection(detail)
         verificationDetailsSection(detail)
         footerActions(detail)
@@ -347,14 +347,67 @@ struct ModulePageView: View {
     }
   }
 
-  private func sharedDependenciesSection(_ detail: BrowseModuleDetail) -> some View {
-    DetailSection(title: "Shared dependencies", systemImage: "link") {
-      if detail.sharedDependencies.isEmpty {
-        emptyText("No shared dependencies recorded.")
-      } else {
-        pathList(detail.sharedDependencies)
+  // MARK: Requirements readout (T-10.6 — "to run this elsewhere, you need")
+
+  /// The portability readout that replaces the old shared-dependency *paths*
+  /// list: three honest rows — runtime, packages, env vars — derived from real
+  /// manifest data persisted into the bundle's `gunk.yml`. Empty rows read
+  /// `none`; nothing is invented. Packages are neutral chips (never earned
+  /// green); env vars are mono because they are literal identifiers.
+  private func requirementsSection(_ detail: BrowseModuleDetail) -> some View {
+    let requirements = detail.requirements ?? .empty
+
+    return DetailSection(title: "To run this elsewhere, you need", systemImage: "shippingbox") {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+        requirementRow(label: "Runtime") {
+          if let runtime = requirements.runtime, !runtime.isEmpty {
+            Text(runtime)
+              .font(BrandTypography.callout)
+              .foregroundStyle(BrandColors.textPrimary)
+              .textSelection(.enabled)
+          } else {
+            noneValue
+          }
+        }
+
+        requirementRow(label: "Packages") {
+          if requirements.packages.isEmpty {
+            noneValue
+          } else {
+            RequirementChips(values: requirements.packages, mono: false)
+          }
+        }
+
+        requirementRow(label: "Env vars") {
+          if requirements.env.isEmpty {
+            noneValue
+          } else {
+            RequirementChips(values: requirements.env, mono: true)
+          }
+        }
       }
     }
+  }
+
+  private func requirementRow<Content: View>(
+    label: String,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.md) {
+      Text(label)
+        .font(BrandTypography.caption)
+        .foregroundStyle(BrandColors.textTertiary)
+        .frame(width: 92, alignment: .leading)
+
+      content()
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private var noneValue: some View {
+    Text("none")
+      .font(BrandTypography.callout)
+      .foregroundStyle(BrandColors.textTertiary)
   }
 
   private func entrypointsSection(_ detail: BrowseModuleDetail) -> some View {
@@ -776,6 +829,92 @@ struct DetailSection<Content: View>: View {
         content
       }
       .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+}
+
+// MARK: - Requirement chips (T-10.6)
+
+/// A wrapping row of neutral capsules for the requirements readout: packages
+/// render as plain caption chips, env vars as mono chips (they are literal
+/// identifiers). Neutral on purpose — requirements are facts, not earned trust,
+/// so they stay off the accent-green vocabulary.
+private struct RequirementChips: View {
+  let values: [String]
+  let mono: Bool
+
+  var body: some View {
+    FlowLayout(spacing: BrandMetrics.Spacing.xs) {
+      ForEach(values, id: \.self) { value in
+        Text(value)
+          .font(mono ? BrandTypography.mono : BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+          .lineLimit(1)
+          .padding(.horizontal, BrandMetrics.Spacing.sm)
+          .padding(.vertical, BrandMetrics.Spacing.xs)
+          .background(
+            Capsule().fill(
+              BrandColors.textSecondary.opacity(BrandMetrics.Control.tintedFillOpacity)
+            )
+          )
+          .overlay(Capsule().strokeBorder(BrandColors.separator))
+      }
+    }
+  }
+}
+
+/// A minimal flow layout: lays subviews left-to-right and wraps to the next row
+/// when the proposed width runs out. Used for the requirements chips so a long
+/// package list wraps instead of truncating or stretching the panel.
+private struct FlowLayout: Layout {
+  var spacing: CGFloat = BrandMetrics.Spacing.xs
+
+  func sizeThatFits(proposal: ProposedViewSize, subviews: Subviews, cache: inout Void) -> CGSize {
+    let maxWidth = proposal.width ?? .infinity
+    var rowWidth: CGFloat = 0
+    var rowHeight: CGFloat = 0
+    var totalHeight: CGFloat = 0
+    var widestRow: CGFloat = 0
+
+    for subview in subviews {
+      let size = subview.sizeThatFits(.unspecified)
+      if rowWidth > 0 && rowWidth + spacing + size.width > maxWidth {
+        widestRow = max(widestRow, rowWidth)
+        totalHeight += rowHeight + spacing
+        rowWidth = size.width
+        rowHeight = size.height
+      } else {
+        rowWidth += (rowWidth > 0 ? spacing : 0) + size.width
+        rowHeight = max(rowHeight, size.height)
+      }
+    }
+
+    widestRow = max(widestRow, rowWidth)
+    totalHeight += rowHeight
+    let resolvedWidth = maxWidth == .infinity ? widestRow : min(widestRow, maxWidth)
+    return CGSize(width: resolvedWidth, height: totalHeight)
+  }
+
+  func placeSubviews(
+    in bounds: CGRect,
+    proposal: ProposedViewSize,
+    subviews: Subviews,
+    cache: inout Void
+  ) {
+    var x = bounds.minX
+    var y = bounds.minY
+    var rowHeight: CGFloat = 0
+
+    for subview in subviews {
+      let size = subview.sizeThatFits(.unspecified)
+      if x > bounds.minX && x + size.width > bounds.maxX {
+        x = bounds.minX
+        y += rowHeight + spacing
+        rowHeight = 0
+      }
+      subview.place(at: CGPoint(x: x, y: y), proposal: ProposedViewSize(size))
+      x += size.width + spacing
+      rowHeight = max(rowHeight, size.height)
     }
   }
 }

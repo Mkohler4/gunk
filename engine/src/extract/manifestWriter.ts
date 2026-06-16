@@ -6,6 +6,7 @@ import { basename } from "node:path";
 
 import type { Gunk } from "../store/index.js";
 import type { DetectedLicense } from "./licenseDetector.js";
+import { EMPTY_REQUIREMENTS, type ModuleRequirements } from "./requirements.js";
 import type { Redaction } from "./secretRedactor.js";
 
 export interface ManifestInput {
@@ -17,6 +18,8 @@ export interface ManifestInput {
   license: DetectedLicense;
   redactions: Redaction[];
   extractedAtMs: number;
+  /** Portability readout persisted into `gunk.yml` (T-10.6). */
+  requirements?: ModuleRequirements;
 }
 
 export interface ManifestArtifact {
@@ -54,6 +57,11 @@ export class ManifestWriter {
     lines.push("deps:");
     lines.push("  package_managers: []");
     lines.push("  packages: []");
+    const requirements = input.requirements ?? EMPTY_REQUIREMENTS;
+    lines.push("requirements:");
+    lines.push(`  runtime: ${this.yamlOptional(requirements.runtime)}`);
+    this.appendIndentedList(requirements.packages, "packages", "  ", lines);
+    this.appendIndentedList(requirements.env, "env", "  ", lines);
     if (entrypoints.length === 0) {
       lines.push("entrypoints: []");
     } else {
@@ -125,6 +133,15 @@ export class ManifestWriter {
     }
     lines.push(`${key}:`);
     lines.push(...values.map((v) => `  - ${this.yaml(v)}`));
+  }
+
+  private appendIndentedList(values: string[], key: string, indent: string, lines: string[]): void {
+    if (values.length === 0) {
+      lines.push(`${indent}${key}: []`);
+      return;
+    }
+    lines.push(`${indent}${key}:`);
+    lines.push(...values.map((v) => `${indent}  - ${this.yaml(v)}`));
   }
 
   private yamlOptional(value: string | null): string {

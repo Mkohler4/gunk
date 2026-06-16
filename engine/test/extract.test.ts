@@ -112,6 +112,74 @@ describe("ManifestWriter", () => {
     expect(artifact.readme).toContain("# Auth");
   });
 
+  it("persists the requirements readout block", () => {
+    const writer = new ManifestWriter("/home/me");
+    const artifact = writer.artifact({
+      gunk: {
+        id: 7,
+        sourceId: 1,
+        name: "Convert",
+        purpose: "EPUB → markdown",
+        language: "python",
+        confidence: 0.9,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
+        removedAt: null,
+      },
+      tags: [],
+      files: ["convert.py"],
+      sourcePath: "~/proj",
+      sourceCommit: null,
+      license: { detected: "MIT", warning: null },
+      redactions: [],
+      extractedAtMs: 0,
+      requirements: {
+        runtime: "Python ≥ 3.11",
+        packages: ["ebooklib", "markdownify"],
+        env: ["OUTPUT_DIR"],
+      },
+    });
+    expect(artifact.manifest).toContain("requirements:");
+    expect(artifact.manifest).toContain('  runtime: "Python ≥ 3.11"');
+    expect(artifact.manifest).toContain("  packages:");
+    expect(artifact.manifest).toContain('    - "ebooklib"');
+    expect(artifact.manifest).toContain('    - "markdownify"');
+    expect(artifact.manifest).toContain("  env:");
+    expect(artifact.manifest).toContain('    - "OUTPUT_DIR"');
+  });
+
+  it("renders empty requirements as honest empty lists", () => {
+    const writer = new ManifestWriter("/home/me");
+    const artifact = writer.artifact({
+      gunk: {
+        id: 8,
+        sourceId: 1,
+        name: "Bare",
+        purpose: null,
+        language: null,
+        confidence: 0.9,
+        bundlePath: null,
+        manifestPath: null,
+        extractedAt: null,
+        approvedAt: null,
+        removedAt: null,
+      },
+      tags: [],
+      files: ["bare.txt"],
+      sourcePath: "~/proj",
+      sourceCommit: null,
+      license: { detected: "unknown", warning: null },
+      redactions: [],
+      extractedAtMs: 0,
+    });
+    expect(artifact.manifest).toContain("requirements:");
+    expect(artifact.manifest).toContain("  runtime: null");
+    expect(artifact.manifest).toContain("  packages: []");
+    expect(artifact.manifest).toContain("  env: []");
+  });
+
   it("maps home-relative paths", () => {
     const writer = new ManifestWriter("/home/me");
     expect(writer.homeRelativePath("/home/me/proj")).toBe("~/proj");

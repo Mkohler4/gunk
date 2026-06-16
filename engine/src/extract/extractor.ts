@@ -16,6 +16,7 @@ import {
 import type { Database } from "bun:sqlite";
 import { LicenseDetector } from "./licenseDetector.js";
 import { ManifestWriter } from "./manifestWriter.js";
+import type { ModuleRequirements } from "./requirements.js";
 import { SecretRedactor, type Redaction } from "./secretRedactor.js";
 
 export interface ExtractionResult {
@@ -66,7 +67,7 @@ export class Extractor {
     this.now = options.now ?? Date.now;
   }
 
-  extract(gunk: Gunk): ExtractionResult | null {
+  extract(gunk: Gunk, requirements?: ModuleRequirements): ExtractionResult | null {
     if ((gunk.confidence ?? 0) < this.confidenceThreshold) {
       return null;
     }
@@ -102,6 +103,7 @@ export class Extractor {
       license: this.licenseDetector.detect(sourceRoot),
       redactions,
       extractedAtMs: extractedAt,
+      requirements,
     });
 
     writeFileSync(manifestPath, artifact.manifest, "utf-8");
