@@ -264,8 +264,9 @@ final class RunConsoleModel {
   /// a console state at launch so every CP-F state can be captured without live
   /// execution. Pair with `GUNK_DEBUG_MODULE_PAGE=first|<id>` to open the page.
   /// Values: `nevertried`, `consent`, `running`, `passed`, `failed`,
-  /// `unrunnable`, and the typed-input surface (T-10.8): `prefilled`,
-  /// `swapped`, `invalid`, `missing`, `dropwell`.
+  /// `unrunnable`, `uimodule` (the T-10.13 deferred UI-module state), and the
+  /// typed-input surface (T-10.8): `prefilled`, `swapped`, `invalid`,
+  /// `missing`, `dropwell`.
   private func applyDebugOverride() {
     guard let value = ProcessInfo.processInfo.environment["GUNK_DEBUG_RUN_CONSOLE"] else {
       return
@@ -302,6 +303,8 @@ final class RunConsoleModel {
       )
     case "unrunnable":
       runnabilityOverride = .needsNetwork
+    case "uimodule":
+      runnabilityOverride = .uiModule
     case "prefilled", "dropwell":
       stageInputSurface(values: [:])
     case "swapped":
