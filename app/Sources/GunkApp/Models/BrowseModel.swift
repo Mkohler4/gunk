@@ -534,7 +534,11 @@ final class BrowseModel {
   /// the classifier keys on — never installed here). Returns `nil` when the
   /// module has no extracted bundle to stage, so the page shows nothing to run
   /// rather than guessing.
-  func smokeRunInput(for detail: BrowseModuleDetail, origin: RunOrigin = .human) -> RunInput? {
+  func smokeRunInput(
+    for detail: BrowseModuleDetail,
+    arguments: [String] = [],
+    origin: RunOrigin = .human
+  ) -> RunInput? {
     guard let bundlePath = detail.bundlePath else {
       return nil
     }
@@ -545,7 +549,22 @@ final class BrowseModel {
       language: ModuleLanguage(rawLanguage: detail.item.gunk.language ?? ""),
       entrypoints: detail.entrypoints.map { Entrypoint(path: $0.path, symbol: $0.symbol) },
       dependencies: detail.requirements?.packages ?? [],
+      arguments: arguments,
       origin: origin
+    )
+  }
+
+  /// The typed-input surface (T-10.8) for a module: native controls derived
+  /// from the entrypoint signature, prefilled with the staged demo input and
+  /// swappable. A read-only derivation over what the detail already carries; an
+  /// unreliable inference returns `.unreliable` so the page falls back to the
+  /// zero-touch terminal path (T-10.7) quietly.
+  func inputSignature(for detail: BrowseModuleDetail) -> InputSignature {
+    InputSignatureInference.infer(
+      entrypoints: detail.entrypoints,
+      language: detail.item.gunk.language,
+      purpose: detail.item.gunk.purpose,
+      requirements: detail.requirements
     )
   }
 
@@ -562,9 +581,11 @@ final class BrowseModel {
   }
 
   /// The resolved command line a smoke run would execute, for the first-run
-  /// consent treatment. `nil` when no command can be derived.
-  func resolvedRunCommand(for detail: BrowseModuleDetail) -> String? {
-    guard let input = smokeRunInput(for: detail) else {
+  /// consent treatment and the console header. Includes the developer's
+  /// composed `arguments` so the displayed command reflects the typed input
+  /// (T-10.8). `nil` when no command can be derived.
+  func resolvedRunCommand(for detail: BrowseModuleDetail, arguments: [String] = []) -> String? {
+    guard let input = smokeRunInput(for: detail, arguments: arguments) else {
       return nil
     }
 
@@ -594,10 +615,12 @@ final class BrowseModel {
   @discardableResult
   func runSmokeTest(
     for detail: BrowseModuleDetail,
+    arguments: [String] = [],
+    exampleId: Int64? = nil,
     origin: RunOrigin = .human,
     emit: @escaping (RunStreamEvent) -> Void
   ) async -> SmokeRunRecord? {
-    guard let input = smokeRunInput(for: detail, origin: origin) else {
+    guard let input = smokeRunInput(for: detail, arguments: arguments, origin: origin) else {
       return nil
     }
 
@@ -618,7 +641,43 @@ final class BrowseModel {
     }
 
     do {
-      return try store.recordSmokeRun(gunkId: detail.item.gunk.id, result: result)
+      return try store.recordSmokeRun(
+        gunkId: detail.item.gunk.id,
+        exampleId: exampleId,
+        result: result
+      )
+    } catch {
+      errorMessage = error.localizedDescription
+      return nil
+    }
+  }
+
+  // MARK: - Typed input surface ("bring your own input") (T-10.8)
+
+  /// Persists the developer's swapped input as a **named, re-runnable example**
+  /// — the far end of the effort spectrum (Try it → swap → save as example).
+  /// This task wires the "save" action and stores it via T-10.3; the saved-
+  /// example *list* and re-run are T-10.10. An input the developer brought is
+  /// the `yours` coverage class; the bare staged demo is `happy`.
+  ///
+  /// Returns `nil` (and surfaces an error) on a store failure so the caller can
+  /// keep the developer's input in the field rather than silently losing it.
+  @discardableResult
+  func saveExample(
+    for detail: BrowseModuleDetail,
+    name: String,
+    input: String,
+    inputClass: ExampleInputClass = .yours,
+    verdict: RunVerdict? = nil
+  ) -> ModuleExample? {
+    do {
+      return try store.insertExample(
+        gunkId: detail.item.gunk.id,
+        name: name,
+        input: input,
+        inputClass: inputClass,
+        verdict: verdict
+      )
     } catch {
       errorMessage = error.localizedDescription
       return nil

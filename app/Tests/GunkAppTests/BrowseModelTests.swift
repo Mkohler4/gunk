@@ -1066,6 +1066,154 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertFalse(model.hasRunBefore(gunkId: gunk.id))
   }
 
+  // MARK: - Typed input surface (T-10.8)
+
+  func testInputSignatureInfersFileFieldFromPurpose() {
+    let signature = InputSignatureInference.infer(
+      entrypoints: [BrowseEntrypoint(path: "parser.py", symbol: "parse_epub")],
+      language: "Python",
+      purpose: "Parse an EPUB into markdown",
+      requirements: nil
+    )
+
+    XCTAssertTrue(signature.reliable)
+    XCTAssertEqual(signature.fields.count, 1)
+    let field = try? XCTUnwrap(signature.fields.first)
+    XCTAssertEqual(field?.kind, .file(extensions: ["epub"]))
+    XCTAssertFalse(field?.required ?? true)
+  }
+
+  func testInputSignatureInfersFileFieldFromEntrypointFilename() {
+    let signature = InputSignatureInference.infer(
+      entrypoints: [BrowseEntrypoint(path: "tools/convert_pdf.py", symbol: nil)],
+      language: "python",
+      purpose: nil,
+      requirements: nil
+    )
+
+    XCTAssertEqual(signature.fields.first?.kind, .file(extensions: ["pdf"]))
+  }
+
+  func testInputSignatureInfersTextFieldForStringUtility() {
+    let signature = InputSignatureInference.infer(
+      entrypoints: [BrowseEntrypoint(path: "slugify.py", symbol: "slugify")],
+      language: "Python",
+      purpose: "Slugify a string",
+      requirements: nil
+    )
+
+    XCTAssertTrue(signature.reliable)
+    XCTAssertEqual(signature.fields.first?.kind, .text)
+  }
+
+  func testInputSignatureUnreliableForVagueModule() {
+    let signature = InputSignatureInference.infer(
+      entrypoints: [BrowseEntrypoint(path: "main.py", symbol: "run")],
+      language: "Python",
+      purpose: "Do the thing",
+      requirements: nil
+    )
+
+    XCTAssertFalse(signature.reliable)
+    XCTAssertTrue(signature.isEmpty)
+  }
+
+  func testInputSignatureUnreliableForNonRunnableLanguage() {
+    let signature = InputSignatureInference.infer(
+      entrypoints: [BrowseEntrypoint(path: "Slug.swift", symbol: "slugify")],
+      language: "Swift",
+      purpose: "Slugify a string",
+      requirements: nil
+    )
+
+    XCTAssertFalse(signature.reliable)
+  }
+
+  func testSignatureComposesPresentValuesAsPositionalArguments() {
+    let signature = InputSignature(
+      fields: [
+        InputField(id: "input-file", label: "Input file", kind: .file(extensions: ["epub"])),
+        InputField(id: "format", label: "Format", kind: .choice(options: ["md", "txt"])),
+      ],
+      reliable: true
+    )
+
+    // Empty values contribute nothing (the zero-touch floor: bare command).
+    XCTAssertEqual(signature.arguments(from: [:]), [])
+    // Present values compose in field order; whitespace-only is treated empty.
+    XCTAssertEqual(
+      signature.arguments(from: ["input-file": "/tmp/book.epub", "format": "  "]),
+      ["/tmp/book.epub"]
+    )
+    XCTAssertEqual(
+      signature.arguments(from: ["input-file": "/tmp/book.epub", "format": "md"]),
+      ["/tmp/book.epub", "md"]
+    )
+  }
+
+  func testInputValidatorFlagsMissingWrongTypeTooLargeAndNonNumber() {
+    let requiredFile = InputField(
+      id: "f", label: "Input file", kind: .file(extensions: ["epub"]), required: true
+    )
+    XCTAssertEqual(InputValidator.validate(field: requiredFile, value: ""), .missing)
+    XCTAssertEqual(
+      InputValidator.validate(field: requiredFile, value: "/tmp/notes.txt"),
+      .wrongFileType(expected: ["epub"])
+    )
+    XCTAssertEqual(
+      InputValidator.validate(
+        field: requiredFile,
+        value: "/tmp/book.epub",
+        fileSizeBytes: InputLimits.maxFileBytes + 1
+      ),
+      .tooLarge(limitBytes: InputLimits.maxFileBytes)
+    )
+    XCTAssertEqual(InputValidator.validate(field: requiredFile, value: "/tmp/book.epub"), .ok)
+
+    let number = InputField(id: "n", label: "Count", kind: .number)
+    XCTAssertEqual(InputValidator.validate(field: number, value: "abc"), .notANumber)
+    XCTAssertEqual(InputValidator.validate(field: number, value: "42"), .ok)
+    // An optional empty field is fine (the demo-less default).
+    XCTAssertEqual(InputValidator.validate(field: number, value: ""), .ok)
+  }
+
+  func testSmokeRunInputThreadsComposedArguments() throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let input = try XCTUnwrap(model.smokeRunInput(for: detail, arguments: ["book.epub"]))
+    XCTAssertEqual(input.arguments, ["book.epub"])
+    XCTAssertEqual(model.resolvedRunCommand(for: detail, arguments: ["book.epub"]), "python3 main.py book.epub")
+  }
+
+  func testRunSmokeTestUsesComposedArgumentsInReceiptCommand() async throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let record = await model.runSmokeTest(for: detail, arguments: ["book.epub"]) { _ in }
+    let receipt = try XCTUnwrap(record)
+    XCTAssertEqual(receipt.command, "python3 main.py book.epub")
+  }
+
+  func testSaveExamplePersistsDeveloperInputAsYoursClass() throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let saved = model.saveExample(for: detail, name: "My book", input: "book.epub")
+
+    XCTAssertEqual(saved?.name, "My book")
+    XCTAssertEqual(saved?.inputClass, .yours)
+    let examples = try store.listExamples(gunkId: gunk.id)
+    XCTAssertEqual(examples.map(\.name), ["My book"])
+    XCTAssertEqual(examples.first?.input, "book.epub")
+  }
+
   /// Inserts an extracted Python module whose entrypoint (`main.py`) lives in a
   /// real on-disk bundle the runner can stage, wired to a `BrowseModel` with an
   /// injected (canned) smoke runner.
