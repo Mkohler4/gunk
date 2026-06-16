@@ -71,6 +71,7 @@ struct ModulePageView: View {
         agentReadyLine(detail)
         reviewSection(detail)
         trustReadout(detail)
+        callItSection(detail)
         bundleSection(detail)
         filesSection(detail)
         sharedDependenciesSection(detail)
@@ -267,6 +268,20 @@ struct ModulePageView: View {
         .padding(.top, BrandMetrics.Spacing.xs)
       }
       .transition(.opacity)
+    }
+  }
+
+  // MARK: Call it (T-10.5 — copyable invocation snippet)
+
+  /// The "Call it" snippet: a generated, one-glance "how do I use this" call
+  /// built from the stored entrypoints + symbols, copyable in one click. Mono
+  /// is allowed here — it is code. Hidden entirely when no entrypoint resolves,
+  /// so the page never shows an empty code block.
+  @ViewBuilder
+  private func callItSection(_ detail: BrowseModuleDetail) -> some View {
+    let snippets = model.callItSnippets(for: detail)
+    if !snippets.isEmpty {
+      CallItView(snippets: snippets)
     }
   }
 
@@ -606,6 +621,101 @@ private struct ModulePageBreadcrumb: View {
       .foregroundStyle(color)
       .lineLimit(1)
       .truncationMode(.middle)
+  }
+}
+
+// MARK: - Call it snippet (T-10.5)
+
+/// The "Call it" panel: a copyable invocation snippet in a mono block. When a
+/// module exposes several entrypoints it shows the primary one with a quiet
+/// picker to switch — never a wall of snippets (the refining-loop rule). The
+/// Copy button writes the snippet to the pasteboard and flips to a brief
+/// "Copied" confirmation (neutral — copying is not earned trust state, so it
+/// stays off the accent-green vocabulary).
+private struct CallItView: View {
+  let snippets: [CallItSnippet]
+
+  @State private var selectedID: CallItSnippet.ID?
+  @State private var didCopy = false
+  @State private var copyResetTask: Task<Void, Never>?
+
+  private var selected: CallItSnippet {
+    snippets.first { $0.id == selectedID } ?? snippets[0]
+  }
+
+  var body: some View {
+    DetailSection(title: "Call it", systemImage: "curlybraces") {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+        header
+
+        Text(selected.code)
+          .font(BrandTypography.mono)
+          .foregroundStyle(BrandColors.textPrimary)
+          .textSelection(.enabled)
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .padding(BrandMetrics.Spacing.md)
+          .background(
+            RoundedRectangle(cornerRadius: BrandMetrics.Radius.small, style: .continuous)
+              .fill(BrandColors.backgroundSecondary)
+          )
+          .overlay(
+            RoundedRectangle(cornerRadius: BrandMetrics.Radius.small, style: .continuous)
+              .strokeBorder(BrandColors.separator)
+          )
+      }
+    }
+    .onDisappear { copyResetTask?.cancel() }
+  }
+
+  private var header: some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      if snippets.count > 1 {
+        entrypointPicker
+      }
+
+      Spacer(minLength: 0)
+
+      Button(action: copy) {
+        Label(didCopy ? "Copied" : "Copy", systemImage: didCopy ? "checkmark" : "doc.on.doc")
+      }
+      .buttonStyle(.brandSecondary)
+      .help("Copy the snippet to the clipboard")
+      .accessibilityLabel(didCopy ? "Copied snippet" : "Copy snippet")
+    }
+  }
+
+  private var entrypointPicker: some View {
+    Menu {
+      ForEach(snippets) { snippet in
+        Button(snippet.entrypoint.label) { selectedID = snippet.id }
+      }
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.xs) {
+        Text(selected.entrypoint.label)
+          .lineLimit(1)
+          .truncationMode(.middle)
+        Image(systemName: "chevron.down")
+      }
+      .font(BrandTypography.callout)
+      .foregroundStyle(BrandColors.textSecondary)
+    }
+    .menuStyle(.borderlessButton)
+    .fixedSize()
+    .help("Switch entrypoint")
+  }
+
+  private func copy() {
+    let pasteboard = NSPasteboard.general
+    pasteboard.clearContents()
+    pasteboard.setString(selected.code, forType: .string)
+
+    withAnimation(BrandMotion.quick) { didCopy = true }
+    copyResetTask?.cancel()
+    copyResetTask = Task { @MainActor in
+      try? await Task.sleep(for: .seconds(1.6))
+      guard !Task.isCancelled else { return }
+      withAnimation(BrandMotion.quick) { didCopy = false }
+    }
   }
 }
 
