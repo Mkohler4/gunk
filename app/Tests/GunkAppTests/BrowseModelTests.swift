@@ -673,6 +673,177 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertNil(detail.buildVerification)
   }
 
+  // MARK: Call it snippet (T-10.5)
+
+  func testCallItSnippetPythonWithSymbolImportsAndCalls() {
+    let snippet = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "src/audiobook_content_parsing/parser.py", symbol: "parse_epub"),
+      language: "Python",
+      purpose: "Parse an EPUB into markdown"
+    )
+
+    XCTAssertEqual(
+      snippet.code,
+      """
+      # Parse an EPUB into markdown
+      from audiobook_content_parsing.parser import parse_epub
+      result = parse_epub(...)
+      """
+    )
+  }
+
+  func testCallItSnippetPythonWithoutSymbolFallsBackToPathImport() {
+    let snippet = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "tools/convert.py", symbol: nil),
+      language: "Python",
+      purpose: nil
+    )
+
+    XCTAssertEqual(snippet.code, "import tools.convert")
+  }
+
+  func testCallItSnippetPythonPackageInitImportsAsPackage() {
+    let snippet = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "slugify/__init__.py", symbol: "slugify"),
+      language: "python",
+      purpose: nil
+    )
+
+    XCTAssertEqual(
+      snippet.code,
+      """
+      from slugify import slugify
+      result = slugify(...)
+      """
+    )
+  }
+
+  func testCallItSnippetNodeWithSymbolUsesEsmImport() {
+    let snippet = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "src/index.ts", symbol: "slugify"),
+      language: "TypeScript",
+      purpose: "Slugify a string"
+    )
+
+    XCTAssertEqual(
+      snippet.code,
+      """
+      // Slugify a string
+      import { slugify } from "./src/index";
+      const result = slugify(...);
+      """
+    )
+  }
+
+  func testCallItSnippetNodeWithoutSymbolFallsBackToSideEffectImport() {
+    let snippet = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "lib/run.js", symbol: nil),
+      language: "JavaScript",
+      purpose: nil
+    )
+
+    XCTAssertEqual(snippet.code, "import \"./lib/run\";")
+  }
+
+  func testCallItSnippetGenericLanguageEmitsHonestFallback() {
+    let withSymbol = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "Sources/Slug/Slug.swift", symbol: "slugify"),
+      language: "Swift",
+      purpose: "Slugify"
+    )
+    XCTAssertEqual(
+      withSymbol.code,
+      """
+      // Slugify
+      // from Sources/Slug/Slug.swift
+      slugify(...)
+      """
+    )
+
+    let hashLanguage = CallItSnippetGenerator.snippet(
+      for: BrowseEntrypoint(path: "bin/deploy.sh", symbol: nil),
+      language: "Shell",
+      purpose: nil
+    )
+    XCTAssertEqual(hashLanguage.code, "# see bin/deploy.sh")
+  }
+
+  func testCallItSnippetsPreserveEntrypointOrderWithPrimaryFirst() {
+    let snippets = CallItSnippetGenerator.snippets(
+      for: [
+        BrowseEntrypoint(path: "src/primary.py", symbol: "main"),
+        BrowseEntrypoint(path: "src/secondary.py", symbol: "helper"),
+      ],
+      language: "Python",
+      purpose: nil
+    )
+
+    XCTAssertEqual(snippets.map(\.entrypoint.path), ["src/primary.py", "src/secondary.py"])
+    XCTAssertTrue(snippets[0].code.contains("from primary import main"))
+  }
+
+  func testCallItSnippetsEmptyWhenNoEntrypoints() {
+    XCTAssertTrue(
+      CallItSnippetGenerator.snippets(for: [], language: "Python", purpose: "x").isEmpty
+    )
+  }
+
+  func testCallItSnippetsModelMethodDerivesFromDetailLanguage() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let gunk = try insertGunk(
+      store: store,
+      source: source,
+      name: "slugifier",
+      tags: [],
+      language: "Python",
+      confidence: 0.9,
+      extractedAt: 200
+    )
+    let trace = RunTrace(
+      runId: "run-1",
+      sourceId: source.id,
+      sourceName: source.name,
+      provider: "openai",
+      model: "gpt-test",
+      startedAtMs: 1,
+      finishedAtMs: 2,
+      status: "succeeded",
+      error: nil,
+      stages: [],
+      refinements: [
+        RunTrace.Refinement(
+          capability: "slugifier",
+          accepted: true,
+          rejectReason: nil,
+          module: RunTrace.Module(
+            name: "slugifier",
+            ownedFiles: ["slugify.py"],
+            sharedDeps: [],
+            surface: [RunTrace.Surface(path: "slugify.py", symbol: "slugify")]
+          )
+        )
+      ],
+      verification: nil,
+      summary: RunTrace.Summary(accepted: 1, needsApproval: 0, rejected: 0, gunkIds: [gunk.id])
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [trace] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+    let snippets = model.callItSnippets(for: detail)
+
+    XCTAssertEqual(snippets.count, 1)
+    XCTAssertEqual(
+      snippets[0].code,
+      """
+      # slugifier purpose
+      from slugify import slugify
+      result = slugify(...)
+      """
+    )
+  }
+
   private func makeStore(now: @escaping () -> Int64 = { 100 }) throws -> Store {
     try Store(databaseQueue: DatabaseQueue(), now: now)
   }

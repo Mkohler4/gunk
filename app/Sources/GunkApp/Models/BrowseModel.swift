@@ -42,6 +42,189 @@ struct BrowseEntrypoint: Equatable, Identifiable, Sendable {
   }
 }
 
+/// A generated, copyable "how do I use this" snippet (T-10.5), derived purely
+/// from a module's stored entrypoint + symbol + language. Read-only/derived:
+/// no schema, no store writes — it just shapes what `BrowseModel` already
+/// knows into a one-glance call the developer can paste.
+struct CallItSnippet: Equatable, Identifiable, Sendable {
+  /// The entrypoint this snippet demonstrates (the primary one when a module
+  /// exposes several — the page shows a quiet switcher for the rest).
+  let entrypoint: BrowseEntrypoint
+  /// The rendered code, ready for the mono block and the clipboard.
+  let code: String
+
+  var id: String {
+    entrypoint.id
+  }
+}
+
+/// Pure generator for the "Call it" snippet (T-10.5). Builds a short (≈2-line)
+/// example call from the dominant entrypoint + symbol and language (Hard data
+/// fact 4): a leading `# <purpose>` comment, then an import + a call. Where no
+/// symbol exists it falls back to the path-based import; for languages it does
+/// not model precisely it emits an honest, path-referencing fallback rather
+/// than inventing a wrong call. No I/O, no state — trivially testable.
+enum CallItSnippetGenerator {
+  /// One snippet per entrypoint, in the entrypoint order the model resolved
+  /// (so `.first` is the primary / dominant one the page shows by default).
+  static func snippets(
+    for entrypoints: [BrowseEntrypoint],
+    language: String?,
+    purpose: String?
+  ) -> [CallItSnippet] {
+    entrypoints.map { snippet(for: $0, language: language, purpose: purpose) }
+  }
+
+  static func snippet(
+    for entrypoint: BrowseEntrypoint,
+    language: String?,
+    purpose: String?
+  ) -> CallItSnippet {
+    let kind = SnippetLanguage(language)
+    let lines = [purposeComment(purpose, prefix: kind.commentPrefix)]
+      + kind.body(for: entrypoint)
+    let code = lines.compactMap { $0 }.joined(separator: "\n")
+    return CallItSnippet(entrypoint: entrypoint, code: code)
+  }
+
+  /// The leading `# <purpose>` comment, collapsed to one line so a multi-line
+  /// purpose never breaks the snippet. `nil` (omitted) when there is none.
+  private static func purposeComment(_ purpose: String?, prefix: String) -> String? {
+    guard
+      let firstLine = purpose?
+        .split(whereSeparator: \.isNewline)
+        .first
+        .map(String.init)?
+        .trimmingCharacters(in: .whitespaces),
+      !firstLine.isEmpty
+    else {
+      return nil
+    }
+    return "\(prefix) \(firstLine)"
+  }
+
+  /// How the snippet is shaped for a module's language. Python and Node are
+  /// modeled precisely (Hard data fact 4); everything else gets a generic,
+  /// honest fallback keyed only by its comment marker.
+  private enum SnippetLanguage {
+    case python
+    case node
+    case generic(commentPrefix: String)
+
+    init(_ language: String?) {
+      let normalized = (language ?? "").lowercased()
+      if normalized.contains("python") {
+        self = .python
+      } else if normalized.contains("typescript")
+        || normalized.contains("javascript")
+        || normalized.contains("node")
+        || normalized == "ts"
+        || normalized == "js" {
+        self = .node
+      } else {
+        self = .generic(commentPrefix: Self.commentPrefix(forHashLanguage: normalized))
+      }
+    }
+
+    var commentPrefix: String {
+      switch self {
+      case .python:
+        return "#"
+      case .node:
+        return "//"
+      case let .generic(commentPrefix):
+        return commentPrefix
+      }
+    }
+
+    func body(for entrypoint: BrowseEntrypoint) -> [String] {
+      switch self {
+      case .python:
+        let module = Self.pythonModule(from: entrypoint.path)
+        if let symbol = entrypoint.symbol {
+          return [
+            "from \(module) import \(symbol)",
+            "result = \(symbol)(...)",
+          ]
+        }
+        return ["import \(module)"]
+      case .node:
+        let module = Self.nodeModule(from: entrypoint.path)
+        if let symbol = entrypoint.symbol {
+          return [
+            "import { \(symbol) } from \"\(module)\";",
+            "const result = \(symbol)(...);",
+          ]
+        }
+        return ["import \"\(module)\";"]
+      case let .generic(commentPrefix):
+        if let symbol = entrypoint.symbol {
+          return [
+            "\(commentPrefix) from \(entrypoint.path)",
+            "\(symbol)(...)",
+          ]
+        }
+        return ["\(commentPrefix) see \(entrypoint.path)"]
+      }
+    }
+
+    /// `#`-style comment languages (so the fallback reads natively); the
+    /// default is `//`, which covers Swift/Go/Rust/Java/C-family/Kotlin/etc.
+    private static func commentPrefix(forHashLanguage normalized: String) -> String {
+      let hashLanguages = ["ruby", "shell", "bash", "sh", "zsh", "perl", "r", "yaml", "toml", "elixir"]
+      return hashLanguages.contains(where: normalized.contains) ? "#" : "//"
+    }
+
+    /// Derives an importable Python module path from a bundle-relative file
+    /// path: drop a leading `src/`, drop the `.py` extension (and a trailing
+    /// `__init__` so a package imports as the package), and join segments with
+    /// dots. `audiobook_content_parsing/parser.py` → `audiobook_content_parsing.parser`.
+    static func pythonModule(from path: String) -> String {
+      var segments = normalizedSegments(from: path)
+      if segments.first == "src" {
+        segments.removeFirst()
+      }
+      if let last = segments.last {
+        segments[segments.count - 1] = stripExtension(last)
+      }
+      if segments.last == "__init__" {
+        segments.removeLast()
+      }
+      let module = segments.joined(separator: ".")
+      return module.isEmpty ? "module" : module
+    }
+
+    /// Derives a JS/TS import specifier: keep the relative path, drop the
+    /// extension, and ensure a leading `./` so it reads as a local import.
+    /// `src/index.ts` → `./src/index`.
+    static func nodeModule(from path: String) -> String {
+      let segments = normalizedSegments(from: path)
+      guard !segments.isEmpty else {
+        return "./module"
+      }
+      var trimmed = segments
+      trimmed[trimmed.count - 1] = stripExtension(trimmed[trimmed.count - 1])
+      let joined = trimmed.joined(separator: "/")
+      return joined.hasPrefix(".") ? joined : "./\(joined)"
+    }
+
+    private static func normalizedSegments(from path: String) -> [String] {
+      path
+        .replacingOccurrences(of: "\\", with: "/")
+        .split(separator: "/")
+        .map(String.init)
+        .filter { $0 != "." && !$0.isEmpty }
+    }
+
+    private static func stripExtension(_ filename: String) -> String {
+      guard let dot = filename.lastIndex(of: "."), dot != filename.startIndex else {
+        return filename
+      }
+      return String(filename[filename.startIndex..<dot])
+    }
+  }
+}
+
 struct BrowseSelfContainmentResult: Equatable, Sendable {
   let imports: String
   let entrypoint: String
@@ -319,6 +502,17 @@ final class BrowseModel {
       bundlePath: item.gunk.bundlePath,
       selfContainment: selfContainmentByGunkId[gunkId],
       buildVerification: buildVerification(for: item.gunk)
+    )
+  }
+
+  /// The "Call it" snippets (T-10.5) for a module — one per stored entrypoint,
+  /// primary first. A read-only derivation over the entrypoints + language the
+  /// detail already carries; no store state.
+  func callItSnippets(for detail: BrowseModuleDetail) -> [CallItSnippet] {
+    CallItSnippetGenerator.snippets(
+      for: detail.entrypoints,
+      language: detail.item.gunk.language,
+      purpose: detail.item.gunk.purpose
     )
   }
 
