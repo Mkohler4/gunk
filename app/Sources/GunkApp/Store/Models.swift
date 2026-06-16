@@ -65,3 +65,81 @@ struct GunkEmbedding: Equatable, Identifiable, Sendable {
   let dim: Int
   let model: String
 }
+
+/// The developer's binary judgement on a run or an example (module-run-v2:
+/// the verdict stays binary — `right`/`wrong` — and the *note* carries any
+/// nuance). `nil` when not yet judged.
+enum RunVerdict: String, Equatable, Sendable, Codable {
+  case right
+  case wrong
+}
+
+/// The four coverage axes a saved example belongs to (CP-F open question #1).
+/// These are a flat description of *which class of input* a fixture exercises,
+/// never a tier to climb. A pinned failing case is an `edge`/`adversarial`
+/// example with an `expectedOutput` + `note`; a known limit is an
+/// `adversarial` example with a `note`.
+enum ExampleInputClass: String, Equatable, Sendable, Codable {
+  /// The shipped/synthesized demo — the lowest honest evidence.
+  case happy
+  /// An input the developer brought themselves (the `yours` provenance).
+  case yours
+  /// A boundary/edge-case input.
+  case edge
+  /// A "try to break it" input.
+  case adversarial
+}
+
+/// A durable smoke-run receipt (T-10.3) — one row per execution or refusal.
+/// Persists the CP-F receipt fields so proof survives `RunTrace` pruning
+/// (Hard data fact 2). No store writes happen in the runner itself; the
+/// console (T-10.7) and the MCP tool (T-10.12) each persist one of these.
+struct SmokeRunRecord: Equatable, Identifiable, Sendable {
+  let id: Int64
+  let gunkId: Int64
+  /// The example/input this run used, if any. `nil` for an ad-hoc run.
+  let exampleId: Int64?
+  /// The resolved command line that ran, for display. `nil` when not run.
+  let command: String?
+  /// The runnability classification — only `.terminalRunnable` was executed.
+  let runnability: Runnability
+  /// Who initiated the run, so agent volume never reads as human-checked.
+  let origin: RunOrigin
+  let exitCode: Int32?
+  /// The clean-exit *fact* (`nil` when the module was not actually executed).
+  /// Distinct from `verdict`: a passing exit is evidence, not a judgement.
+  let passed: Bool?
+  let timedOut: Bool
+  let durationMs: Int
+  /// Path to an artifact left in the run dir — never the bytes; prunes with
+  /// the run dir.
+  let outputArtifactPath: String?
+  /// Captured stdout/stderr.
+  let log: String
+  /// The developer's verdict on this run (`nil` until they judge).
+  let verdict: RunVerdict?
+  let createdAt: Int64
+}
+
+/// A saved/golden example — the developer's fixture library, listed by the
+/// coverage ledger. Folds pinned failing cases and known limits into one
+/// table via `inputClass` + `expectedOutput`/`note` (CP-F open question #10,
+/// capture-and-queue).
+struct ModuleExample: Equatable, Identifiable, Sendable {
+  let id: Int64
+  let gunkId: Int64
+  let name: String
+  /// The input (or an input ref) this example feeds the entrypoint.
+  let input: String
+  let inputClass: ExampleInputClass
+  /// The canonical example a future run diffs against. Exclusive per
+  /// `(gunkId, inputClass)`.
+  let isGolden: Bool
+  let verdict: RunVerdict?
+  /// The output the developer says it *should* produce (for a pinned failing
+  /// case / correction). `nil` for a plain passing example.
+  let expectedOutput: String?
+  /// A free-text note — the "what's wrong" correction or a known-limit record.
+  let note: String?
+  let createdAt: Int64
+}
