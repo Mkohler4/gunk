@@ -1285,7 +1285,37 @@ never fabricate usage numbers).
 ## T-10.12 — MCP run/test tool: the agent tests modules too (CP-K)
 
 **Owner:** agent
-**Checkpoint:** CP-K
+**Checkpoint:** CP-K — **implementation landed, awaiting Mark's CP-K wiring.**
+
+> **Status: built, pending CP-K.** The safety posture is recorded in
+> [ADR-0017](../adr/0017-mcp-run-tool.md) (Proposed): **one sandbox, two
+> callers** — the runner stays the app-side Swift `SmokeRunner` (ADR-0016, not
+> forked/re-ported), and the MCP tool reaches it through a thin headless
+> `gunk run` verb (`app/Sources/GunkApp/Run/SmokeRunCLI.swift`, wired into
+> `GunkAppMain` like the icon export) that runs the same executor **buffered**
+> and prints a JSON receipt. Consent posture: **the sandbox is the consent** —
+> an agent run needs no prior human first-run consent but is *strictly more*
+> constrained (always sandboxed; the reduced-isolation fallback is **never**
+> available — it fails closed; pinned explicitly in `SmokeRunCLI` and
+> re-checked at the TS boundary). Returns `{ passed, runnability, isolation,
+> exitCode, durationMs, timedOut, command, stdout, stderr, output }` — buffered,
+> **no live stream**; non-terminal classes return a typed "not runnable here",
+> not a failure. **Return-only this phase** (no MCP store writes — the v6
+> agent-receipt write is a documented seam). The tool lives in
+> `mcp/src/tools/run_gunk.ts` (+ `mcp/src/lib/manifest.ts` for `gunk.yml`
+> entrypoint/package reads), opens the store the existing way
+> (`getGunk`, explicit columns), and resolves the binary via `GUNK_RUN_BIN`.
+> Tested in `mcp/test/tools/run_gunk.test.ts` + `mcp/test/lib/manifest.test.ts`
+> (pass/fail/not-runnable/not-found/no-bundle/reduced-fallback-refused/request
+> resolution; no real store, no real spawn) and
+> `app/Tests/GunkAppTests/SmokeRunCLITests.swift` (decode → run → encode round
+> trips; agent origin forced; timeout clamp). `bun test` (64) + `swift build` +
+> `swift test` (239) green; typecheck/lint/format clean. End-to-end verified:
+> `echo <req> | GunkApp run` on a live Python module returns a passing,
+> `sandbox-exec`-isolated, agent-origin receipt. The **security-review subagent
+> ran** and found **no medium+ issues**; its three optional hardenings (explicit
+> agent posture, TS-side reduced-fallback refusal, output cap) are applied.
+> Still needs Mark to wire `GUNK_RUN_BIN` into his real Cursor and confirm CP-K.
 
 ### Goal
 The user's explicit ask: **the AI system tests modules as well.** Add the

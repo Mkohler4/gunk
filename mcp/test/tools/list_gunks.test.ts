@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { runMigrations } from "../../src/schema/index.js";
 import { createServer } from "../../src/server/index.js";
 import { GET_GUNK_TOOL } from "../../src/tools/get_gunk.js";
+import { RUN_GUNK_TOOL } from "../../src/tools/run_gunk.js";
 import {
   createListGunksHandler,
   LIST_GUNKS_TOOL,
@@ -246,6 +247,7 @@ describe("list_gunks MCP registration", () => {
         LIST_SOURCES_TOOL,
         SEARCH_GUNKS_TOOL,
         GET_GUNK_TOOL,
+        RUN_GUNK_TOOL,
       ],
     });
   });

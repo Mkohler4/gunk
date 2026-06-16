@@ -8,6 +8,7 @@ import { afterEach, describe, expect, test } from "vitest";
 import { runMigrations } from "../../src/schema/index.js";
 import { createServer } from "../../src/server/index.js";
 import { GET_GUNK_TOOL } from "../../src/tools/get_gunk.js";
+import { RUN_GUNK_TOOL } from "../../src/tools/run_gunk.js";
 import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
 import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
 import {
@@ -178,6 +179,7 @@ describe("search_gunks MCP registration", () => {
         LIST_SOURCES_TOOL,
         SEARCH_GUNKS_TOOL,
         GET_GUNK_TOOL,
+        RUN_GUNK_TOOL,
       ],
     });
   });
