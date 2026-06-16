@@ -578,6 +578,327 @@ final class Store {
     }
   }
 
+  // MARK: - Smoke-run receipts & examples (T-10.3, v6)
+
+  /// Insert a smoke-run receipt. Persistence the runner deliberately does not
+  /// do (T-10.2 returns a value); the console (T-10.7) and the MCP tool
+  /// (T-10.12) call this to make the proof durable.
+  @discardableResult
+  func insertSmokeRun(
+    gunkId: Int64,
+    exampleId: Int64? = nil,
+    command: String?,
+    runnability: Runnability,
+    origin: RunOrigin,
+    exitCode: Int32? = nil,
+    passed: Bool? = nil,
+    timedOut: Bool = false,
+    durationMs: Int = 0,
+    outputArtifactPath: String? = nil,
+    log: String = "",
+    verdict: RunVerdict? = nil
+  ) throws -> SmokeRunRecord {
+    let createdAt = now()
+
+    return try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO smoke_runs (
+            gunk_id,
+            example_id,
+            command,
+            runnability,
+            origin,
+            exit_code,
+            passed,
+            timed_out,
+            duration_ms,
+            output_artifact_path,
+            log,
+            verdict,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [
+          gunkId,
+          exampleId,
+          command,
+          runnability.rawValue,
+          origin.rawValue,
+          exitCode,
+          passed,
+          timedOut,
+          durationMs,
+          outputArtifactPath,
+          log,
+          verdict?.rawValue,
+          createdAt
+        ]
+      )
+
+      return SmokeRunRecord(
+        id: db.lastInsertedRowID,
+        gunkId: gunkId,
+        exampleId: exampleId,
+        command: command,
+        runnability: runnability,
+        origin: origin,
+        exitCode: exitCode,
+        passed: passed,
+        timedOut: timedOut,
+        durationMs: durationMs,
+        outputArtifactPath: outputArtifactPath,
+        log: log,
+        verdict: verdict,
+        createdAt: createdAt
+      )
+    }
+  }
+
+  /// Convenience over `insertSmokeRun` that maps a runner result into a
+  /// receipt. `passed` is recorded only when the module was actually executed
+  /// (a `.terminalRunnable` class) — a not-runnable-here refusal stores `nil`,
+  /// not a fabricated failure.
+  @discardableResult
+  func recordSmokeRun(
+    gunkId: Int64,
+    exampleId: Int64? = nil,
+    result: SmokeRunResult,
+    verdict: RunVerdict? = nil
+  ) throws -> SmokeRunRecord {
+    let executed = result.runnability == .terminalRunnable
+    let log = [result.stdout, result.stderr]
+      .filter { !$0.isEmpty }
+      .joined(separator: "\n")
+
+    return try insertSmokeRun(
+      gunkId: gunkId,
+      exampleId: exampleId,
+      command: result.command,
+      runnability: result.runnability,
+      origin: result.origin,
+      exitCode: result.exitCode,
+      passed: executed ? result.passed : nil,
+      timedOut: result.timedOut,
+      durationMs: result.durationMs,
+      outputArtifactPath: result.outputArtifacts.first?.path,
+      log: log,
+      verdict: verdict
+    )
+  }
+
+  func mostRecentSmokeRun(gunkId: Int64) throws -> SmokeRunRecord? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          \(Store.smokeRunColumns)
+          FROM smoke_runs
+          WHERE gunk_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT 1
+          """,
+        arguments: [gunkId]
+      )
+      .map(Store.smokeRun(from:))
+    }
+  }
+
+  /// A module's receipt history, newest first and **capped** — these are
+  /// receipts, not a history table feeding a chart (explicitly out of scope).
+  func smokeRuns(gunkId: Int64, limit: Int = 50) throws -> [SmokeRunRecord] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          \(Store.smokeRunColumns)
+          FROM smoke_runs
+          WHERE gunk_id = ?
+          ORDER BY created_at DESC, id DESC
+          LIMIT ?
+          """,
+        arguments: [gunkId, limit]
+      )
+
+      return rows.map(Store.smokeRun(from:))
+    }
+  }
+
+  /// Attach the developer's `right`/`wrong` verdict to a run after they judge
+  /// its output.
+  func attachVerdict(smokeRunId: Int64, verdict: RunVerdict) throws {
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: "UPDATE smoke_runs SET verdict = ? WHERE id = ?",
+        arguments: [verdict.rawValue, smokeRunId]
+      )
+    }
+  }
+
+  /// Insert a saved example / pinned case. Marking it golden is exclusive per
+  /// `(gunkId, inputClass)`.
+  @discardableResult
+  func insertExample(
+    gunkId: Int64,
+    name: String,
+    input: String,
+    inputClass: ExampleInputClass,
+    isGolden: Bool = false,
+    verdict: RunVerdict? = nil,
+    expectedOutput: String? = nil,
+    note: String? = nil
+  ) throws -> ModuleExample {
+    let createdAt = now()
+
+    return try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO module_examples (
+            gunk_id,
+            name,
+            input,
+            input_class,
+            is_golden,
+            verdict,
+            expected_output,
+            note,
+            created_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+          """,
+        arguments: [
+          gunkId,
+          name,
+          input,
+          inputClass.rawValue,
+          isGolden,
+          verdict?.rawValue,
+          expectedOutput,
+          note,
+          createdAt
+        ]
+      )
+
+      let id = db.lastInsertedRowID
+
+      if isGolden {
+        try Store.enforceGoldenExclusivity(
+          db,
+          id: id,
+          gunkId: gunkId,
+          inputClass: inputClass
+        )
+      }
+
+      return ModuleExample(
+        id: id,
+        gunkId: gunkId,
+        name: name,
+        input: input,
+        inputClass: inputClass,
+        isGolden: isGolden,
+        verdict: verdict,
+        expectedOutput: expectedOutput,
+        note: note,
+        createdAt: createdAt
+      )
+    }
+  }
+
+  func listExamples(gunkId: Int64) throws -> [ModuleExample] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          \(Store.moduleExampleColumns)
+          FROM module_examples
+          WHERE gunk_id = ?
+          ORDER BY created_at ASC, id ASC
+          """,
+        arguments: [gunkId]
+      )
+
+      return rows.map(Store.moduleExample(from:))
+    }
+  }
+
+  /// Mark one example as the golden of its class, clearing any sibling golden
+  /// in the same `(gunkId, inputClass)` in a single statement.
+  func markExampleGolden(id: Int64) throws {
+    try databaseQueue.write { db in
+      guard
+        let row = try Row.fetchOne(
+          db,
+          sql: "SELECT gunk_id, input_class FROM module_examples WHERE id = ?",
+          arguments: [id]
+        )
+      else {
+        return
+      }
+
+      let gunkId: Int64 = row["gunk_id"]
+      let inputClass: String = row["input_class"]
+
+      try db.execute(
+        sql: """
+          UPDATE module_examples
+          SET is_golden = (id = ?)
+          WHERE gunk_id = ? AND input_class = ?
+          """,
+        arguments: [id, gunkId, inputClass]
+      )
+    }
+  }
+
+  private static func enforceGoldenExclusivity(
+    _ db: Database,
+    id: Int64,
+    gunkId: Int64,
+    inputClass: ExampleInputClass
+  ) throws {
+    try db.execute(
+      sql: """
+        UPDATE module_examples
+        SET is_golden = (id = ?)
+        WHERE gunk_id = ? AND input_class = ?
+        """,
+      arguments: [id, gunkId, inputClass.rawValue]
+    )
+  }
+
+  private static let smokeRunColumns = """
+    SELECT
+      id,
+      gunk_id,
+      example_id,
+      command,
+      runnability,
+      origin,
+      exit_code,
+      passed,
+      timed_out,
+      duration_ms,
+      output_artifact_path,
+      log,
+      verdict,
+      created_at
+    """
+
+  private static let moduleExampleColumns = """
+    SELECT
+      id,
+      gunk_id,
+      name,
+      input,
+      input_class,
+      is_golden,
+      verdict,
+      expected_output,
+      note,
+      created_at
+    """
+
   private func prepareDatabase() throws {
     try databaseQueue.writeWithoutTransaction { db in
       try db.execute(sql: "PRAGMA journal_mode = WAL")
@@ -658,6 +979,40 @@ final class Store {
       gunkId: row["gunk_id"],
       relpath: row["relpath"],
       size: row["size"]
+    )
+  }
+
+  private static func smokeRun(from row: Row) -> SmokeRunRecord {
+    SmokeRunRecord(
+      id: row["id"],
+      gunkId: row["gunk_id"],
+      exampleId: row["example_id"],
+      command: row["command"],
+      runnability: Runnability(rawValue: row["runnability"]) ?? .cannotDetermine,
+      origin: RunOrigin(rawValue: row["origin"]) ?? .human,
+      exitCode: row["exit_code"],
+      passed: row["passed"],
+      timedOut: row["timed_out"],
+      durationMs: row["duration_ms"],
+      outputArtifactPath: row["output_artifact_path"],
+      log: row["log"],
+      verdict: (row["verdict"] as String?).flatMap(RunVerdict.init(rawValue:)),
+      createdAt: row["created_at"]
+    )
+  }
+
+  private static func moduleExample(from row: Row) -> ModuleExample {
+    ModuleExample(
+      id: row["id"],
+      gunkId: row["gunk_id"],
+      name: row["name"],
+      input: row["input"],
+      inputClass: ExampleInputClass(rawValue: row["input_class"]) ?? .happy,
+      isGolden: row["is_golden"],
+      verdict: (row["verdict"] as String?).flatMap(RunVerdict.init(rawValue:)),
+      expectedOutput: row["expected_output"],
+      note: row["note"],
+      createdAt: row["created_at"]
     )
   }
 
