@@ -34,6 +34,98 @@ The two reference screens that exist today (resting "Proven" state only —
 ![Module page — top](../design/explorations/module-run-v1-page.png)
 ![Module page — proof card, call-it, footer](../design/explorations/module-run-v1-proof.png)
 
+## Mid-phase revision (2026-06-15) — empowerment loop + terminal-only scope
+
+Pressure-testing the v1 prototype ("Proven by you" after a single run)
+surfaced changes that reshape what this phase builds. They are routed into
+CP-F via
+[`module-run-v2-instruction.md`](../design/explorations/module-run-v2-instruction.md)
+(the design side) and recorded here (the build side). **These supersede the
+matching points below where they conflict.**
+
+1. **"Proven by you" is dead; replace it with an honest evidence readout —
+   not a game.** Nobody tests a module once. The Tested metric (T-10.11)
+   becomes a **plain factual description of what testing happened** —
+   `Untested → Ran-not-checked → Checked once → Checked · N inputs` (copy
+   pending CP-F) — **not** a ladder to climb. **No gamification:** no levels,
+   ranks, points, streaks, progress meters, "1 more to reach X" nudges, or
+   celebratory moments. One AI-staged pass = **Checked once** at most (the
+   lowest honest label), never "Proven." Confident green is warranted only
+   once the developer has judged **distinct inputs they brought** — so the
+   human's contribution is real, but the page *states* it, it never rewards
+   it.
+2. **"That's wrong" becomes "improve the module" — a new loop, new
+   architecture.** A wrong verdict must let the developer *correct the
+   module without editing code*: pin the **expected output** + a *what's
+   wrong* note → that correction feeds a **guided re-extraction hint** →
+   the failing case flips green when the new output matches. This is a
+   feedback channel from the proof loop back into extraction that does not
+   exist today. **Decide its depth at CP-F (new open question #10):** ship a
+   *real* guided re-extraction this phase, or *capture-and-queue* the
+   correction as a pinned failing case now and wire re-extraction later.
+   Default recommendation: **capture-and-queue this phase** (store the
+   correction + failing target via T-10.3; surface it; defer the
+   re-extraction trigger to a follow-up) to keep the phase shippable.
+3. **Terminal-only runtime scope this phase.** The sandbox runs
+   **terminal/CLI/library one-shot entrypoints only.** Everything else gets
+   an **honest "runnable here: not yet"** state (neutral, never red): needs
+   network, needs secrets, wants interactive stdin, long-running/non-
+   terminating, UI module, or "cannot determine how to run." This is a
+   **runnability classification** the runner must produce (see T-10.2
+   addendum) and the page must render as a distinct category from a failed
+   run.
+4. **UI-module runner (T-10.13) is deferred.** In-browser launch ships in a
+   later phase. This phase shows the UI-module state as a clearly *future*
+   affordance, not a working button. T-10.13 is descoped to "detect + label
+   as not-yet-runnable" (see its updated header).
+5. **Agent runs ≠ human verdicts in the readout.** T-10.12's
+   agent-initiated receipts share the evidence pile but are stated
+   separately ("N agent runs · M you checked") and **alone never count as
+   human-checked evidence** (new open question #8).
+6. **Golden-diff must tolerate non-determinism.** Many modules don't
+   reproduce byte-identical output; "differs from golden" must not read as a
+   regression when difference is expected (folds into open question #4).
+
+## Future-vision context (disposable software) — run-time seams to protect
+
+This is *context*, not phase scope. A 2026-06-15 engineering conversation
+sharpened where the product is going, and "how you run a module" is central
+to it — so two seams must stay open while we build this phase. **Do not
+build either now; just don't architect them out.**
+
+The direction: modules trend **smaller and lower-level** (e.g. a String
+Slugification Utility), and **compose upward** — low-level gunks stack into
+**parent gunks**, which the **AI composes** into larger capabilities. Each
+utility has two usage paths: the one the **human** gave (the "Call it"
+snippet) and the one the **AI discovers** (`get_gunk` + `run_gunk` over
+MCP). The payoff verticals are **internal tools** (possibly hosted) and the
+headline one, **disposable software for other people** — plus **fewer
+tokens**, because an agent team reuses *verified* bricks instead of
+re-deriving them.
+
+**Why Phase 10 already serves this (no run-mechanism change needed):**
+low-level pure functions are the terminal-only runner's *best* case
+(deterministic, no network/secrets, instant proof card); the per-module
+proof loop + the MCP `run_gunk` tool are exactly "let the AI verify a brick
+before it builds with it" — the prerequisite for trustworthy composition and
+the token-savings story.
+
+**The two seams to protect:**
+1. **Composition / parent-gunk runs.** Bundles today are deliberately
+   **self-contained** (a core trust property — "Self-contained: Passed"), so
+   running a *parent* gunk whose entrypoint calls *child* gunks is a future
+   capability, not today's model. The T-10.2 sandbox copies **one** bundle
+   into the run dir; design that copy/resolve step so it can later become
+   "copy the bundle **+ its resolved gunk-deps**" and so entrypoint
+   resolution can later span multiple gunks. Single self-contained modules
+   only this phase.
+2. **Verified state must eventually be machine-readable.** For an AI to
+   *choose* which bricks to compose, each module's evidence/verified state
+   must eventually surface over MCP (`get_gunk`). The v6 store (T-10.3) is
+   app-only today; T-10.12 already notes the agent-receipt/store overlap.
+   Keep this in view — don't lock the evidence data somewhere MCP can never
+   reach.
+
 ## How to read this document
 
 Written to be executed by an AI agent **with a human ("me") in the loop**.
@@ -86,10 +178,13 @@ Each task has the same shape:
   before/after **Proof card**, rendered *as the artifact* (markdown
   rendered, JSON pretty, audio playable, image shown, text plain). The raw
   command + stdout/stderr **demote to a `>_ Command & raw log` disclosure.**
-- **The developer is the judge.** A run gets a developer verdict
-  (**"That's right" / "That's wrong"**). A "right" verdict **pins a golden
-  example**; future runs and source re-extractions diff against it. "Wrong"
-  is a first-class amber state (*Needs you*), warmer than "needs approval".
+- **The developer is the judge — and the improver.** A run gets a developer
+  verdict (**"That's right" / "That's wrong"**). A "right" verdict **pins a
+  golden example**; future runs and source re-extractions diff against it.
+  "Wrong" is a first-class amber state (*Needs you*), warmer than "needs
+  approval" — and per the 2026-06-15 revision it **opens the improve loop**
+  (pin the expected output + note → guided re-extraction or capture-and-
+  queue), so the developer corrects the module *without editing code*.
 - **The agent is the second runner.** An MCP tool lets the AI system run a
   module's entrypoint in the same sandbox and get the same receipt back, so
   an agent can verify before it uses. This is the user's explicit Phase 10
@@ -103,9 +198,11 @@ Each task has the same shape:
   is a typed input surface. They coexist. The boundary is **sandbox
   guarantees** (fs scope, network, timeouts), stated in the UI, not waved
   at. First-run consent applies to both.
-- **UI modules launch the browser.** If a module's output *is* UI, running
-  it launches the user's external browser at the served surface. In-app
-  preview is explicitly **out**.
+- **UI modules launch the browser** *(eventual; **deferred** per the
+  2026-06-15 revision — this phase is terminal-only and only **detects +
+  labels** UI modules as not-runnable-here, see T-10.13)*. If a module's
+  output *is* UI, running it launches the user's external browser at the
+  served surface. In-app preview is explicitly **out**.
 - **Two surfaces, never merged.** *Extraction runs* (`view run →`, the
   T-8.6 `RunInspectorView`) answer "what did gunk do to make this." *Smoke
   runs* answer "what does the module do." They link but never share a
@@ -207,7 +304,22 @@ Each task has the same shape:
 ## T-10.1 — Design gate: the full module page, every run state, the open questions (CP-F)
 
 **Owner:** me (Claude Design) + agent (documentation)
-**Checkpoint:** CP-F
+**Checkpoint:** CP-F — **CLEARED 2026-06-15.**
+
+> **Status: done.** The Claude Design HTML export landed and is saved as
+> [`module-run-v2.html`](../design/explorations/module-run-v2.html)
+> (+ [`module-run-v2-coverage.png`](../design/explorations/module-run-v2-coverage.png)).
+> The approved design is recorded in
+> [`module-run-v2.md`](../design/explorations/module-run-v2.md): "Proven by
+> you" is replaced by the **coverage ledger** (happy path · your own inputs ·
+> edge cases · adversarial — coverage, **not** a tier ladder), the **run
+> console** is the page hero, and all **ten** open questions are resolved
+> into recorded decisions there. Key load-bearing answers for the build:
+> runnability is **terminal-only** with Python/Node first and a
+> cannot-determine fallback (#9, feeds T-10.2); the improve loop is
+> **capture-and-queue** this phase with re-extraction deferred (#10); agent
+> runs are counted **separately** and never advance the sign-off alone (#8).
+> Build resumes at T-10.2.
 
 ### Goal
 Get an approved, complete visual + product target before any module-page
@@ -226,23 +338,43 @@ explicit doc + decisions, or structural work builds on the wrong look.)
 ### Task execution (agent prompt)
 
 > 1. Write the revision instruction for Claude Design covering the states
->    the PNGs do **not** show, each as its own screen:
+>    the PNGs do **not** show, each as its own screen. **The current driving
+>    instruction is
+>    [`module-run-v2-instruction.md`](../design/explorations/module-run-v2-instruction.md)**
+>    (the empowerment revision); the list below is its checklist:
+>    - **The honest evidence readout** (replaces "Proven by you"): each
+>      evidence state on the page state line **and** the Library cell, stated
+>      as a plain fact (a count/descriptor), **never** as a level, rank, or
+>      badge-to-collect — no progress meter, no "next rung" nudge, no
+>      celebration. One AI-staged pass = the lowest honest state, never
+>      "Proven."
 >    - **Smoke run states:** never-tried, **first-run consent** (states the
 >      command + working directory + sandbox promise without reading like a
 >      scary system dialog), running/streaming terminal, passed (earned
 >      green), failed (red), resting receipt.
+>    - **The "That's wrong" → correct → fix loop:** the inline "what
+>      should it have done?" (pin expected output + note), the "fix it" /
+>      guided-re-extraction state, the resting state with an open failing
+>      case, and **"Try to break it"** (a failing adversarial input records a
+>      plain known-limitation note, not a red failure and not a reward).
+>    - **Honest "runnable here: not yet" states** (terminal-only scope, all
+>      neutral — never red): needs network, needs secrets, wants interactive
+>      stdin, long-running/non-terminating, **UI module (deferred)**, and
+>      "cannot determine how to run."
 >    - **Typed input surface** (stage 2): prefilled-demo, developer-swapped,
 >      invalid input, missing-requirement, file-drop-well.
 >    - **The effort spectrum in one composition:** Try it → swap input →
 >      *save as example*, without three competing CTAs.
 >    - **Saved examples:** the module's named-case list, re-run, diff vs
->      golden.
+>      golden, and a **failing/flagged** case; plus the **batch
+>      reconciliation** after a re-extraction ("4 pass · 1 broke").
 >    - **"How this works"** disclosure: closed (one quiet affordance) and
 >      open (analysis layout inside the page).
->    - **Tested badge** on the Library cell at each tier — *must not break
->      the one-trust-verdict-per-cell rule* (it is provenance/metric, not a
->      second trust verdict).
->    - **UI-module** running state (the "launching browser" moment).
+>    - **Evidence readout** on the Library cell at each state — *must not
+>      break the one-trust-verdict-per-cell rule* (it is a quiet factual
+>      metric, not a second trust verdict and not a badge-to-collect) —
+>      including how **agent runs** read distinctly from human-checked ones
+>      ("N agent runs · M you checked").
 >    - **Needs-you** on the cell and on the page (warmer than needs-approval).
 > 2. Put the seven open questions from `module-run-v1.md` §"Open questions"
 >    in front of me as explicit product decisions and record my answers in
@@ -260,6 +392,17 @@ explicit doc + decisions, or structural work builds on the wrong look.)
 >    - breadcrumb navigation mechanics (does the grid keep scroll/selection
 >      on back; sidebar-badge deep-link → scoped grid → page → back);
 >    - where "How this works" lives on the page.
+>    Plus the three new questions from the mid-phase revision:
+>    - **#8 agent vs human evidence:** how agent-initiated runs (T-10.12)
+>      appear in the readout without volume masquerading as human-verified
+>      quality (agent runs alone never count as human-checked evidence);
+>    - **#9 runnability classification:** what gunk keys on to decide
+>      terminal-runnable vs "can't prove here," and how confident it must be
+>      before it offers a run button;
+>    - **#10 the improve loop's depth:** does a developer correction trigger
+>      a real guided re-extraction this phase, or is it captured-and-queued
+>      (pinned failing case now, re-extraction wired later — the recommended
+>      default).
 > 3. Hand the instruction to me; I run the iteration in Claude Design and
 >    return the HTML export + screenshots.
 > 4. When I return an approved iteration, save the assets into
@@ -285,7 +428,28 @@ explicit doc + decisions, or structural work builds on the wrong look.)
 ## T-10.2 — Sandbox & execution runner foundation (CP-G)
 
 **Owner:** agent
-**Checkpoint:** CP-G
+**Checkpoint:** CP-G — **implementation landed, awaiting Mark's approval.**
+
+> **Status: built, pending CP-G.** The sandbox model is recorded in
+> [ADR-0016](../adr/0016-sandbox-execution-model.md) (app-side Swift,
+> `sandbox-exec` deny-by-default profile, documented reduced-isolation
+> fallback, no unbounded `Process`). The runner lives in
+> `app/Sources/GunkApp/Run/` — `SmokeRunResult.swift` (result + runnability
+> + `RunInput`), `RunnabilityClassifier.swift` (#9 terminal-only/
+> cannot-determine), `EntrypointResolver.swift` (Python/Node first),
+> `RunSandbox.swift` (Seatbelt profile + wrap), `SmokeRunner.swift`
+> (streaming + buffered core, throwaway bundle copy, scoped writes, no
+> inherited env, hard timeout). Tested in `SmokeRunnerTests.swift` (25 cases:
+> classification, command resolution, profile, fake-executor orchestration,
+> real-`/bin/sh` pass/fail/timeout/cwd). `swift build` + `swift test` green.
+> **No store writes, no UI.** The **security-review subagent has run** and its
+> three medium findings are addressed (fail-closed when the sandbox can't be
+> applied — never a silent downgrade; entrypoint-path validation +
+> in-bundle containment; process-group teardown on timeout); see ADR-0016
+> §"Hardening from the security review." Still needs Mark to approve the ADR
+> before anything calls the runner. **Note:** `sandbox-exec` cannot nest, so
+> the live-sandbox path only applies when gunk runs unsandboxed (the normal
+> case); CI/agents that run sandboxed exercise the pure logic + fallback.
 
 ### Goal
 A reusable, **sandbox-bounded** capability to execute a module's entrypoint
@@ -328,19 +492,40 @@ isolation primitive, what the promise to the user is). It gets its own ADR.
 >    nearest existing pattern, and how `EngineLauncher`/`MCPBinary` resolve
 >    binaries and inherit env — your sandbox tightens these, it does not
 >    copy them wholesale.
-> 2. Define the result type: `{ command, exitCode, stdout, stderr,
->    durationMs, timedOut, outputArtifacts: [path], startedAt }`. Streaming
->    must be supported (incremental stdout/stderr for the live terminal in
->    T-10.7) **and** a buffered one-shot mode (for the MCP tool in T-10.12).
+> 2. Define the result type: `{ runnability, command, exitCode, stdout,
+>    stderr, durationMs, timedOut, outputArtifacts: [path], startedAt }`
+>    where `runnability` is the classification from step 3b
+>    (`terminal-runnable` | `needs-network` | `needs-secrets` |
+>    `interactive-stdin` | `long-running` | `ui-module` |
+>    `cannot-determine`). Streaming must be supported (incremental
+>    stdout/stderr for the live terminal in T-10.7) **and** a buffered
+>    one-shot mode (for the MCP tool in T-10.12).
 > 3. Resolve the entrypoint command from the stored entrypoints + language
 >    (Hard data fact 4): e.g. Python `python <entry>`, Node
 >    `node <entry>` / the symbol import form. Where the command can't be
 >    derived confidently, return a typed "cannot determine how to run"
 >    result rather than guessing — the UI shows that honestly.
+> 3b. **Runnability classification (mid-phase revision).** Before running,
+>    classify the module into one of: **terminal-runnable** (one-shot CLI/
+>    library entrypoint — the only class this phase actually executes), or a
+>    typed **not-runnable-here** reason — `needs-network`, `needs-secrets`,
+>    `interactive-stdin`, `long-running`, `ui-module`, or
+>    `cannot-determine`. Key off existing signals (language, entrypoint
+>    shape, parsed dependency manifest from Hard data fact 5, framework
+>    hints); when unsure, prefer a not-runnable-here reason over a wrong
+>    guess. This classification is the input to the page's neutral "runnable
+>    here: not yet" category (never a red failure) and to the deferred
+>    T-10.13. Return it on the result type; do not auto-run a non-terminal
+>    class.
 > 4. Enforce the sandbox: copy the bundle to a run dir under
 >    `~/.gunk/runs/smoke/<gunkId>/<timestamp>/`, run there, deny network,
 >    apply the timeout, and tear down on completion (keep the captured
->    output, drop the temp copy unless an artifact must persist).
+>    output, drop the temp copy unless an artifact must persist). **Seam
+>    (future-vision):** structure this copy/resolve step so it can later
+>    become "copy the bundle **+ its resolved gunk-deps**" for parent-gunk
+>    composition (see "Future-vision context" above) — copy a single
+>    self-contained bundle now, but don't hard-code the single-bundle
+>    assumption into the runner's shape.
 > 5. **No store writes here** — this task returns the result object;
 >    persistence is T-10.3/T-10.7. **No UI here.**
 > 6. Tests against fixtures (no real user data): a passing entrypoint
@@ -762,15 +947,25 @@ diffing. This is what makes a module *demonstrate* instead of *assert*.
 >    playable clip, image as an image, plain text plain. Side-by-side
 >    `Synthesized input → Output` like `module-run-v1-proof.png`.
 > 3. **Developer verdict:** **That's right** pins the run as the module's
->    **golden example** (stored, T-10.3); **That's wrong** sets the amber
->    **Needs you** state (feeds review — judging behavior, not AI self-
->    assessment). The footer reads `★ Golden example pinned — every re-run
->    is diffed against this`.
+>    **golden example** (stored, T-10.3); **That's wrong** opens the
+>    **improve loop** (mid-phase revision): the developer pins the
+>    **expected output** + a *what's wrong* note, creating a pinned failing
+>    case with a target, and sets the amber **Needs you** state (judging
+>    behavior, not AI self-assessment). Per CP-F open question #10, either
+>    feed that correction into a guided re-extraction now **or**
+>    capture-and-queue it (recommended default) — store the correction +
+>    target via T-10.3 and surface the open failing case; do not build the
+>    re-extraction trigger unless CP-F says so. The footer reads `★ Golden
+>    example pinned — every re-run is diffed against this`.
 > 4. **Golden diff:** subsequent runs (and source re-extractions) diff their
 >    output against the golden per the CP-F per-artifact semantics (text
->    diff / structural JSON / audio tolerance). "Still matches your golden
->    output" is the quality statement; a break surfaces per the CP-F
->    re-extraction-resolution decision.
+>    diff / structural JSON / audio tolerance). **Tolerate non-determinism
+>    (mid-phase revision):** when a module is non-deterministic, "differs
+>    from golden" must not read as a regression — honor the per-module
+>    non-determinism affordance / looser-diff decision from CP-F open
+>    question #4. "Still matches your golden output" is the quality
+>    statement; a break surfaces per the CP-F re-extraction-resolution
+>    decision.
 > 5. The `>_ Command & raw log` disclosure from T-10.7 lives **under** the
 >    card (footnote, not headline).
 > 6. `swift build`, `swift test` (+ `bun test` if engine touched),
@@ -863,10 +1058,16 @@ also the first **honest** usage signal for the Library `heroRank`
 ### Task execution (agent prompt)
 
 > 1. Implement the leveling rule from CP-F as a **pure, tested**
->    derivation over T-10.3 data (examples + pass state + recency). Define
->    the tiers and the **lowest honest label** for "one synthesized example
->    passed" (per CP-F — it is *not* "Proven"). Isolate it behind one
->    `testedTier` function with a comment pointing at the CP-F decision.
+>    derivation over T-10.3 data (examples + pass state + recency). It is an
+>    **honest evidence readout** from the mid-phase revision (e.g. Untested →
+>    Ran-not-checked → Checked once → Checked · N inputs — copy per CP-F),
+>    **not** a gamified ladder: no levels, points, streaks, or "next rung"
+>    nudges — it states facts. Define the states and the **lowest honest
+>    label** for "one synthesized example passed" (per CP-F — it is *not*
+>    "Proven"; confident green requires **developer-brought, distinct
+>    inputs**). Encode the rule that **agent-initiated runs alone never count
+>    as human-checked evidence** (CP-F open question #8). Isolate it behind
+>    one `testedState` function with a comment pointing at the CP-F decision.
 > 2. Express the tier on `ModuleCell` quietly — it must not compete with the
 >    `.agentReady`/`.needsApproval`/`.notInToolbox` trust verdict (Hard data
 >    fact 10). It is a metric/provenance mark, like the provider badge.
@@ -978,8 +1179,16 @@ the tool returns).
 
 **Owner:** agent
 **Checkpoint:** none
+**Status: DEFERRED (mid-phase revision 2026-06-15).** The in-browser
+*launch* moves to a later phase. This phase ships **terminal-only**
+execution; a UI module is **detected and labeled** as a `ui-module`
+not-runnable-here class (T-10.2 step 3b) and the page shows it as a clearly
+*future* affordance — **not** a working run button. Only step 1 (detection)
+and the page's deferred-state label are in scope now; steps 2–3 (actually
+serving + `NSWorkspace.open`) are out until the follow-up phase. Keep the
+goal below as the eventual target.
 
-### Goal
+### Goal (eventual — not this phase)
 If a module's output *is* UI, running it **launches the user's external
 browser** at the module's served surface. In-app preview is explicitly out.
 

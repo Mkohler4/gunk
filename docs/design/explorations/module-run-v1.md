@@ -1,7 +1,11 @@
 # Module run exploration v1 — the module page, the proof loop, the terminal
 
-Date: 2026-06-12 · Designed in Claude Design · Status: **exploration —
-direction set by Mark, not yet CP-approved; no task brief exists yet.**
+Date: 2026-06-12 · Designed in Claude Design · Status: **SUPERSEDED by
+[module-run-v2.md](module-run-v2.md) (CP-F, 2026-06-15).** The v2 HTML
+export landed and won: "Proven by you" is dead, the run console is the hero,
+and the resting badge is replaced by the honest **coverage ledger**. v1 is
+retained for lineage — read v2 for the locked design and the resolved open
+questions.
 
 > **Source of truth.** The reference screens are in this folder:
 > [`module-run-v1-page.png`](module-run-v1-page.png) (top of the page) and
