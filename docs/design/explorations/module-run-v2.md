@@ -90,8 +90,8 @@ honestly sufficient.
      (`known not to handle: empty file`), with a count and an empty state.
      **Never red** — a known limit is an honest record, not a failure.
    - **Sign-off** — a statement, not a card: **Not ready to connect**
-     (locked, greyed `Connect to my agent`, with *"Cover edge cases and
-     adversarial to reach a confident sign-off"*) → flips to the ready
+     (locked, greyed `Connect to my agent`, with *"Cover happy path and your
+     own inputs to reach a confident sign-off"*) → flips to the ready
      state (green `Connect to my agent`) only when coverage is sufficient.
 5. **Advanced footer** (`<details>`, fully demoted) — the module's
    provenance, the requirements readout ("to run this elsewhere"), the
@@ -167,10 +167,11 @@ design. These are the recorded answers; T-10.4+ builds against them.
    (happy path · your own inputs · edge cases · adversarial), each a plain
    count. The lowest honest label for "one synthesized example passed" is a
    single check under **Happy path** — never "Proven." Confident green / the
-   *ready to connect* sign-off is warranted only when coverage spans classes
-   **including at least one input the developer brought themselves** plus
-   some edge/adversarial exercise. The readout **describes**; it never ranks,
-   rewards, or nudges.
+   *ready to connect* sign-off is warranted only when **Happy path is covered
+   and at least one of Your own inputs is checked** (the locked copy: "Cover
+   happy path and your own inputs to reach a confident sign-off"). Edge cases
+   and adversarial deepen coverage but are **not** required to unlock the
+   sign-off. The readout **describes**; it never ranks, rewards, or nudges.
 2. **Sandbox promise (#2).** Scope is **terminal/CLI/library one-shot
    entrypoints only**. The sandbox runs against a **throwaway copy** of the
    bundle (never the user's source), with **network off**, a **hard
