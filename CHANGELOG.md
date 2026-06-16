@@ -37,6 +37,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipped controls, no layout shifts.
 
 ### Added
+- `gunk.app` proof-loop storage (T-10.3, CP-H). Schema **v6** adds two
+  additive, nullable tables that make smoke-run proof durable (it survives
+  `RunTrace` pruning, unlike today's trace-JSON build receipt): `smoke_runs`
+  (one receipt per execution/refusal — `runnability` class, `origin`
+  human/agent, exit/duration/output-artifact path/log, the clean-exit
+  `passed` *fact*, and the developer's separate `right`/`wrong` `verdict`)
+  and `module_examples` (the coverage-ledger fixture library, tagged by
+  `input_class` happy/yours/edge/adversarial, with `is_golden` exclusive per
+  class and `expected_output`/`note` carrying pinned failing cases + known
+  limits). Old stores open unchanged; the new tables start empty. App-only,
+  with **no** `mcp/src/schema/v6.sql` — the gunk-mcp and TS-engine migrators
+  pin `LATEST_VERSION = 4` and early-return, and every read uses explicit
+  column lists, so v6 is invisible to them (parity check unaffected). The
+  Tested/coverage state stays **derived** (T-10.11 owns that rule); this
+  migration only stores the inputs it reads. New `Store` API rounds-trips
+  receipts and examples; `StoreTests` cover the v5→v6 upgrade, round-trips,
+  not-executed `nil` passed, per-class golden exclusivity, and the
+  `ON DELETE SET NULL` input ref. No UI, no `mcp/`/`engine/` changes.
 - `gunk.app` durable model attribution (T-9.2, #166; closes audit finding
   D9). A module now records the `provider`/`model` that created it, so its
   `via <model>` provenance survives `RunTrace` pruning instead of depending
