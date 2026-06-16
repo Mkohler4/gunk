@@ -69,6 +69,12 @@ struct AppShellView: View {
   /// detail, the run-failed status element) requests it with a context.
   @State private var runInspectorContext: RunInspectorContext?
 
+  /// The module-page navigation stack (T-10.4): selecting a module in the
+  /// Library pushes a `module(gunkId)` route here; the breadcrumb `‹ Library`
+  /// pops it. The BrowseView grid lives at the stack root, so it keeps its
+  /// scroll + selection while a page is pushed (the CP-F decision).
+  @State private var modulePath: [ModuleRoute] = []
+
   /// How long the run-end toast floats before auto-dismissing (the old
   /// strip's completed-state lifetime, kept at 8s — ux §4.3).
   private static let toastLifetime: Duration = .seconds(8)
@@ -105,7 +111,7 @@ struct AppShellView: View {
     // browser's reported ideal width doesn't fit (observed even at 1120pt),
     // which is exactly the D10 failure this task must fix. A fixed sidebar
     // can never collapse, and GlassSidebar supplies its own chrome.
-    NavigationStack {
+    NavigationStack(path: $modulePath) {
       HStack(spacing: 0) {
         sidebar
           .frame(width: Self.sidebarWidth)
@@ -113,6 +119,26 @@ struct AppShellView: View {
         detailContainer
       }
       .navigationTitle("gunk")
+      // The module-page route (T-10.4): selecting a module in the Library
+      // pushes a full breadcrumb page over the shell. The page carries its own
+      // `‹ Library` breadcrumb (the glass controls layer), so the system back
+      // button is hidden and the window title removed.
+      .navigationDestination(for: ModuleRoute.self) { route in
+        switch route {
+        case .module(let gunkId):
+          ModulePageView(
+            model: services.browseModel,
+            gunkId: gunkId,
+            mcpNeedsSetup: !mcpSetup.isAnyClientConnected,
+            onBack: popModulePage,
+            onShowMCPSetup: { showMCPSetup = true },
+            onShowRuns: { runInspectorContext = $0 }
+          )
+          .navigationBarBackButtonHidden(true)
+          .toolbar(removing: .title)
+          .toolbarBackgroundVisibility(.hidden, for: .windowToolbar)
+        }
+      }
     }
     .background(BrandColors.backgroundPrimary)
     // Whole-window drop target (T-8.5): one `.onDrop` on the shell's root —
@@ -149,6 +175,7 @@ struct AppShellView: View {
       services.browseModel.refresh()
       mcpSetup.refresh()
       applyDropOverlayDebugOverride()
+      applyModulePageDebugOverride()
       applyRunInspectorDebugOverride()
       applyToastDebugOverride()
       applyMCPSetupDebugOverride()
@@ -301,6 +328,17 @@ struct AppShellView: View {
       : progress.values.reduce(0, +) / Double(progress.count)
 
     return (subject, fraction)
+  }
+
+  // MARK: Module-page navigation (T-10.4)
+
+  /// Pops the top module page back to the Library. The grid at the stack root
+  /// keeps its scroll + selection, so back lands on the cell the user opened.
+  private func popModulePage() {
+    guard !modulePath.isEmpty else {
+      return
+    }
+    modulePath.removeLast()
   }
 
   // MARK: Run-end toast (T-8.7)
@@ -487,6 +525,28 @@ struct AppShellView: View {
     }
   }
 
+  /// Dev-only screenshot hook (same family as `GUNK_DEBUG_SECTION`): pushes a
+  /// module page at launch so the breadcrumb page can be captured without a
+  /// scripted click path. `GUNK_DEBUG_MODULE_PAGE=first` opens the first
+  /// stored module; `=<id>` opens a specific gunk. No-op in normal launches,
+  /// or when the store has no matching module.
+  private func applyModulePageDebugOverride() {
+    guard let value = ProcessInfo.processInfo.environment["GUNK_DEBUG_MODULE_PAGE"] else {
+      return
+    }
+
+    let gunkId: Int64?
+    if value == "first" {
+      gunkId = try? services.store.listGunks().first?.id
+    } else {
+      gunkId = Int64(value)
+    }
+
+    if let gunkId {
+      modulePath = [.module(gunkId)]
+    }
+  }
+
   /// Dev-only screenshot hook (same family as `GUNK_DEBUG_SECTION`): opens
   /// the run inspector at launch with a given context — "all", "failure",
   /// or "source:<id>" — so scripted runs can capture it without staging a
@@ -629,7 +689,8 @@ struct AppShellView: View {
         mcpNeedsSetup: !mcpSetup.isAnyClientConnected,
         onShowSettings: { selection = .settings },
         onShowMCPSetup: { showMCPSetup = true },
-        onShowRuns: { runInspectorContext = $0 }
+        onShowRuns: { runInspectorContext = $0 },
+        onOpenModule: { modulePath.append(.module($0)) }
       )
     case .marketplace:
       EmptyStateView(
@@ -679,6 +740,15 @@ private struct WindowDropDelegate: DropDelegate {
   func performDrop(info: DropInfo) -> Bool {
     receiveDrop(info.itemProviders(for: [UTType.fileURL]))
   }
+}
+
+// MARK: - Navigation routes
+
+/// A typed shell-navigation route (T-10.4). Today the only pushable
+/// destination is a module's full page; the proof/run surfaces (T-10.5+) land
+/// on that page, not as new routes.
+enum ModuleRoute: Hashable {
+  case module(Int64)
 }
 
 // MARK: - Sections
@@ -1261,6 +1331,7 @@ private struct ModulesSectionView: View {
   let onShowSettings: () -> Void
   let onShowMCPSetup: () -> Void
   let onShowRuns: (RunInspectorContext) -> Void
+  let onOpenModule: (Int64) -> Void
 
   var body: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
@@ -1279,7 +1350,8 @@ private struct ModulesSectionView: View {
         mcpNeedsSetup: mcpNeedsSetup,
         onShowSettings: onShowSettings,
         onShowMCPSetup: onShowMCPSetup,
-        onShowRuns: onShowRuns
+        onShowRuns: onShowRuns,
+        onOpenModule: onOpenModule
       )
     }
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
