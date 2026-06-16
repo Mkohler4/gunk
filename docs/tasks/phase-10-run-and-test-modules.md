@@ -428,7 +428,25 @@ explicit doc + decisions, or structural work builds on the wrong look.)
 ## T-10.2 — Sandbox & execution runner foundation (CP-G)
 
 **Owner:** agent
-**Checkpoint:** CP-G
+**Checkpoint:** CP-G — **implementation landed, awaiting Mark's approval.**
+
+> **Status: built, pending CP-G.** The sandbox model is recorded in
+> [ADR-0016](../adr/0016-sandbox-execution-model.md) (app-side Swift,
+> `sandbox-exec` deny-by-default profile, documented reduced-isolation
+> fallback, no unbounded `Process`). The runner lives in
+> `app/Sources/GunkApp/Run/` — `SmokeRunResult.swift` (result + runnability
+> + `RunInput`), `RunnabilityClassifier.swift` (#9 terminal-only/
+> cannot-determine), `EntrypointResolver.swift` (Python/Node first),
+> `RunSandbox.swift` (Seatbelt profile + wrap), `SmokeRunner.swift`
+> (streaming + buffered core, throwaway bundle copy, scoped writes, no
+> inherited env, hard timeout). Tested in `SmokeRunnerTests.swift` (25 cases:
+> classification, command resolution, profile, fake-executor orchestration,
+> real-`/bin/sh` pass/fail/timeout/cwd). `swift build` + `swift test` green
+> (172 total, 0 failures). **No store writes, no UI.** Still needs Mark to
+> approve the ADR + run the security-review subagent before anything calls
+> the runner. **Note:** `sandbox-exec` cannot nest, so the live-sandbox path
+> only applies when gunk runs unsandboxed (the normal case); CI/agents that
+> run sandboxed exercise the pure logic + fallback.
 
 ### Goal
 A reusable, **sandbox-bounded** capability to execute a module's entrypoint
