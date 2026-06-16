@@ -37,6 +37,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipped controls, no layout shifts.
 
 ### Added
+- `gunk.app` smoke run console — "Try it": consent → run → streaming terminal →
+  receipt (T-10.7, CP-I). The module page gains a **Try it** section
+  (`RunConsoleView` + `RunConsoleModel`) that executes the entrypoint through the
+  T-10.2 sandbox runner in **streaming** mode and renders every CP-F run state:
+  never-tried, **first-run consent** (the exact command, a throwaway-copy working
+  directory, and the sandbox promise — network off · writes confined to the run
+  dir · 30s timeout · secrets never passed in), running/streaming (a mono
+  terminal block with a spinner + elapsed indicator that auto-scrolls and never
+  grows the page), **passed** (the receipt line takes earned accent green — "Last
+  tried: passed · 1.8s"), **failed** (red, with stderr in the disclosure), and an
+  honest, neutral **"runnable here: not yet"** treatment for modules the sandbox
+  can't fairly run (needs network / secrets / interactive stdin / long-running /
+  UI / cannot-determine — never red). On completion the run persists a receipt
+  (T-10.3) via `BrowseModel`, so the resting state on re-visit shows the **last
+  receipt**, not a live terminal, and the receipt survives an app relaunch.
+  First-run consent is recorded per module (inferred from the presence of any
+  prior receipt) so subsequent runs don't re-ask. The terminal + raw command are
+  the **demoted disclosure** (`>_ Command & raw log`), collapsed by default per
+  the receipt-first rule; this is the *smoke run* only and never merges with the
+  `view run →` extraction inspector (the two-surfaces rule). A
+  `GUNK_DEBUG_RUN_CONSOLE=nevertried|consent|running|passed|failed|unrunnable`
+  screenshot hook (pair with `GUNK_DEBUG_MODULE_PAGE=first|<id>`) stages each
+  state deterministically without live execution. Build + tests green (213 tests).
 - `gunk.app` full module page + breadcrumb navigation (T-10.4, the CP-F page
   shell). Clicking a module now **navigates** to a full page (`ModulePageView`)
   under a glass breadcrumb (`‹ Library › <source> › <module>`) instead of

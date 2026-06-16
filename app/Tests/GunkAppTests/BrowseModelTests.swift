@@ -969,6 +969,180 @@ final class BrowseModelTests: XCTestCase {
     )
   }
 
+  // MARK: - Smoke run ("Try it") orchestration (T-10.7)
+
+  func testSmokeRunInputBuildsFromDetail() throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let input = try XCTUnwrap(model.smokeRunInput(for: detail))
+    XCTAssertEqual(input.gunkId, gunk.id)
+    XCTAssertEqual(input.bundlePath.path, bundle.path)
+    XCTAssertEqual(input.language, .python)
+    XCTAssertEqual(input.entrypoints, [Entrypoint(path: "main.py", symbol: nil)])
+    XCTAssertEqual(input.origin, .human)
+  }
+
+  func testSmokeRunInputNilWithoutBundle() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(store: store, source: source, name: "no-bundle", tags: [], confidence: 0.4)
+    let model = BrowseModel(store: store)
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertNil(model.smokeRunInput(for: detail))
+    XCTAssertEqual(model.runnability(for: detail), .cannotDetermine)
+  }
+
+  func testRunnabilityTerminalForPythonEntrypoint() throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertEqual(model.runnability(for: detail), .terminalRunnable)
+    XCTAssertEqual(model.resolvedRunCommand(for: detail), "python3 main.py")
+  }
+
+  func testRunSmokeTestStreamsAndPersistsPassedReceipt() async throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let runner = StubProcessRunner(stdout: "parsed 1 chapter\n", exitCode: 0)
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle, runner: runner)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertFalse(model.hasRunBefore(gunkId: gunk.id))
+    XCTAssertNil(model.lastSmokeRun(for: gunk.id))
+
+    var streamed = ""
+    let record = await model.runSmokeTest(for: detail) { event in
+      if case .stdout(let text) = event {
+        streamed += text
+      }
+    }
+
+    let receipt = try XCTUnwrap(record)
+    XCTAssertEqual(receipt.passed, true)
+    XCTAssertEqual(receipt.exitCode, 0)
+    XCTAssertEqual(receipt.runnability, .terminalRunnable)
+    XCTAssertEqual(receipt.origin, .human)
+    XCTAssertEqual(streamed, "parsed 1 chapter\n")
+    XCTAssertTrue(receipt.log.contains("parsed 1 chapter"))
+
+    // The receipt is now the durable resting state, and consent is not re-asked.
+    XCTAssertTrue(model.hasRunBefore(gunkId: gunk.id))
+    XCTAssertEqual(model.lastSmokeRun(for: gunk.id)?.passed, true)
+  }
+
+  func testRunSmokeTestPersistsFailedReceipt() async throws {
+    let store = try makeStore()
+    let bundle = try makeBundle()
+    let runner = StubProcessRunner(stderr: "Traceback...\n", exitCode: 3)
+    let (model, gunk) = try makeRunnableModule(store: store, bundle: bundle, runner: runner)
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let record = await model.runSmokeTest(for: detail) { _ in }
+
+    let receipt = try XCTUnwrap(record)
+    XCTAssertEqual(receipt.passed, false)
+    XCTAssertEqual(receipt.exitCode, 3)
+    XCTAssertFalse(receipt.timedOut)
+    XCTAssertTrue(receipt.log.contains("Traceback"))
+  }
+
+  func testRunSmokeTestNilWhenNothingToRun() async throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(store: store, source: source, name: "no-bundle", tags: [], confidence: 0.4)
+    let model = BrowseModel(store: store)
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let record = await model.runSmokeTest(for: detail) { _ in }
+    XCTAssertNil(record)
+    XCTAssertFalse(model.hasRunBefore(gunkId: gunk.id))
+  }
+
+  /// Inserts an extracted Python module whose entrypoint (`main.py`) lives in a
+  /// real on-disk bundle the runner can stage, wired to a `BrowseModel` with an
+  /// injected (canned) smoke runner.
+  private func makeRunnableModule(
+    store: Store,
+    bundle: URL,
+    runner: SandboxedProcessRunner = StubProcessRunner(stdout: "ok\n", exitCode: 0),
+    language: String = "Python"
+  ) throws -> (BrowseModel, Gunk) {
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "parser",
+      purpose: "Parse things",
+      language: language,
+      confidence: 0.9,
+      bundlePath: bundle.path,
+      manifestPath: nil,
+      extractedAt: 200
+    )
+    let trace = RunTrace(
+      runId: "run-smoke",
+      sourceId: source.id,
+      sourceName: source.name,
+      provider: "openai",
+      model: "gpt-test",
+      startedAtMs: 1,
+      finishedAtMs: 2,
+      status: "succeeded",
+      error: nil,
+      stages: [],
+      refinements: [
+        RunTrace.Refinement(
+          capability: "parser",
+          accepted: true,
+          rejectReason: nil,
+          module: RunTrace.Module(
+            name: "parser",
+            ownedFiles: ["main.py"],
+            sharedDeps: [],
+            surface: [RunTrace.Surface(path: "main.py", symbol: nil)]
+          )
+        )
+      ],
+      verification: nil,
+      summary: RunTrace.Summary(accepted: 1, needsApproval: 0, rejected: 0, gunkIds: [gunk.id])
+    )
+    let model = BrowseModel(
+      store: store,
+      loadRunTraces: { [trace] },
+      smokeRunner: makeSmokeRunner(runner)
+    )
+    model.refresh()
+    return (model, gunk)
+  }
+
+  private func makeBundle(file: String = "main.py", contents: String = "print('ok')") throws -> URL {
+    let root = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    let bundle = root.appendingPathComponent("bundle")
+    try FileManager.default.createDirectory(at: bundle, withIntermediateDirectories: true)
+    try contents.write(to: bundle.appendingPathComponent(file), atomically: true, encoding: .utf8)
+    addTeardownBlock { try? FileManager.default.removeItem(at: root) }
+    return bundle
+  }
+
+  private func makeSmokeRunner(_ runner: SandboxedProcessRunner) -> SmokeRunner {
+    let runsRoot = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+    addTeardownBlock { try? FileManager.default.removeItem(at: runsRoot) }
+    return SmokeRunner(
+      runsRoot: runsRoot,
+      processRunner: runner,
+      interpreterLocator: { _ in URL(fileURLWithPath: "/usr/bin/true") },
+      useSandbox: false,
+      now: { Date(timeIntervalSince1970: 1_700_000_000) }
+    )
+  }
+
   private func makeStore(now: @escaping () -> Int64 = { 100 }) throws -> Store {
     try Store(databaseQueue: DatabaseQueue(), now: now)
   }
@@ -1034,5 +1208,39 @@ final class BrowseModelTests: XCTestCase {
     }
 
     return gunk
+  }
+}
+
+/// A canned sandbox executor for the smoke-run orchestration tests: emits fixed
+/// stdout/stderr through the streaming callback and returns a fixed outcome, so
+/// `BrowseModel.runSmokeTest` is exercised without spawning a real process.
+private final class StubProcessRunner: SandboxedProcessRunner, @unchecked Sendable {
+  private let stdout: String
+  private let stderr: String
+  private let exitCode: Int32?
+  private let timedOut: Bool
+
+  init(stdout: String = "", stderr: String = "", exitCode: Int32? = 0, timedOut: Bool = false) {
+    self.stdout = stdout
+    self.stderr = stderr
+    self.exitCode = exitCode
+    self.timedOut = timedOut
+  }
+
+  func run(
+    executable: URL,
+    arguments: [String],
+    workingDirectory: URL,
+    environment: [String: String],
+    timeoutSeconds: Double,
+    onChunk: @escaping @Sendable (RunOutputChunk) -> Void
+  ) async -> ProcessOutcome {
+    if !stdout.isEmpty {
+      onChunk(.stdout(stdout))
+    }
+    if !stderr.isEmpty {
+      onChunk(.stderr(stderr))
+    }
+    return ProcessOutcome(exitCode: exitCode, timedOut: timedOut, launchError: nil)
   }
 }
