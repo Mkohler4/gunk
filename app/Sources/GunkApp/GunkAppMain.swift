@@ -13,6 +13,13 @@ enum GunkAppMain {
       return
     }
 
+    // Headless `gunk run` verb: the MCP `run_gunk` tool (T-10.12, ADR-0017)
+    // reaches the one app-side sandbox runner through this path. It runs to
+    // completion and exits without ever starting the UI.
+    if SmokeRunCLI.runIfRequested() {
+      return
+    }
+
     let application = NSApplication.shared
     let delegate = AppDelegate()
 

@@ -16,6 +16,7 @@ import {
 } from "../../src/tools/get_gunk.js";
 import { LIST_GUNKS_TOOL } from "../../src/tools/list_gunks.js";
 import { LIST_SOURCES_TOOL } from "../../src/tools/list_sources.js";
+import { RUN_GUNK_TOOL } from "../../src/tools/run_gunk.js";
 import { SEARCH_GUNKS_TOOL } from "../../src/tools/search_gunks.js";
 
 function createMemoryStore(
@@ -217,6 +218,7 @@ describe("get_gunk MCP registration", () => {
         LIST_SOURCES_TOOL,
         SEARCH_GUNKS_TOOL,
         GET_GUNK_TOOL,
+        RUN_GUNK_TOOL,
       ],
     });
   });

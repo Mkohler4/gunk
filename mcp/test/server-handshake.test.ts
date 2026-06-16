@@ -7,6 +7,7 @@ import { createServer } from "../src/server/index.js";
 import { GET_GUNK_TOOL } from "../src/tools/get_gunk.js";
 import { LIST_GUNKS_TOOL } from "../src/tools/list_gunks.js";
 import { LIST_SOURCES_TOOL } from "../src/tools/list_sources.js";
+import { RUN_GUNK_TOOL } from "../src/tools/run_gunk.js";
 import { SEARCH_GUNKS_TOOL } from "../src/tools/search_gunks.js";
 
 let client: Client;
@@ -55,6 +56,7 @@ test("tools/list advertises registered tools", async () => {
       LIST_SOURCES_TOOL,
       SEARCH_GUNKS_TOOL,
       GET_GUNK_TOOL,
+      RUN_GUNK_TOOL,
     ],
   });
 });

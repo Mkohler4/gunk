@@ -18,22 +18,30 @@ import {
   LIST_SOURCES_TOOL,
 } from "../tools/list_sources.js";
 import {
+  createRunGunkHandler,
+  RUN_GUNK_TOOL,
+  type RunnerInvoker,
+} from "../tools/run_gunk.js";
+import {
   createSearchGunksHandler,
   SEARCH_GUNKS_TOOL,
 } from "../tools/search_gunks.js";
 
 export interface RegisterToolsOptions {
   openStore?: StoreOpener;
+  /** Overrides how `run_gunk` reaches the sandbox runner (tests inject a fake). */
+  invokeRunner?: RunnerInvoker;
 }
 
 export function registerTools(
   server: Server,
-  { openStore = openDefaultStore }: RegisterToolsOptions = {},
+  { openStore = openDefaultStore, invokeRunner }: RegisterToolsOptions = {},
 ): void {
   const handleListGunks = createListGunksHandler(openStore);
   const handleListSources = createListSourcesHandler(openStore);
   const handleSearchGunks = createSearchGunksHandler(openStore);
   const handleGetGunk = createGetGunkHandler(openStore);
+  const handleRunGunk = createRunGunkHandler(openStore, invokeRunner);
 
   server.setRequestHandler(ListToolsRequestSchema, async () => ({
     tools: [
@@ -41,6 +49,7 @@ export function registerTools(
       LIST_SOURCES_TOOL,
       SEARCH_GUNKS_TOOL,
       GET_GUNK_TOOL,
+      RUN_GUNK_TOOL,
     ],
   }));
 
@@ -77,6 +86,35 @@ export function registerTools(
       }
 
       return handleGetGunk(id);
+    }
+
+    if (request.params.name === RUN_GUNK_TOOL.name) {
+      const gunkId = request.params.arguments?.gunkId;
+
+      if (typeof gunkId !== "number" || !Number.isInteger(gunkId)) {
+        throw new McpError(
+          ErrorCode.InvalidParams,
+          "run_gunk requires an integer gunkId",
+        );
+      }
+
+      const rawInput = request.params.arguments?.input;
+      let input: string[] | undefined;
+
+      if (rawInput !== undefined) {
+        if (
+          !Array.isArray(rawInput) ||
+          !rawInput.every((value) => typeof value === "string")
+        ) {
+          throw new McpError(
+            ErrorCode.InvalidParams,
+            "run_gunk input must be an array of strings",
+          );
+        }
+        input = rawInput;
+      }
+
+      return handleRunGunk(gunkId, input);
     }
 
     throw new McpError(
