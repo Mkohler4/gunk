@@ -81,6 +81,30 @@ final class SmokeRunnerTests: XCTestCase {
     XCTAssertNil(EntrypointResolver.resolve(input))
   }
 
+  // MARK: - Entrypoint path safety (security review)
+
+  func testRejectsUnsafeEntrypointPaths() {
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath(""))
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath("/etc/passwd"))
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath("-c"))
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath("--eval"))
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath("../evil.py"))
+    XCTAssertFalse(EntrypointResolver.isSafeEntrypointPath("src/../../evil.py"))
+    XCTAssertTrue(EntrypointResolver.isSafeEntrypointPath("main.py"))
+    XCTAssertTrue(EntrypointResolver.isSafeEntrypointPath("src/parser/main.py"))
+  }
+
+  func testPoisonedEntrypointClassifiesCannotDetermineAndDoesNotResolve() {
+    let input = makeInput(language: .python, entrypoints: [Entrypoint(path: "../../../etc/shadow")])
+    XCTAssertEqual(RunnabilityClassifier.classify(input), .cannotDetermine)
+    XCTAssertNil(EntrypointResolver.resolve(input))
+  }
+
+  func testFlagPathDoesNotResolveEvenWithArguments() {
+    let input = makeInput(language: .node, entrypoints: [Entrypoint(path: "-e")], arguments: ["require('child_process')"])
+    XCTAssertNil(EntrypointResolver.resolve(input))
+  }
+
   // MARK: - Sandbox profile (ADR-0016 promise)
 
   func testProfileDeniesNetworkAndConfinesWrites() {
@@ -211,6 +235,38 @@ final class SmokeRunnerTests: XCTestCase {
     )
   }
 
+  func testFailsClosedWhenSandboxRequestedButUnavailable() async throws {
+    let bundle = try makeBundle(files: ["main.py": "print('hi')"])
+    let runner = FakeProcessRunner(behavior: .init(stdout: "hi\n"))
+    let smokeRunner = makeSmokeRunner(
+      processRunner: runner, useSandbox: true, allowReducedFallback: false, isSandboxAvailable: { false }
+    )
+    let input = makeInput(gunkId: 21, bundlePath: bundle, language: .python, entrypoints: [Entrypoint(path: "main.py")])
+
+    let result = await smokeRunner.run(input)
+
+    XCTAssertEqual(result.isolation, .notRun, "Must not silently run without the sandbox.")
+    XCTAssertEqual(result.runnability, .terminalRunnable)
+    XCTAssertFalse(result.passed)
+    XCTAssertTrue(result.stderr.contains("without isolation"))
+    XCTAssertEqual(runner.invocationCount, 0)
+  }
+
+  func testReducedFallbackRunsOnlyWhenExplicitlyAllowed() async throws {
+    let bundle = try makeBundle(files: ["main.py": "print('hi')"])
+    let runner = FakeProcessRunner(behavior: .init(stdout: "hi\n", exitCode: 0))
+    let smokeRunner = makeSmokeRunner(
+      processRunner: runner, useSandbox: true, allowReducedFallback: true, isSandboxAvailable: { false }
+    )
+    let input = makeInput(gunkId: 22, bundlePath: bundle, language: .python, entrypoints: [Entrypoint(path: "main.py")])
+
+    let result = await smokeRunner.run(input)
+
+    XCTAssertEqual(result.isolation, .reducedFallback)
+    XCTAssertEqual(runner.invocationCount, 1)
+    XCTAssertTrue(result.passed)
+  }
+
   func testSandboxWrappingMarksIsolationWhenAvailable() async throws {
     guard RunSandbox.isAvailable() else {
       throw XCTSkip("sandbox-exec is not present on this machine.")
@@ -252,6 +308,16 @@ final class SmokeRunnerTests: XCTestCase {
     XCTAssertLessThan(elapsed, .seconds(3), "The timeout should have killed the process well before 5s.")
   }
 
+  func testRealExecutorTimeoutKillsBackgroundChildren() async throws {
+    // The shell backgrounds a child then sleeps; the timeout must tear down
+    // the whole process group, not just the direct child.
+    let start = ContinuousClock.now
+    let outcome = await runShell("sleep 30 & sleep 30", timeoutSeconds: 0.3)
+    let elapsed = ContinuousClock.now - start
+    XCTAssertTrue(outcome.result.timedOut)
+    XCTAssertLessThan(elapsed, .seconds(3))
+  }
+
   func testRealExecutorHonorsWorkingDirectory() async throws {
     let workDir = temporaryDirectory.appendingPathComponent("work")
     try FileManager.default.createDirectory(at: workDir, withIntermediateDirectories: true)
@@ -291,13 +357,17 @@ final class SmokeRunnerTests: XCTestCase {
   private func makeSmokeRunner(
     processRunner: SandboxedProcessRunner,
     interpreterLocator: @escaping @Sendable (String) -> URL? = { _ in URL(fileURLWithPath: "/usr/bin/true") },
-    useSandbox: Bool = false
+    useSandbox: Bool = false,
+    allowReducedFallback: Bool = false,
+    isSandboxAvailable: @escaping @Sendable () -> Bool = { true }
   ) -> SmokeRunner {
     SmokeRunner(
       runsRoot: temporaryDirectory.appendingPathComponent("runs"),
       processRunner: processRunner,
       interpreterLocator: interpreterLocator,
       useSandbox: useSandbox,
+      allowReducedFallback: allowReducedFallback,
+      isSandboxAvailable: isSandboxAvailable,
       now: { Date(timeIntervalSince1970: 1_700_000_000) }
     )
   }
