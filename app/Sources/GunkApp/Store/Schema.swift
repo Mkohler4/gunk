@@ -1,5 +1,5 @@
 enum Schema {
-  static let version = 5
+  static let version = 6
 
   static let migrations = [
     (version: 0, sql: v0),
@@ -7,7 +7,8 @@ enum Schema {
     (version: 2, sql: v2),
     (version: 3, sql: v3),
     (version: 4, sql: v4),
-    (version: 5, sql: v5)
+    (version: 5, sql: v5),
+    (version: 6, sql: v6)
   ]
 
   // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
@@ -206,5 +207,85 @@ ON CONFLICT(name) DO NOTHING;
   static let v5 = """
 ALTER TABLE gunks ADD COLUMN provider TEXT;
 ALTER TABLE gunks ADD COLUMN model TEXT;
+""" + "\n"
+
+  // The proof loop's durable storage (T-10.3, CP-H). Two new tables back
+  // everything T-10.2's runner produces and the coverage ledger (module-run-v2)
+  // describes. Additive + nullable: old stores open unchanged, the new tables
+  // start empty.
+  //
+  // Representation decision (the ADR-adjacent write-up the task asks for,
+  // recorded here instead of a standalone ADR because nothing below is
+  // hard-to-reverse — it is two additive tables):
+  //
+  // • `module_examples` is the developer's fixture library — the named cases
+  //   the coverage ledger lists. Each row carries an `input_class`
+  //   (`happy`/`yours`/`edge`/`adversarial`, the four coverage axes from CP-F
+  //   open question #1), so a "pinned failing case" and a "known limit" are
+  //   not new tables: a failing case is an example with `expected_output` +
+  //   `note` set (CP-F open question #10, capture-and-queue), and a known
+  //   limit is an adversarial example with a `note`. `is_golden` marks the
+  //   canonical example a future run diffs against; it is exclusive **per
+  //   (gunk, input_class)** rather than per module, because v2 coverage spans
+  //   classes (each class has at most one golden to diff against). The task
+  //   sanctioned either rule ("or per the CP-F decision").
+  //
+  // • `smoke_runs` is the receipt — one row per execution (or refusal). It
+  //   stores the CP-F receipt fields verbatim: the `runnability` class and the
+  //   `origin` (`human`/`agent`, open question #8 — agent volume must never
+  //   read as human-checked), plus exit/duration/output-artifact/log. `passed`
+  //   is the run's clean-exit *fact* (nullable when the module was not actually
+  //   executed — a not-runnable-here class); `verdict` is the developer's
+  //   separate `right`/`wrong` judgement (nullable until they judge). These are
+  //   deliberately distinct columns: a clean exit is evidence, not a verdict.
+  //   `example_id` is the nullable input ref (`ON DELETE SET NULL` so deleting
+  //   an example never erases its receipts). `output_artifact_path` stores the
+  //   **path** into the run dir, never the bytes — it prunes with the run dir.
+  //
+  // The Tested/coverage state stays **derived** (count of passing examples,
+  // distinct brought inputs, recency) in the model layer per CP-F — T-10.11
+  // owns that rule; this migration only stores the inputs it reads. Nothing is
+  // denormalized here.
+  //
+  // APP-ONLY — intentionally has NO mcp/src/schema/v6.sql counterpart. Both the
+  // gunk-mcp and TS-engine migrators pin `LATEST_VERSION = 4` and early-return
+  // on any store at/above it, so neither trips on a v6 store; every MCP/engine
+  // read uses an explicit column list, so these tables are invisible to them.
+  // T-10.12 (the MCP run tool) will read/write these tables explicitly when it
+  // lands — that dependency is noted, not pre-built here.
+  static let v6 = """
+CREATE TABLE module_examples (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  gunk_id INTEGER NOT NULL REFERENCES gunks(id) ON DELETE CASCADE,
+  name TEXT NOT NULL,
+  input TEXT NOT NULL,
+  input_class TEXT NOT NULL,
+  is_golden INTEGER NOT NULL DEFAULT 0,
+  verdict TEXT,
+  expected_output TEXT,
+  note TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX module_examples_gunk_idx ON module_examples(gunk_id);
+
+CREATE TABLE smoke_runs (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  gunk_id INTEGER NOT NULL REFERENCES gunks(id) ON DELETE CASCADE,
+  example_id INTEGER REFERENCES module_examples(id) ON DELETE SET NULL,
+  command TEXT,
+  runnability TEXT NOT NULL,
+  origin TEXT NOT NULL,
+  exit_code INTEGER,
+  passed INTEGER,
+  timed_out INTEGER NOT NULL DEFAULT 0,
+  duration_ms INTEGER NOT NULL DEFAULT 0,
+  output_artifact_path TEXT,
+  log TEXT NOT NULL DEFAULT '',
+  verdict TEXT,
+  created_at INTEGER NOT NULL
+);
+
+CREATE INDEX smoke_runs_gunk_idx ON smoke_runs(gunk_id, created_at DESC);
 """ + "\n"
 }

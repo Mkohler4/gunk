@@ -561,7 +561,42 @@ isolation primitive, what the promise to the user is). It gets its own ADR.
 ## T-10.3 — Store: smoke-run receipts, examples, test counts (v6 migration) (CP-H)
 
 **Owner:** agent
-**Checkpoint:** CP-H
+**Checkpoint:** CP-H — **implementation landed, awaiting Mark's review.**
+
+> **Status: built, pending CP-H.** The v6 forward migration lands in
+> `app/Sources/GunkApp/Store/Schema.swift` (`version = 6`) — two additive,
+> nullable tables, no destructive change, old stores open unchanged. The
+> representation decision is written into the migration comment (no separate
+> ADR — nothing below is hard-to-reverse):
+> - **`module_examples`** is the fixture library the coverage ledger lists.
+>   Each row carries an `input_class` (`happy`/`yours`/`edge`/`adversarial`,
+>   the CP-F coverage axes), so a **pinned failing case** (open question #10,
+>   capture-and-queue) is an example with `expected_output` + `note`, and a
+>   **known limit** is an adversarial example with a `note` — no extra tables.
+>   `is_golden` is exclusive **per (gunk, input_class)** (the CP-F decision the
+>   task sanctioned over "per module", because v2 coverage spans classes).
+> - **`smoke_runs`** is the receipt: it stores the CP-F fields verbatim
+>   (`runnability` class, `origin` human/agent per #8, exit/duration/
+>   output-artifact **path**/log). `passed` is the clean-exit *fact* (nullable
+>   when the module was not executed); `verdict` is the developer's separate
+>   `right`/`wrong` judgement. `example_id` is the nullable input ref
+>   (`ON DELETE SET NULL` — deleting an example never erases its receipts).
+>
+> The Tested/coverage state stays **derived** (T-10.11 owns the rule); this
+> task only stores the inputs it reads — nothing is denormalized. Store API:
+> `insertSmokeRun`/`recordSmokeRun` (from a `SmokeRunResult`),
+> `mostRecentSmokeRun`, `smokeRuns(limit:)` (capped history), `attachVerdict`,
+> `insertExample`, `listExamples`, `markExampleGolden`. **mcp divergence
+> confirmed:** v6 is app-only with **no** `mcp/src/schema/v6.sql` — both the
+> gunk-mcp and TS-engine migrators pin `LATEST_VERSION = 4` and early-return,
+> and every read uses explicit column lists, so v6 is invisible to them
+> (parity script unaffected — it only checks v0–v4). T-10.12 will read/write
+> these tables explicitly when it lands. Tested in `StoreTests.swift`
+> (v5→v6 upgrade leaves empty proof tables; receipt + example round-trips;
+> not-executed runs store `nil` passed; golden exclusive per class;
+> `ON DELETE SET NULL`). `swift build` + `swift test` green (189 tests);
+> schema parity green. **No UI, no mcp/engine changes.** Still needs Mark to
+> review the migration on a copy of his real store before CP-H clears.
 
 ### Goal
 Durable per-module storage for everything the proof loop produces: run
