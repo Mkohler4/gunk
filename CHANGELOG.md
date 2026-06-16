@@ -6,6 +6,26 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Added
+- `gunk.app` UI-module detection (T-10.13, deferred scope): the runnability
+  classifier now flags a module as a `ui-module` not-runnable-here class from
+  **entrypoint shape** (a safe entrypoint ending in
+  `.jsx`/`.tsx`/`.vue`/`.svelte`/`.astro`/`.html`/`.htm`), not just a declared
+  UI framework in `requirements:` — catching hand-extracted UI bundles that
+  declare no framework. The shape check runs before the python/node language
+  gate so an `.html`/`.vue` module lands on the specific "UI module" label
+  rather than the vaguer "can't tell how to run this"; it matches the last
+  path segment's extension only, so `.py`/`.js`/`.ts` CLI entrypoints never
+  trip it, and poisoned (`../`, absolute, `-flag`) paths are never trusted.
+  The module page renders the deferred state as a neutral (never red)
+  "Runnable here: not yet — UI module / In-browser launch is coming in a later
+  phase." treatment in both the v2 run console and the legacy view; the actual
+  in-browser launch stays deferred to a later phase. New `SmokeRunnerTests`
+  cases cover the shape, the HTML/non-runnable-language path, the poisoned
+  path, and the dotted-dir false-positive guard; a
+  `GUNK_DEBUG_RUN_CONSOLE=uimodule` screenshot hook stages the state. Build +
+  tests green (243 passing, 1 sandbox-availability skip).
+
 ### Removed
 - `gunk.app` phase-9 close-out (T-9.7): removed the orphaned `ProviderBadge`
   component. T-9.2 (#165) reworked it into a brand "token" and kept it "for

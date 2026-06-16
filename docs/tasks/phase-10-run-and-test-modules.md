@@ -1394,7 +1394,7 @@ the tool returns).
 
 **Owner:** agent
 **Checkpoint:** none
-**Status: DEFERRED (mid-phase revision 2026-06-15).** The in-browser
+**Status: detection + deferred label landed (2026-06-16).** The in-browser
 *launch* moves to a later phase. This phase ships **terminal-only**
 execution; a UI module is **detected and labeled** as a `ui-module`
 not-runnable-here class (T-10.2 step 3b) and the page shows it as a clearly
@@ -1402,6 +1402,37 @@ not-runnable-here class (T-10.2 step 3b) and the page shows it as a clearly
 and the page's deferred-state label are in scope now; steps 2–3 (actually
 serving + `NSWorkspace.open`) are out until the follow-up phase. Keep the
 goal below as the eventual target.
+
+> **What landed (deferred scope).** Detection now keys on **two existing
+> signals**, both honest and conservative (no new store state — a derived
+> classification only):
+> 1. **Declared UI framework** in the bundle's `requirements:` packages
+>    (`react-dom`/`vue`/`svelte`/`@angular`/`electron`/`vite`/`streamlit`/
+>    `gradio`/… — the pre-existing `uiSignals` list).
+> 2. **UI entrypoint shape** — a *safe* entrypoint whose extension is a
+>    framework component or web page (`.jsx`/`.tsx`/`.vue`/`.svelte`/
+>    `.astro`/`.html`/`.htm`). This is new in T-10.13: it catches UI modules
+>    whose hand-extracted manifest declares **no** UI framework (the common
+>    case), and is matched on the *last path segment's* extension only, so
+>    `.py`/`.js`/`.ts` CLI entrypoints (even under a `v1.2/` dir) never trip
+>    it. The check runs **before** the python/node language gate, so an
+>    `.html`/`.vue` module lands on the specific *UI module* label rather
+>    than the vaguer *can't tell how to run this*. Poisoned (`../`, absolute,
+>    `-flag`) paths are never trusted for the decision.
+>
+> The page renders the deferred state as a **neutral** (never red) "Runnable
+> here: not yet — UI module / Output is a UI surface. In-browser launch is
+> coming in a later phase." treatment in both the v2 run-console stage
+> (`RunConsoleStageView`) and the legacy `RunConsoleView`, with the Call-it
+> snippet as the place to run it today. No run button is shown — the eventual
+> launch affordance is explicitly future. Lives in
+> `app/Sources/GunkApp/Run/RunnabilityClassifier.swift` (detection) with
+> tests in `SmokeRunnerTests`; a `GUNK_DEBUG_RUN_CONSOLE=uimodule` screenshot
+> hook stages the state. Reference capture:
+> [`module-run-v2-ui-module.png`](../design/explorations/module-run-v2-ui-module.png).
+> Build + tests green (243 passing, 1 sandbox-availability skip). The
+> human-in-the-loop confirmation below (a real UI module opening in the
+> browser) belongs to the **eventual** launch phase, not this deferred slice.
 
 ### Goal (eventual — not this phase)
 If a module's output *is* UI, running it **launches the user's external

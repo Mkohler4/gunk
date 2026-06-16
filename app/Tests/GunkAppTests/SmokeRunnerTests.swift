@@ -51,6 +51,35 @@ final class SmokeRunnerTests: XCTestCase {
     XCTAssertEqual(RunnabilityClassifier.classify(input), .uiModule)
   }
 
+  func testUiEntrypointShapeMarksUiModuleWithoutDeclaredFramework() {
+    // No UI package declared in the manifest — the entrypoint shape alone
+    // (a framework component) is enough to classify it honestly (T-10.13).
+    for path in ["App.tsx", "src/Widget.jsx", "Page.vue", "Card.svelte", "index.astro"] {
+      let input = makeInput(language: .node, entrypoints: [Entrypoint(path: path)], dependencies: [])
+      XCTAssertEqual(RunnabilityClassifier.classify(input), .uiModule, "\(path) should classify as a UI module")
+    }
+  }
+
+  func testHtmlEntrypointMarksUiModuleEvenWhenLanguageIsNotRunnable() {
+    // A web page whose engine language isn't python/node still lands on the
+    // specific UI-module label rather than the vaguer "can't tell how to run".
+    let input = makeInput(language: .other("html"), entrypoints: [Entrypoint(path: "index.html")])
+    XCTAssertEqual(RunnabilityClassifier.classify(input), .uiModule)
+  }
+
+  func testPoisonedUiEntrypointDoesNotSteerClassification() {
+    // An unsafe `..` path is never trusted for UI detection (or anything else).
+    let input = makeInput(language: .python, entrypoints: [Entrypoint(path: "../../app.jsx")])
+    XCTAssertEqual(RunnabilityClassifier.classify(input), .cannotDetermine)
+  }
+
+  func testTerminalScriptWithDotInPathStaysRunnable() {
+    // A `.py` entrypoint with a versioned directory must not trip the UI
+    // extension check (it keys on the last segment's extension only).
+    let input = makeInput(language: .python, entrypoints: [Entrypoint(path: "v1.2/parser.py")])
+    XCTAssertEqual(RunnabilityClassifier.classify(input), .terminalRunnable)
+  }
+
   func testSecretSdkMarksNeedsSecrets() {
     let input = makeInput(language: .python, entrypoints: [Entrypoint(path: "upload.py")], dependencies: ["boto3"])
     XCTAssertEqual(RunnabilityClassifier.classify(input), .needsSecrets)

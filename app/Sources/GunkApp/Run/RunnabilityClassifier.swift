@@ -32,10 +32,23 @@ enum RunnabilityClassifier {
     "twilio", "sendgrid", "@google-cloud",
   ]
 
-  /// Dependency fragments for UI surfaces (deferred to T-10.13).
+  /// Dependency fragments for UI surfaces (the eventual in-browser launch is
+  /// T-10.13; this phase only *detects and labels* them, ADR-0016).
   private static let uiSignals: Set<String> = [
     "react-dom", "react-native", "vue", "svelte", "@angular", "electron",
     "vite", "webpack-dev-server", "streamlit", "gradio", "dash",
+  ]
+
+  /// Entrypoint **file extensions** that are UI surfaces, not one-shot
+  /// scripts: a framework single-file component or a web page that needs a
+  /// build step and/or a browser, which `node`/`python3` can't fairly run as
+  /// a terminal script. Keying on the entrypoint shape (not just the declared
+  /// manifest) catches UI modules whose `requirements:` block lists no UI
+  /// framework — the more common case for a hand-extracted bundle (T-10.13
+  /// detection step). Extension-matched, so it carries no false positives for
+  /// `.py`/`.js`/`.ts` CLI entrypoints.
+  private static let uiEntrypointExtensions: Set<String> = [
+    "jsx", "tsx", "vue", "svelte", "astro", "html", "htm",
   ]
 
   /// Dependency fragments for interactive CLIs that read from stdin.
@@ -51,6 +64,18 @@ enum RunnabilityClassifier {
       return .cannotDetermine
     }
 
+    let deps = input.dependencies.map { $0.lowercased() }
+
+    // UI is a **category fact** independent of the interpreter: a framework
+    // component / web-page entrypoint, or a declared UI framework, means the
+    // proof belongs in a browser (T-10.13), not the one-shot terminal runner.
+    // Checked before the language gate so an `.html`/`.vue` module whose
+    // language isn't python/node lands on the specific "UI module" label
+    // rather than the vaguer "can't tell how to run this".
+    if hasUIEntrypoint(input) || matches(deps, uiSignals) {
+      return .uiModule
+    }
+
     // Only languages with a confident one-shot interpreter are candidates.
     switch input.language {
     case .python, .node:
@@ -59,17 +84,39 @@ enum RunnabilityClassifier {
       return .cannotDetermine
     }
 
-    // Dependency signals, most-specific first. UI and long-running are
-    // category facts; secrets is more actionable than the network reason it
+    // Remaining dependency signals, most-specific first. Long-running is a
+    // category fact; secrets is more actionable than the network reason it
     // implies; interactive is last because it is the weakest signal.
-    let deps = input.dependencies.map { $0.lowercased() }
-    if matches(deps, uiSignals) { return .uiModule }
     if matches(deps, serverSignals) { return .longRunning }
     if matches(deps, secretSignals) { return .needsSecrets }
     if matches(deps, networkSignals) { return .needsNetwork }
     if matches(deps, interactiveSignals) { return .interactiveStdin }
 
     return .terminalRunnable
+  }
+
+  /// Whether any *safe* entrypoint is a UI surface by file extension (a
+  /// framework component or a web page). Only safe paths count, so a poisoned
+  /// `../app.jsx` can't steer the classification.
+  private static func hasUIEntrypoint(_ input: RunInput) -> Bool {
+    input.entrypoints.contains { entrypoint in
+      EntrypointResolver.isSafeEntrypointPath(entrypoint.path)
+        && uiEntrypointExtensions.contains(fileExtension(of: entrypoint.path))
+    }
+  }
+
+  /// The lowercased extension of a path's last segment (no dot), or "" when
+  /// there is none. Splits on `/` and `\` so a Windows-style path is handled.
+  private static func fileExtension(of path: String) -> String {
+    let lastSegment = path
+      .replacingOccurrences(of: "\\", with: "/")
+      .split(separator: "/")
+      .last
+      .map(String.init) ?? path
+    guard let dot = lastSegment.lastIndex(of: "."), dot != lastSegment.startIndex else {
+      return ""
+    }
+    return String(lastSegment[lastSegment.index(after: dot)...]).lowercased()
   }
 
   private static func matches(_ deps: [String], _ signals: Set<String>) -> Bool {
