@@ -11,11 +11,17 @@ take it somewhere?"* (portability).
 
 Clicking a module stops opening an inline pane and instead navigates to a
 **full module page** (breadcrumb `‹ Library › <source> › <module>`) whose
-spine is *proof*: the trust readout, a before/after **Proof card**, a real
-**sandbox-bounded terminal** with developer and example inputs, an
-accumulating **testing metric** (the Tested badge — *one passing example
-never reads "Proven"*), and an MCP run/test tool so the agent earns the
-same evidence the human does.
+hero is a real, **sandbox-bounded run console** paired with a **coverage
+ledger** that states — plainly, never as a score — which classes of input
+have actually been proven (*happy path · your own inputs · edge cases ·
+adversarial*). Trust is not a badge earned in one click: it is coverage
+across those classes, and an **agent connection** (`Connect to my agent`)
+is offered only when that coverage is honestly sufficient. An MCP run/test
+tool lets the agent earn the same evidence the human does. (This supersedes
+v1's standalone *proof card* and *Tested badge* per the CP-F-approved
+[module-run-v2.md](../design/explorations/module-run-v2.md); the task bodies
+below were updated to match — the run console is T-10.7, the coverage ledger
+is T-10.9, and the sign-off is T-10.11.)
 
 Roadmap: [docs/roadmap.md → Phase 10](../roadmap.md). Product definition:
 [smoke-run-prompt.md](../design/feature-report/smoke-run-prompt.md) (stage
@@ -119,8 +125,8 @@ re-deriving them.
 
 **Why Phase 10 already serves this (no run-mechanism change needed):**
 low-level pure functions are the terminal-only runner's *best* case
-(deterministic, no network/secrets, instant proof card); the per-module
-proof loop + the MCP `run_gunk` tool are exactly "let the AI verify a brick
+(deterministic, no network/secrets, an instant happy-path check); the
+per-module coverage loop + the MCP `run_gunk` tool are exactly "let the AI verify a brick
 before it builds with it" — the prerequisite for trustworthy composition and
 the token-savings story.
 
@@ -188,10 +194,14 @@ Each task has the same shape:
   reverses toolbox-v2's "detail = centered glass sheet" and T-8.4's interim
   inline pane: clicking a module **navigates** (breadcrumb back, not
   dismiss). Nothing pre-builds the glass-sheet detail container.
-- **Receipt-first, terminal-demoted.** The primary evidence is the
-  before/after **Proof card**, rendered *as the artifact* (markdown
-  rendered, JSON pretty, audio playable, image shown, text plain). The raw
-  command + stdout/stderr **demote to a `>_ Command & raw log` disclosure.**
+- **Console-first; evidence renders inside the console** *(v2 supersedes
+  v1's receipt-first/terminal-demoted framing).* The page hero is the **run
+  console**; the before/after evidence is the **diff receipt rendered inside
+  the console** as terminal *text* (per artifact type — text diff, structural
+  JSON diff, audio/metadata compare), not a separate floating card. The
+  **coverage ledger** (right rail) states which input classes are proven.
+  Provenance, the call-it snippet, the requirements readout, the file list,
+  and `view run →` demote into the **advanced footer**.
 - **The developer is the judge — and the improver.** A run gets a developer
   verdict (**"That's right" / "That's wrong"**). A "right" verdict **pins a
   golden example**; future runs and source re-extractions diff against it.
@@ -203,10 +213,15 @@ Each task has the same shape:
   module's entrypoint in the same sandbox and get the same receipt back, so
   an agent can verify before it uses. This is the user's explicit Phase 10
   ask ("the AI needs to test these modules as well").
-- **"Proven is earned, not declared."** One pinned golden example must
-  **not** read as "Proven." The claim scales with an accumulating metric
-  (count of examples + pass state) — the **Tested badge leveling rule**.
-  What earns each tier is an open product decision settled in T-10.1.
+- **No "Proven" word, no leveling rule — coverage by input class.** Evidence
+  is stated as **coverage across four input classes** (happy path · your own
+  inputs · edge cases · adversarial), each a plain count — never a tier to
+  climb, no progress bar, no celebration. One AI-staged pass registers as a
+  single check under *Happy path* (the lowest honest fact), never "Proven."
+  The one consequential claim the page makes is the **sign-off**: whether the
+  module is *ready to connect to your agent*, gated on real coverage
+  (including at least one input the developer brought). Settled at CP-F in
+  [module-run-v2.md](../design/explorations/module-run-v2.md) open question #1.
 - **A real terminal, sandbox-bounded.** The expert path is a working
   terminal (developer inputs + one-click example inputs); the guided path
   is a typed input surface. They coexist. The boundary is **sandbox
@@ -306,11 +321,11 @@ Each task has the same shape:
 
 | Gate | What I review | Blocks |
 | --- | --- | --- |
-| CP-F | Design gate: full module page + **all** smoke-run states + the seven open-question decisions (incl. the leveling rule and sandbox-promise copy) | all visual work (T-10.4+) |
+| CP-F | Design gate: full module page + **all** smoke-run states + the seven open-question decisions (incl. the coverage model and sandbox-promise copy) | all visual work (T-10.4+) |
 | CP-G | The **sandbox/execution contract** (ADR + what the sandbox promises) — security-sensitive | T-10.7+, T-10.12, T-10.13 |
 | CP-H | The **store migration** (v6: receipts, examples, test counts) — schema + backfill | T-10.7, T-10.9, T-10.10, T-10.11 |
 | CP-I | The first real smoke run **end-to-end** on my real store (consent → run → receipt) | T-10.8+ |
-| CP-J | The **Tested leveling rule** as implemented (tiers, what earns each) | phase exit |
+| CP-J | The **coverage sign-off rule** as implemented (which input classes earn *Ready to connect*) | phase exit |
 | CP-K | The **MCP run/test tool** exercised by a real agent against my Cursor | phase exit |
 
 ---
@@ -841,18 +856,19 @@ Reshape shared-dependency *paths* into a portability readout: **runtime**
 
 ---
 
-## T-10.7 — Smoke run ("Try it"): consent → run → streaming terminal → receipt (CP-I)
+## T-10.7 — Run console ("Run it"): consent → run → streaming console → receipt (CP-I)
 
 **Owner:** agent
 **Checkpoint:** CP-I
 
 ### Goal
-The developer's door. One **Try it** on the module page executes the
-entrypoint via the T-10.2 sandbox runner, streams stdout/stderr into a mono
-terminal block, and persists a receipt (T-10.3). All states from CP-F:
+The developer's door. One **Run it** on the module page executes the
+entrypoint via the T-10.2 sandbox runner, streams stdout/stderr into the
+mono **run console**, and persists a receipt (T-10.3). All states from CP-F:
 never-tried, **first-run consent**, running/streaming, passed (earned
-green), failed (red), resting receipt. This is the demoted-disclosure
-evidence (`>_ Command & raw log`); the Proof card (T-10.9) is the headline.
+green), failed (red), resting receipt. This builds the **run console — the
+page hero** (v2, not a demoted disclosure); the coverage ledger (T-10.9)
+reads its receipts and the sign-off (T-10.11) reads its coverage.
 
 ### Files
 - `app/Sources/GunkApp/Views/ModulePageView.swift` (Try it + terminal block
@@ -877,10 +893,11 @@ evidence (`>_ Command & raw log`); the Proof card (T-10.9) is the headline.
 >    passed · 1.8s"), **failed** (non-zero/timeout — red, with the stderr in
 >    the disclosure), or **un-runnable** (the typed "cannot determine"
 >    result rendered honestly, not as a failure).
-> 4. The terminal + raw command are the **demoted disclosure**
->    (`>_ Command & raw log`), collapsed by default per the receipt-first
->    rule. The resting state on re-visit shows the last receipt, not a live
->    terminal.
+> 4. The run console is the page **hero** (v2): a `>_ run console` bar with
+>    the resolved entrypoint and a status chip (`idle → running → pass/fail`),
+>    the composed command line + streamed stdout/stderr in the console body.
+>    It is **not** a collapsed disclosure. The resting state on re-visit
+>    shows the last receipt in the console, ready to re-run.
 > 5. Keep the two-surfaces rule: this is the *smoke run*; do not merge it
 >    with the `view run →` extraction inspector.
 > 6. `swift build`, `swift test`, screenshots of every state (never-tried,
@@ -892,8 +909,9 @@ evidence (`>_ Command & raw log`); the Proof card (T-10.9) is the headline.
 - If streaming output floods the block, virtualize/scroll it; never let it
   grow the page or steal focus.
 - If a passed run's green competes with the trust readout's green, the
-  receipt's green is fine (it is earned meaning) but keep one *headline*
-  verdict — the Proof card (T-10.9) owns the headline once it lands.
+  console status chip's green is fine (it is earned meaning) but keep one
+  *headline* verdict — the coverage ledger + sign-off (T-10.9/T-10.11) own
+  the page's honest claim once they land.
 
 ### Human-in-the-loop (me)
 - `[HOLD FOR ME]` CP-I: I run a **real** module on my machine end-to-end —
@@ -901,45 +919,53 @@ evidence (`>_ Command & raw log`); the Proof card (T-10.9) is the headline.
   relaunch.
 
 ### Acceptance
-- Try it runs the entrypoint in the sandbox with first-run consent, streams
-  output, persists a receipt that survives relaunch, and renders all CP-F
-  states with the terminal demoted to a disclosure; never-merged with the
-  extraction inspector. Build + tests green.
+- Run it executes the entrypoint in the sandbox with first-run consent,
+  streams output, persists a receipt that survives relaunch, and renders all
+  CP-F states in the run console hero; never-merged with the extraction
+  inspector. Build + tests green.
 
 ---
 
-## T-10.8 — Typed input surface (the developer brings their own input)
+## T-10.8 — Intent toolbar + typed input (the developer brings their own input)
 
 **Owner:** agent
-**Checkpoint:** none (implements CP-F's typed-input + effort-spectrum design)
+**Checkpoint:** none (implements CP-F's intent-toolbar + typed-input design)
 
 ### Goal
-The empowerment move: a developer feeds the module **their** data. Compact
+The empowerment move, expressed as the console's **intent toolbar** (v2):
+verb tabs that compose the command and map 1:1 to the coverage classes —
+**Shipped example**, **My own input**, **Try to break it** (adversarial),
+with a `swap input` affordance. Selecting **My own input** surfaces compact
 native controls derived from the entrypoint's input signature — file drop
-well, text field, dropdown — **prefilled with the staged demo input**,
-every value swappable. The run button always works untouched (the T-10.7
+well, text field, dropdown — **prefilled with the staged demo input**, every
+value swappable. The active verb tints the console (green for a normal run,
+amber for "break it"). The run button always works untouched (the T-10.7
 zero-touch floor is preserved).
 
 ### Files
-- `app/Sources/GunkApp/Views/ModulePageView.swift` (the input surface +
-  the effort spectrum: Try it → swap input → save as example)
+- `app/Sources/GunkApp/Views/ModulePageView.swift` (the intent toolbar +
+  input surface + the effort spectrum: Run it → swap input → save as example)
 - `app/Sources/GunkApp/Models/BrowseModel.swift` (input signature →
   controls; pass the chosen input to `SmokeRunner`)
 
 ### Task execution (agent prompt)
 
-> 1. Derive the input controls from the entrypoint signature (symbols/params
->    + the CP-F decision on signatures): file-of-type, string, number,
->    choice, env var. Prefill with the AI-staged demo input; every value is
->    swappable in one gesture (not a form-filling session).
+> 1. Build the **intent toolbar** as verb tabs that compose the console
+>    command and map 1:1 to the coverage classes (Shipped example / My own
+>    input / Try to break it). Under **My own input**, derive the input
+>    controls from the entrypoint signature (symbols/params + the CP-F
+>    decision on signatures): file-of-type, string, number, choice, env var.
+>    Prefill with the AI-staged demo input; every value is swappable in one
+>    gesture (not a form-filling session).
 > 2. The file drop well accepts the typed file; invalid input and
 >    missing-requirement states read as **quiet guidance** ("this entrypoint
 >    takes a `.epub`"), not system warnings (CP-F).
 > 3. The **effort spectrum** in one composition (no three competing CTAs):
->    zero-touch Try it → swap an input → **save as example** (persists the
->    developer's input + verdict as a named case — T-10.10 owns the saved-
->    example list; this task wires the "save" action and stores it via
->    T-10.3).
+>    zero-touch Run it → swap an input → **save as example** (persists the
+>    developer's input + verdict as a named case, **tagged by input class**
+>    — `yours`/`edge`/`adversarial` — so it lands in the right coverage node;
+>    T-10.10 owns the passing-checks list; this task wires the "save" action
+>    and stores it via T-10.3).
 > 4. Inputs respect the sandbox boundary (file-size caps, no network, env
 >    vars marked sensitive never echoed into receipts — from the T-10.2
 >    contract).
@@ -963,22 +989,43 @@ zero-touch floor is preserved).
 
 ---
 
-## T-10.9 — Proof card: synthesized before/after demo + developer verdict + golden example
+## T-10.9 — Coverage ledger: input-class spine + in-console diff receipt + developer verdict + known limits
 
 **Owner:** agent
 **Checkpoint:** none (the heart of the page; depends on CP-I)
 
+> **Revised 2026-06-16 to match the merged v2 design
+> ([module-run-v2.md](../design/explorations/module-run-v2.md), CP-F
+> approved).** There is **no "proof card"** anymore. The before/after
+> evidence renders **inside the run console** (T-10.7) as terminal text; this
+> task builds the **coverage ledger** — the right-rail readout that states,
+> plainly and un-gamified, which **classes of input** have actually been
+> proven. The salvaged-and-still-true parts of the old proof card live on
+> here: the synthesized demo input, artifact-aware before/after rendering,
+> the developer verdict (**That's right / That's wrong**), golden pinning +
+> diffing, the wrong→fix capture-and-queue loop, and non-determinism
+> tolerance — re-housed into the console (diff receipt) and the ledger
+> (coverage spine + known limits) instead of a standalone card.
+
 ### Goal
-The headline evidence: a **Proof card** showing a synthesized **input →
-output** rendered *as the artifact* (not a log), with the developer's
-verdict (**That's right / That's wrong**) and golden-example pinning +
-diffing. This is what makes a module *demonstrate* instead of *assert*.
+The page's right-rail **coverage ledger**: a de-boxed spine — *not* cards,
+*not* a progress meter — with one node per **input class** (**happy path ·
+your own inputs · edge cases · adversarial**), each a plain count, mapping
+1:1 to the console's intent-toolbar verbs (T-10.8). Plus: the before/after
+**diff receipt rendered inside the run console** as terminal text, the
+developer **verdict** that pins a golden / opens the wrong→fix loop, and the
+**Known limits** record. This is what makes a module *demonstrate* coverage
+instead of *assert* a badge. The sign-off gate (`Connect to my agent`) it
+feeds is T-10.11.
 
 ### Files
-- `app/Sources/GunkApp/Views/ModulePageView.swift` (Proof card + artifact
-  renderers + verdict + golden state)
-- `app/Sources/GunkApp/Models/BrowseModel.swift` (golden diff; verdict →
-  Store)
+- `app/Sources/GunkApp/Views/ModulePageView.swift` (coverage-ledger rail:
+  class spine + known-limits record; the in-console **diff receipt** +
+  artifact renderers; the verdict zone in the console footer; the inline
+  correction inside the console body)
+- `app/Sources/GunkApp/Models/BrowseModel.swift` (coverage derivation per
+  input class; golden diff; verdict → Store; known-limit / failing-case
+  capture via T-10.3)
 - Synthesized-demo generation: `engine/src/run/demo.ts` (new) **or** an
   app-side LLM call — decide and report (the engine already owns LLM access
   at extraction; generating a representative demo input there and persisting
@@ -986,81 +1033,125 @@ diffing. This is what makes a module *demonstrate* instead of *assert*.
 
 ### Task execution (agent prompt)
 
-> 1. **Synthesized demo input.** Generate a small, representative input for
->    the module (the "1-chapter EPUB" in the PNG) so Try-it has something to
->    prove against with zero developer effort. Decide where it is generated
->    (engine at extraction, cached; or app-side on first open) and persist
->    it (T-10.3 / bundle run dir). Mark it clearly as `Demo staged by gunk`.
-> 2. **Artifact rendering** per output kind (CP-F + module-io-prompt §1):
->    markdown rendered (not source), JSON pretty-printed, audio as a
->    playable clip, image as an image, plain text plain. Side-by-side
->    `Synthesized input → Output` like `module-run-v1-proof.png`.
-> 3. **Developer verdict:** **That's right** pins the run as the module's
->    **golden example** (stored, T-10.3); **That's wrong** opens the
->    **improve loop** (mid-phase revision): the developer pins the
->    **expected output** + a *what's wrong* note, creating a pinned failing
->    case with a target, and sets the amber **Needs you** state (judging
->    behavior, not AI self-assessment). Per CP-F open question #10, either
->    feed that correction into a guided re-extraction now **or**
->    capture-and-queue it (recommended default) — store the correction +
->    target via T-10.3 and surface the open failing case; do not build the
->    re-extraction trigger unless CP-F says so. The footer reads `★ Golden
->    example pinned — every re-run is diffed against this`.
-> 4. **Golden diff:** subsequent runs (and source re-extractions) diff their
->    output against the golden per the CP-F per-artifact semantics (text
->    diff / structural JSON / audio tolerance). **Tolerate non-determinism
->    (mid-phase revision):** when a module is non-deterministic, "differs
->    from golden" must not read as a regression — honor the per-module
->    non-determinism affordance / looser-diff decision from CP-F open
->    question #4. "Still matches your golden output" is the quality
->    statement; a break surfaces per the CP-F re-extraction-resolution
->    decision.
-> 5. The `>_ Command & raw log` disclosure from T-10.7 lives **under** the
->    card (footnote, not headline).
-> 6. `swift build`, `swift test` (+ `bun test` if engine touched),
->    screenshots: the proof card matching the PNGs, each artifact-kind
->    renderer, the right/wrong verdict, the pinned-golden resting state, and
->    a golden-diff match vs break.
+> 1. **Synthesized demo input (the Happy path check).** Generate a small,
+>    representative input for the module (the "1-chapter EPUB") so the
+>    Shipped-example verb has something to prove against with zero developer
+>    effort. Decide where it is generated (engine at extraction, cached; or
+>    app-side on first open) and persist it (T-10.3 / bundle run dir, tagged
+>    `input_class = happy`). Mark it clearly as `Demo staged by gunk`. A
+>    single passing demo run is **one check under Happy path** — never
+>    "Proven."
+> 2. **The coverage ledger (right rail).** Render the **class spine** —
+>    airy, hairlines, lists; explicitly *not* cards and *not* a progress
+>    bar — one node per input class, each a plain fact with a count:
+>    - **Happy path** — the shipped/synthesized demo (e.g. `1`).
+>    - **Your own inputs** — distinct inputs the developer *brought* and
+>      judged, with the `yours` provenance (e.g. `2 checks · 2 of your books
+>      checked`).
+>    - **Edge cases** — a **gap state** (dashed ring) until covered
+>      (`Boundary inputs untested`), never red.
+>    - **Adversarial** — a gap/amber state until exercised (`Try to break it
+>      with bad input`), never red.
+>    Each node maps 1:1 to a T-10.8 intent verb and links to "test →" it.
+>    The counts come from T-10.3 (`module_examples.input_class` +
+>    `smoke_runs`); derive them, never fabricate. **No tier ladder, no
+>    level, no "1 more to unlock," no celebration** (the locked decision +
+>    open question #1).
+> 3. **In-console diff receipt + artifact rendering.** After a passing run,
+>    render the before/after **inside the run console** as terminal *text*
+>    (before / after columns), per output kind (CP-F + module-io-prompt §1):
+>    markdown rendered (not source), JSON pretty-printed, audio as a playable
+>    clip, image as an image, plain text plain. This replaces v1's separate
+>    proof card — the console is the single evidence surface (T-10.7 hero).
+> 4. **Developer verdict (console footer).** **That's right** pins the run
+>    as a **golden example** (stored T-10.3, tagged by the active input
+>    class — `is_golden` is exclusive **per (gunk, input_class)** per the
+>    T-10.3 decision); **That's wrong** opens the **inline correction inside
+>    the console body** (terminal-styled: a textarea for the **expected
+>    output**, a one-line *what's wrong* note, **Pin failing case**), sets
+>    the amber **Needs you** state, and **captures-and-queues** the
+>    correction (open question #10): store the expected output + note + the
+>    breaking input via T-10.3 and surface it as a **flagged/failing check**
+>    in the ledger with a **fix** action. The guided re-extraction trigger is
+>    a **deferred seam** — design the "fixing…" state but do **not** wire a
+>    real re-extraction this phase.
+> 5. **Golden diff + non-determinism.** Subsequent runs (and source
+>    re-extractions) diff their output against the golden per the CP-F
+>    per-artifact semantics (text diff / structural JSON / audio-metadata
+>    compare — open question #4). When a module is marked
+>    **non-deterministic**, diff **semantically/loosely** (or
+>    informational-only) so "differs from golden" never reads as a
+>    regression. Verdict stays **binary** (right/wrong); the note carries
+>    nuance. A re-extraction break surfaces as a **flagged row** in the
+>    ledger (batch reconciliation "4 pass · 1 broke", open question #5) —
+>    on this page, not the Library cell.
+> 6. **Known limits.** Render the recorded boundaries from "Try to break it"
+>    (e.g. `known not to handle: empty file`) with a count and an empty
+>    state. A known limit is an **honest record, not a failure — never red**
+>    (it is an adversarial example carrying a `note`, per T-10.3).
+> 7. `swift build`, `swift test` (+ `bun test` if engine touched),
+>    screenshots: the coverage ledger (gap + covered classes), the in-console
+>    diff receipt for each artifact kind, the right/wrong verdict + inline
+>    correction, a pinned-golden resting state, a golden-diff match vs break,
+>    and the known-limits record (populated + empty).
 
 ### Refining loop
 - If an output kind has no clean renderer yet, fall back to plain text in
-  the card (never raw log as the headline) and leave a documented seam.
-- If synthesized-demo generation is slow, cache it once and reuse; opening
-  the card must feel instant, not like summoning a model.
+  the console (never a raw log dump as the only evidence) and leave a
+  documented seam.
+- If synthesized-demo generation is slow, cache it once and reuse; the
+  Happy-path check must feel instant, not like summoning a model.
+- The ledger is a **readout, not a dashboard** — if a class node grows busy,
+  keep it a plain fact + count and push detail into the passing-checks list
+  (T-10.10); never add charts or meters.
 
 ### Human-in-the-loop (me)
 - I judge a real run, pin a golden, re-run, and confirm the diff statement
-  is truthful; I confirm "right" feels like *I* earned the verdict.
+  is truthful; I confirm the ledger states coverage as plain facts (no
+  level, no nudge) and that "right" reads as *my* judgement, not a reward.
 
 ### Acceptance
-- The Proof card renders a synthesized before/after as the artifact, takes a
-  developer verdict that pins a golden example, and diffs future runs
-  against it per artifact type; the terminal stays a footnote. Build +
-  tests green.
+- The module page renders a coverage ledger (class spine per input class +
+  known limits, all derived from T-10.3, never fabricated); the before/after
+  evidence renders inside the run console as the artifact and takes a
+  developer verdict that pins a golden / opens the capture-and-queue wrong
+  loop; future runs diff against golden per artifact type with
+  non-determinism tolerated; nothing reads as a tier ladder or "Proven".
+  Build + tests green.
 
 ---
 
-## T-10.10 — Saved examples (the developer's fixture library)
+## T-10.10 — Passing checks: the coverage ledger's named-case list
 
 **Owner:** agent
 **Checkpoint:** none
 
+> **Revised 2026-06-16 to match the merged v2 design.** These "saved
+> examples" are the coverage ledger's **passing-checks list** (v2): each a
+> dot + case name + a `yours` violet badge for developer-brought inputs + a
+> relative time + a hover **re-run**; a failing/flagged case reads red with a
+> **fix** action. They feed the per-class coverage counts (T-10.9) and the
+> sign-off (T-10.11).
+
 ### Goal
 Every developer action persists as an asset: a developer's input + verdict
-becomes a **named, re-runnable example** pinned to the module. The module
-lists its saved cases, re-runs them, and diffs each against golden.
+becomes a **named, re-runnable check** pinned to the module and tagged by
+**input class** — these are the coverage ledger's **passing-checks list**.
+The module lists its checks, re-runs them, and diffs each against golden.
 
 ### Files
-- `app/Sources/GunkApp/Views/ModulePageView.swift` (saved-examples list +
-  re-run + per-example diff state)
+- `app/Sources/GunkApp/Views/ModulePageView.swift` (passing-checks list +
+  re-run + per-check diff state, inside the coverage ledger)
 - `app/Sources/GunkApp/Models/BrowseModel.swift` (examples read/write via
   Store T-10.3)
 - `app/Tests/GunkAppTests/BrowseModelTests.swift`
 
 ### Task execution (agent prompt)
 
-> 1. Render the module's saved examples (from T-10.3): name, last verdict,
->    last-run status, a re-run action. The golden example is marked.
+> 1. Render the module's checks (from T-10.3): name, the `yours` provenance
+>    badge for developer-brought inputs, last verdict, last-run status, a
+>    re-run action. The golden example is marked; failing/flagged checks read
+>    red with a **fix** action.
 > 2. Re-running an example uses `SmokeRunner` with that example's stored
 >    input and diffs against golden (T-10.9), updating the receipt.
 > 3. Keep it **receipts, not a dashboard** — a bounded list of named cases,
@@ -1082,67 +1173,112 @@ lists its saved cases, re-runs them, and diffs each against golden.
 
 ---
 
-## T-10.11 — Tested badge + leveling rule (CP-J)
+## T-10.11 — Coverage state + the agent-connection sign-off (CP-J)
 
 **Owner:** agent
-**Checkpoint:** CP-J
+**Checkpoint:** CP-J — **sign-off rule implemented, pending Mark's review.**
+
+> **Revised 2026-06-16 to match the merged v2 design.** There is **no Tested
+> badge and no leveling rule** (open question #1: "there is no leveling rule
+> — there is a coverage readout"). The honest verdict the page makes is the
+> **sign-off**: whether the module is *ready to connect to your agent*. This
+> task derives the coverage state from T-10.3 data, drives the page's
+> `Connect to my agent` gate + the breadcrumb bar-state chip
+> (`In review` → `Ready to connect`), and expresses the same honest signal —
+> quietly — on the Library cell. No tiers, no points, no "Proven".
+>
+> **Status: sign-off rule built (2026-06-16).** The pure derivation lives in
+> `app/Sources/GunkApp/Models/CoverageState.swift` (`CoverageState.derive` +
+> `BrowseModel.coverageState(for:)`), and `CoverageLedgerView` + the
+> `ModulePageView` breadcrumb chip now read it from one source (the earlier
+> duplicated, `≥3 classes` rule is removed). The **locked threshold** is
+> applied: *ready to connect* = **Happy path covered + at least one of Your
+> own inputs checked, nothing failing**; edge/adversarial deepen coverage but
+> never gate it; a lone synthesized happy-path pass never unlocks it; a
+> `wrong`/pinned-correction case blocks it. Tested in
+> `CoverageStateTests.swift` (10 cases). `swift build` + `swift test` green
+> (233 tests). **Still open within this task:** the quiet **Library-cell**
+> coverage expression (`ModuleCell`) and the `heroRank` usage seam — do
+> before CP-J closes.
 
 ### Goal
-The honest metric: a **Tested badge** whose tier scales with how much the
-module was actually tested (count of examples, pass state, distinct inputs,
-recency — per the CP-F leveling rule). **One passing example never reads
-"Proven."** It expresses on the Library cell *without* breaking the
-one-trust-verdict-per-cell rule, and on the module page's state line. It is
-also the first **honest** usage signal for the Library `heroRank`
-`// FUTURE` seam (still never fabricate usage numbers).
+The honest verdict: a **coverage state** derived from which input classes
+are actually proven (happy path · your own inputs · edge cases ·
+adversarial), gating the **sign-off** — the greyed/locked `Connect to my
+agent` flips to the earned green `Connect to my agent` **only when coverage
+is honestly sufficient** (spans classes, **including at least one input the
+developer brought**). It drives the module-page sign-off block + the
+breadcrumb bar-state chip, and expresses quietly on the Library cell
+*without* breaking the one-trust-verdict-per-cell rule. It is also the first
+**honest** usage signal for the Library `heroRank` `// FUTURE` seam (still
+never fabricate usage numbers).
 
 ### Files
-- `app/Sources/GunkApp/Models/BrowseModel.swift` (the `testedTier`
-  comparator/derivation — the leveling rule; the `heroRank` seam update)
-- `app/Sources/GunkApp/Views/ModuleCell.swift` (cell expression of the
-  tier — provenance/metric, not a second trust verdict)
-- `app/Sources/GunkApp/Views/ModulePageView.swift` (state line tier)
+- `app/Sources/GunkApp/Models/BrowseModel.swift` (the `coverageState`
+  derivation — the sign-off rule; the `heroRank` seam update)
+- `app/Sources/GunkApp/Views/ModulePageView.swift` (the sign-off block:
+  locked `Not ready to connect` → earned `Connect to my agent`; the
+  breadcrumb bar-state chip `In review` → `Ready to connect`)
+- `app/Sources/GunkApp/Views/ModuleCell.swift` (quiet cell expression of the
+  coverage signal — provenance/metric, not a second trust verdict)
 - `app/Tests/GunkAppTests/BrowseModelTests.swift`
 
 ### Task execution (agent prompt)
 
-> 1. Implement the leveling rule from CP-F as a **pure, tested**
->    derivation over T-10.3 data (examples + pass state + recency). It is an
->    **honest evidence readout** from the mid-phase revision (e.g. Untested →
->    Ran-not-checked → Checked once → Checked · N inputs — copy per CP-F),
->    **not** a gamified ladder: no levels, points, streaks, or "next rung"
->    nudges — it states facts. Define the states and the **lowest honest
->    label** for "one synthesized example passed" (per CP-F — it is *not*
->    "Proven"; confident green requires **developer-brought, distinct
->    inputs**). Encode the rule that **agent-initiated runs alone never count
->    as human-checked evidence** (CP-F open question #8). Isolate it behind
->    one `testedState` function with a comment pointing at the CP-F decision.
-> 2. Express the tier on `ModuleCell` quietly — it must not compete with the
->    `.agentReady`/`.needsApproval`/`.notInToolbox` trust verdict (Hard data
->    fact 10). It is a metric/provenance mark, like the provider badge.
-> 3. Express the tier on the module page state line (`Proven · ★ Golden`
->    only at the tier the rule actually earns).
+> 1. Implement the **coverage sign-off rule** from CP-F as a **pure, tested**
+>    derivation over T-10.3 data (examples + pass state by `input_class` +
+>    recency). It is an **honest coverage readout**, **not** a gamified
+>    ladder: no levels, points, streaks, or "next rung" nudges — it states
+>    which classes are covered as plain facts. The **sufficiency threshold**
+>    for the *ready to connect* sign-off is **Happy path covered + at least
+>    one of Your own inputs checked** (the locked copy: "Cover happy path and
+>    your own inputs to reach a confident sign-off"). Edge cases and
+>    adversarial deepen coverage but are **not** required to unlock the
+>    sign-off. A single synthesized Happy-path pass is **never** sufficient on
+>    its own (it has no developer-brought input) and never reads as "Proven".
+>    Encode the rule that **agent-initiated runs
+>    alone never count as human-checked coverage** and never advance the
+>    sign-off on their own (open question #8). Isolate it behind one
+>    `coverageState` function with a comment pointing at the CP-F decision.
+> 2. Drive the **sign-off block** on the module page: the locked state
+>    (`Not ready to connect`, greyed `Connect to my agent`, with the honest
+>    "cover … to reach a confident sign-off" line) flips to the earned green
+>    `Connect to my agent` only when `coverageState` says sufficient. Wire
+>    the breadcrumb **bar-state chip** to the same source (`In review`, amber,
+>    while incomplete → `Ready to connect`, green). No layout shift on change.
+> 3. Express the coverage signal on `ModuleCell` quietly — it must not
+>    compete with the `.agentReady`/`.needsApproval`/`.notInToolbox` trust
+>    verdict (Hard data fact 10). It is a metric/provenance mark, like the
+>    provider badge — never a second trust verdict, never a badge to collect.
 > 4. **Honest usage seam:** wire smoke-run receipts as the input the
 >    `heroRank` `// FUTURE: rank by uses/week` seam was waiting for *only if
 >    CP-F says so*; otherwise leave the seam and note that receipts are now
 >    available to it. Never fabricate counts.
-> 5. `swift build`, `swift test`, screenshots: each tier on the cell and the
->    page; the lowest tier proving "one example passed" reads honestly.
+> 5. `swift build`, `swift test`, screenshots: the locked sign-off + amber
+>    `In review` chip, the earned `Connect to my agent` + green `Ready to
+>    connect` chip, and the quiet coverage signal on the cell; confirm a
+>    single passing demo never unlocks the sign-off.
 
 ### Refining loop
-- If the tier visually competes with the trust verdict on the cell, shrink
-  it / move it to the metric slot rather than escalating it; the trust
-  verdict wins the cell.
+- If the coverage signal visually competes with the trust verdict on the
+  cell, shrink it / move it to the metric slot rather than escalating it; the
+  trust verdict wins the cell.
+- If the sufficiency threshold is ambiguous, defer to the HTML/CP-F decision
+  rather than inventing a rule; the sign-off must never be easier to earn
+  than the design states.
 
 ### Human-in-the-loop (me)
-- `[HOLD FOR ME]` CP-J: I confirm the tiers and labels match my CP-F
-  decision and that a single passing example never claims "Proven."
+- `[HOLD FOR ME]` CP-J: I confirm the sign-off threshold matches my CP-F
+  decision — that `Connect to my agent` stays locked until real coverage
+  (incl. an input I brought) and that a single passing demo never unlocks it.
 
 ### Acceptance
-- A pure, tested leveling rule drives a Tested tier shown on cell + page
-  without breaking the one-trust-verdict rule; one passing example reads
-  honestly (not "Proven"); usage seam handled without fabrication. Build +
-  tests green.
+- A pure, tested coverage-state derivation gates the `Connect to my agent`
+  sign-off + the breadcrumb chip and expresses quietly on the cell without
+  breaking the one-trust-verdict rule; a single passing demo never unlocks
+  the sign-off; agent-only runs never advance it; usage seam handled without
+  fabrication; nothing reads as a tier ladder or "Proven". Build + tests
+  green.
 
 ---
 
@@ -1195,7 +1331,7 @@ the tool returns).
 >    Honor the consent decision from the ADR — an agent must not be a way to
 >    bypass the human first-run consent if the ADR says consent is required.
 > 4. Optionally persist the receipt to the v6 `smoke_runs` table (tagged as
->    agent-initiated) so human + agent evidence share the leveling rule —
+>    agent-initiated) so human + agent evidence share the coverage readout —
 >    only if the ADR approves MCP writes; otherwise return-only this phase.
 > 5. Tests against fixtures: a passing module returns a passing receipt; a
 >    failing one returns a failing receipt; an un-runnable one returns the
@@ -1341,10 +1477,11 @@ feels instant.
 >    pane path if T-10.4 fully replaced it, any superseded scaffolding).
 >    `rg` for references first.
 > 2. Full pass at 960×600 and default window size: the module page and every
->    run state (consent, streaming, passed, failed, resting receipt, typed
->    inputs, proof card per artifact kind, saved examples, Tested tiers,
->    UI-module launch, "How this works"), plus back-navigation grid state —
->    no layout shifts, no clipped controls.
+>    run state (consent, streaming, passed, failed, resting receipt, intent
+>    toolbar + typed inputs, in-console diff receipt per artifact kind,
+>    coverage ledger + known limits, passing-checks list, sign-off locked +
+>    `Ready to connect`, UI-module not-runnable label, "How this works"),
+>    plus back-navigation grid state — no layout shifts, no clipped controls.
 > 3. Confirm the toolbox-v2 constraints still hold (graphite surfaces, mono
 >    only for paths/code/terminal, accent green only on earned meaning,
 >    glass on the controls layer only) and the two-surfaces rule (smoke run
@@ -1373,9 +1510,9 @@ flowchart LR
     t6[T-10.6 requirements readout]
     t7[T-10.7 smoke run core CP-I]
     t8[T-10.8 typed inputs]
-    t9[T-10.9 proof card]
+    t9[T-10.9 coverage ledger]
     t10[T-10.10 saved examples]
-    t11[T-10.11 tested badge CP-J]
+    t11[T-10.11 coverage sign-off CP-J]
     t12[T-10.12 MCP run tool CP-K]
     t13[T-10.13 UI-module launch]
     t14[T-10.14 how this works]

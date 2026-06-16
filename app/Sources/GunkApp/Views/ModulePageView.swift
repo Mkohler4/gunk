@@ -84,10 +84,7 @@ struct ModulePageView: View {
       ModulePageBreadcrumb(
         sourceName: detail.item.source.name,
         moduleName: detail.item.gunk.name,
-        readyToConnect: CoverageLedgerView.isReadyToConnect(
-          model: model,
-          gunkId: detail.item.gunk.id
-        ),
+        readyToConnect: model.coverageState(for: detail.item.gunk.id).readyToConnect,
         onBack: onBack
       )
     }

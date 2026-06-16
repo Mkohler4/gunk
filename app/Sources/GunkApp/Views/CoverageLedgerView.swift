@@ -7,10 +7,10 @@ import SwiftUI
 /// that block sign-off, and recorded known limits, ending in the connect
 /// sign-off.
 ///
-/// The ledger reads the saved examples (T-10.3 store, via `BrowseModel`); the
-/// honest leveling rule + the full re-run/diff UI are T-10.10 / T-10.11. This
-/// is the structural outline they land on — it states facts, never a tier to
-/// climb (no points, streaks, or "next rung" nudges).
+/// The ledger reads the saved examples (T-10.3 store, via `BrowseModel`) and
+/// the pure coverage derivation (`CoverageState`, T-10.11). It states facts,
+/// never a tier to climb (no points, streaks, or "next rung" nudges). The
+/// *ready to connect* sign-off is earned by happy path + your own inputs.
 struct CoverageLedgerView: View {
   let model: BrowseModel
   let gunkId: Int64
@@ -24,7 +24,10 @@ struct CoverageLedgerView: View {
   }
 
   private var examples: [ModuleExample] { model.examples(for: gunkId) }
-  private var lastRun: SmokeRunRecord? { model.lastSmokeRun(for: gunkId) }
+
+  /// The single coverage derivation (T-10.11) — the ledger spine, the sign-off,
+  /// and the breadcrumb bar chip all read this so they never disagree.
+  private var state: CoverageState { model.coverageState(for: gunkId) }
 
   /// Passing checks: saved examples the developer hasn't flagged wrong.
   private var passing: [ModuleExample] {
@@ -42,65 +45,42 @@ struct CoverageLedgerView: View {
   }
 
   private var classes: [ClassNode] {
-    let happy = passing.contains { $0.inputClass == .happy } || lastRun?.passed == true
-    let yours = passing.filter { $0.inputClass == .yours }.count
-    let edge = passing.contains { $0.inputClass == .edge }
-    let adversarial = !limits.isEmpty
+    let s = state
+    let yoursCount = passing.filter { $0.inputClass == .yours }.count
 
     return [
       ClassNode(
         name: "Happy path",
         systemImage: "bolt.fill",
-        ok: happy,
-        detail: happy ? "Shipped example parses clean." : "Run the bundled example once.",
-        count: happy ? "1" : ""
+        ok: s.happy,
+        detail: s.happy ? "Shipped example parses clean." : "Run the bundled example once.",
+        count: s.happy ? "1" : ""
       ),
       ClassNode(
         name: "Your own inputs",
         systemImage: "person",
-        ok: yours > 0,
-        detail: yours > 0 ? "\(yours) of your inputs checked" : "Bring input you actually care about.",
-        count: yours > 0 ? "\(yours) checks" : ""
+        ok: s.yours,
+        detail: yoursCount > 0 ? "\(yoursCount) of your inputs checked" : "Bring input you actually care about.",
+        count: yoursCount > 0 ? "\(yoursCount) checks" : ""
       ),
       ClassNode(
         name: "Edge cases",
         systemImage: "scope",
-        ok: edge,
-        detail: edge ? "Boundary structure covered." : "Boundary inputs untested.",
+        ok: s.edge,
+        detail: s.edge ? "Boundary structure covered." : "Boundary inputs untested.",
         count: ""
       ),
       ClassNode(
         name: "Adversarial",
         systemImage: "shield",
-        ok: adversarial,
-        detail: adversarial ? "Malformed input characterized." : "Try to break it with bad input.",
-        count: adversarial ? "\(limits.count) limit\(limits.count == 1 ? "" : "s")" : ""
+        ok: s.adversarial,
+        detail: s.adversarial ? "Malformed input characterized." : "Try to break it with bad input.",
+        count: s.adversarial ? "\(limits.count) limit\(limits.count == 1 ? "" : "s")" : ""
       ),
     ]
   }
 
-  private var classesOK: Int { classes.filter(\.ok).count }
-  private var ready: Bool { Self.isReadyToConnect(model: model, gunkId: gunkId) }
-
-  /// The coverage sign-off, recomputed standalone so the breadcrumb bar state
-  /// (`Ready to connect` / `In review`) and this ledger's sign-off never
-  /// disagree. Confident green requires ≥3 classes covered and nothing failing
-  /// (the honest rule — one passing run is never enough).
-  static func isReadyToConnect(model: BrowseModel, gunkId: Int64) -> Bool {
-    let examples = model.examples(for: gunkId)
-    let failing = examples.filter { $0.verdict == .wrong || $0.expectedOutput != nil }
-    guard failing.isEmpty else { return false }
-
-    let lastRun = model.lastSmokeRun(for: gunkId)
-    let limits = examples.filter { $0.inputClass == .adversarial && $0.note != nil }
-    let passing = examples.filter { $0.verdict != .wrong && $0.expectedOutput == nil && $0.inputClass != .adversarial }
-    let happy = passing.contains { $0.inputClass == .happy } || lastRun?.passed == true
-    let yours = passing.contains { $0.inputClass == .yours }
-    let edge = passing.contains { $0.inputClass == .edge }
-    let adversarial = !limits.isEmpty
-    let ok = [happy, yours, edge, adversarial].filter { $0 }.count
-    return ok >= 3
-  }
+  private var ready: Bool { state.readyToConnect }
 
   var body: some View {
     VStack(alignment: .leading, spacing: 0) {
@@ -348,12 +328,17 @@ struct CoverageLedgerView: View {
 
   private var signoffDetail: String {
     if ready {
-      return "\(classesOK) of \(classes.count) classes green, nothing failing. Your agent can call this with confidence."
+      return "Happy path and your own inputs covered, nothing failing. Your agent can call this with confidence."
     }
-    if !failing.isEmpty {
+    if state.hasFailing {
       return "Fix the failing check first."
     }
-    let need = classes.filter { !$0.ok }.prefix(2).map { $0.name.lowercased() }
+    // The sign-off gates on happy path + your own inputs (copy locked
+    // 2026-06-16); edge/adversarial deepen coverage but never block it.
+    var need: [String] = []
+    if !state.happy { need.append("happy path") }
+    if !state.yours { need.append("your own inputs") }
+    if need.isEmpty { need = ["happy path", "your own inputs"] }
     return "Cover \(need.joined(separator: " and ")) to reach a confident sign-off."
   }
 
