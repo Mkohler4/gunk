@@ -37,6 +37,31 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipped controls, no layout shifts.
 
 ### Added
+- `gunk.app` typed input surface — "bring your own input" (T-10.8). The **Try
+  it** console (T-10.7) gains signature-derived native controls so a developer
+  can feed the module **their** data: a pure `InputSignatureInference` derives
+  an input field from the entrypoint (a **file drop well** when the purpose /
+  symbol / filename names a format — `.epub`, `.pdf`, `.csv`, …; a **text**
+  field for plain string-in utilities), prefilled with the staged demo and
+  swappable in one gesture (with a quiet "Reset to demo"). It is **one
+  composition**, not competing CTAs: the controls sit inside the same console
+  as Run, and the zero-touch floor is preserved (an empty file field yields the
+  bare command, identical to T-10.7 — the real demo prefill is a forward seam
+  for T-10.9). Invalid input and missing requirements read as **quiet guidance**
+  ("This entrypoint takes a `.epub` file."), never system warnings, and gate Run
+  without ever turning into a red failure. The developer's input composes into
+  the runner's positional `arguments` (the ADR-0016 sandbox contract is
+  unchanged — file *reads* are allowed, writes/network/timeout stay confined, a
+  25 MB input cap is enforced as quiet guidance); env-var "inputs" are
+  deliberately **absent** because the sandbox passes no environment (secrets are
+  never injected — module env requirements surface in the T-10.6 readout
+  instead). After a run launched with their own input, a quiet **Save as
+  example** affordance persists it as a named, re-runnable case via T-10.3
+  (the developer's input is the `yours` coverage class; the saved-example list +
+  re-run are T-10.10). A `GUNK_DEBUG_RUN_CONSOLE=prefilled|swapped|invalid|
+  missing|dropwell` screenshot hook (pair with `GUNK_DEBUG_MODULE_PAGE=first|
+  <id>`) stages each typed-input state deterministically. Build + tests green
+  (223 tests).
 - `gunk.app` smoke run console — "Try it": consent → run → streaming terminal →
   receipt (T-10.7, CP-I). The module page gains a **Try it** section
   (`RunConsoleView` + `RunConsoleModel`) that executes the entrypoint through the
