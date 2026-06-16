@@ -28,11 +28,25 @@ same rule as toolbox-v2). Phase 8/9 outcomes this phase builds on:
 [docs/retros/phase-9.md](../retros/phase-9.md) (write the latter if it does
 not exist yet).
 
-The two reference screens that exist today (resting "Proven" state only —
-**every other state is unbuilt and ungated**, which is what T-10.1 fixes):
+The reference screens. The **CP-F-approved target** is the
+[module-run-v2](../design/explorations/module-run-v2.md) **run console +
+coverage ledger** — the interactive HTML export is the source of truth (when
+the HTML lands, the HTML wins, same rule as toolbox-v2):
 
-![Module page — top](../design/explorations/module-run-v1-page.png)
-![Module page — proof card, call-it, footer](../design/explorations/module-run-v1-proof.png)
+![Module page — run console + coverage ledger](../design/explorations/module-run-v2-coverage.png)
+
+- Interactive source of truth (full page, every run state):
+  [`module-run-v2.html`](../design/explorations/module-run-v2.html).
+- The structural shell that hosts it ships in **T-10.4**; the run console
+  (intent toolbar, composed command, Run) and the coverage ledger land across
+  **T-10.5 – T-10.11** (they are *not* part of the T-10.4 shell).
+
+The earlier v1 PNGs (resting "Proven" state only — **every other state was
+unbuilt and ungated**, which is what T-10.1 fixed; now **superseded by v2**)
+remain for lineage:
+
+![Module page — v1 top](../design/explorations/module-run-v1-page.png)
+![Module page — v1 proof card, call-it, footer](../design/explorations/module-run-v1-proof.png)
 
 ## Mid-phase revision (2026-06-15) — empowerment loop + terminal-only scope
 
