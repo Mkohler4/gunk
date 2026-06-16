@@ -145,6 +145,29 @@ Two consumption shapes share **one executor core**:
 The default timeout is **30 seconds**. `timedOut` is reported as a fact, not
 an error (a long-running module is a *classification*, not a failed run).
 
+### Hardening from the security review (2026-06-15)
+
+The first implementation was reviewed before the gate; three decisions were
+tightened and are now part of the contract:
+
+- **Fail closed, never silently downgrade.** If the sandbox was requested but
+  cannot be applied (`sandbox-exec` missing or the profile can't be written),
+  the runner **refuses to run** (`isolation: .notRun`, reason in `stderr`)
+  rather than dropping to network-on/unscoped execution. The reduced-isolation
+  fallback is **opt-in** (`allowReducedFallback`) and always labeled — it is
+  never reached by accident.
+- **Entrypoint paths are validated, not trusted.** A stored/poisoned
+  entrypoint that is absolute, contains `..`, or looks like an interpreter
+  flag (`-c`, `--eval`) is refused (`cannotDetermine`), and after staging the
+  runner re-checks (symlinks resolved) that the entry resolves *inside* the
+  copied bundle. The validated file path is the interpreter's script argument,
+  so flags can't be smuggled through the composed `arguments`.
+- **Timeouts tear down the whole process tree.** The child is placed in its
+  own process group; on timeout the runner `SIGKILL`s the group (negative
+  pid), so forked grandchildren can't outlive the run with network/write
+  access. The negative-pid kill is used only when the parent confirms it owns
+  a dedicated group.
+
 ### What this ADR does **not** decide
 
 - No store writes (T-10.3 / CP-H).

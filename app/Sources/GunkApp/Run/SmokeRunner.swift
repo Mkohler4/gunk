@@ -45,8 +45,19 @@ struct SmokeRunner {
   /// `nil` if it is not installed.
   let interpreterLocator: @Sendable (String) -> URL?
   /// Whether to wrap runs in `sandbox-exec`. Production: true. Tests that run
-  /// under an outer sandbox (where Seatbelt can't nest) pass false.
+  /// under an outer sandbox (where Seatbelt can't nest) pass false — that is
+  /// an explicit, labeled opt-out into the reduced-isolation path.
   let useSandbox: Bool
+  /// When `useSandbox` is true but the sandbox can't be applied (`sandbox-exec`
+  /// missing or the profile can't be written), whether to *silently* fall
+  /// back to reduced isolation. Defaults to **false: fail closed** — refuse
+  /// to run rather than run untrusted code without the promised network/write
+  /// confinement (security review, 2026-06-15). A caller that genuinely wants
+  /// the documented fallback must opt in explicitly (and surface it).
+  let allowReducedFallback: Bool
+  /// Whether the Seatbelt sandbox can be applied. Injectable so the
+  /// fail-closed path is testable without depending on the host.
+  let isSandboxAvailable: @Sendable () -> Bool
   let fileManager: FileManager
   let now: @Sendable () -> Date
 
@@ -56,6 +67,8 @@ struct SmokeRunner {
     processRunner: SandboxedProcessRunner = ProcessSandboxRunner(),
     interpreterLocator: @escaping @Sendable (String) -> URL? = SmokeRunner.locateOnPath,
     useSandbox: Bool = true,
+    allowReducedFallback: Bool = false,
+    isSandboxAvailable: @escaping @Sendable () -> Bool = { RunSandbox.isAvailable() },
     fileManager: FileManager = .default,
     now: @escaping @Sendable () -> Date = { Date() }
   ) {
@@ -63,6 +76,8 @@ struct SmokeRunner {
     self.processRunner = processRunner
     self.interpreterLocator = interpreterLocator
     self.useSandbox = useSandbox
+    self.allowReducedFallback = allowReducedFallback
+    self.isSandboxAvailable = isSandboxAvailable
     self.fileManager = fileManager
     self.now = now
   }
@@ -127,52 +142,108 @@ struct SmokeRunner {
       try fileManager.createDirectory(at: runDirectory, withIntermediateDirectories: true)
       try fileManager.copyItem(at: input.bundlePath, to: bundleCopy)
     } catch {
-      return SmokeRunResult(
-        runnability: .terminalRunnable,
-        command: resolved.display,
-        exitCode: nil,
-        stdout: "",
-        stderr: "Failed to stage the bundle for a sandboxed run: \(error.localizedDescription)",
-        durationMs: elapsedMs(since: clockStart),
-        timedOut: false,
-        outputArtifacts: [],
-        startedAt: startedAt,
-        isolation: .notRun,
-        origin: input.origin
+      return failed(
+        reason: "Failed to stage the bundle for a sandboxed run: \(error.localizedDescription)",
+        command: resolved.display, input: input, startedAt: startedAt, clockStart: clockStart
+      )
+    }
+
+    // Defense-in-depth: the resolver already rejected `..`/absolute/flag
+    // paths, but re-verify the entry resolves *inside* the staged copy after
+    // symlink resolution, so a symlinked entry can't point out of the bundle.
+    let entryRelative = resolved.arguments.first ?? ""
+    let entryURL = bundleCopy.appendingPathComponent(entryRelative).resolvingSymlinksInPath()
+    let bundleRoot = bundleCopy.resolvingSymlinksInPath()
+    guard entryURL.path == bundleRoot.path || entryURL.path.hasPrefix(bundleRoot.path + "/") else {
+      return failed(
+        reason: "Refusing to run: entrypoint resolves outside the module bundle.",
+        command: resolved.display, input: input, startedAt: startedAt, clockStart: clockStart
       )
     }
 
     let filesBefore = snapshotFiles(under: runDirectory)
 
-    // Build the command: sandbox-wrapped when possible, a labeled fallback
-    // otherwise. We never run unbounded — the timeout and scoped cwd apply
-    // in both shapes (ADR-0016).
+    // Build the command: sandbox-wrapped when possible. We never run
+    // unbounded — and we never *silently* drop the sandbox: if the sandbox
+    // was requested but can't be applied, we fail closed unless the caller
+    // explicitly opted into the reduced-isolation fallback (ADR-0016 +
+    // security review). The timeout and scoped cwd apply in every shape.
     let executable: URL
     let arguments: [String]
     let isolation: RunIsolation
-    if useSandbox, RunSandbox.isAvailable(fileManager: fileManager) {
-      let profile = RunSandbox.profile(runDirectory: runDirectory)
-      if let profilePath = try? RunSandbox.writeProfile(profile, into: runDirectory, fileManager: fileManager) {
-        let wrapped = RunSandbox.wrap(
-          interpreter: interpreter,
-          arguments: resolved.arguments,
-          profilePath: profilePath
+    if useSandbox {
+      guard isSandboxAvailable() else {
+        if allowReducedFallback {
+          executable = interpreter
+          arguments = resolved.arguments
+          isolation = .reducedFallback
+          emit(.started(command: resolved.display))
+          return await spawn(
+            executable: executable, arguments: arguments, bundleCopy: bundleCopy,
+            runDirectory: runDirectory, filesBefore: filesBefore, command: resolved.display,
+            isolation: isolation, input: input, startedAt: startedAt, clockStart: clockStart, emit: emit
+          )
+        }
+        return failed(
+          reason: "Refusing to run without isolation: sandbox-exec is unavailable on this machine.",
+          command: resolved.display, input: input, startedAt: startedAt, clockStart: clockStart
         )
+      }
+      let profile = RunSandbox.profile(runDirectory: runDirectory)
+      do {
+        let profilePath = try RunSandbox.writeProfile(profile, into: runDirectory, fileManager: fileManager)
+        let wrapped = RunSandbox.wrap(interpreter: interpreter, arguments: resolved.arguments, profilePath: profilePath)
         executable = wrapped.executable
         arguments = wrapped.arguments
         isolation = .sandboxExec
-      } else {
-        executable = interpreter
-        arguments = resolved.arguments
-        isolation = .reducedFallback
+      } catch {
+        if allowReducedFallback {
+          executable = interpreter
+          arguments = resolved.arguments
+          isolation = .reducedFallback
+          emit(.started(command: resolved.display))
+          return await spawn(
+            executable: executable, arguments: arguments, bundleCopy: bundleCopy,
+            runDirectory: runDirectory, filesBefore: filesBefore, command: resolved.display,
+            isolation: isolation, input: input, startedAt: startedAt, clockStart: clockStart, emit: emit
+          )
+        }
+        return failed(
+          reason: "Refusing to run without isolation: could not write the sandbox profile (\(error.localizedDescription)).",
+          command: resolved.display, input: input, startedAt: startedAt, clockStart: clockStart
+        )
       }
     } else {
+      // Explicit, labeled opt-out (dev/tests under an outer sandbox).
       executable = interpreter
       arguments = resolved.arguments
       isolation = .reducedFallback
     }
 
     emit(.started(command: resolved.display))
+    return await spawn(
+      executable: executable, arguments: arguments, bundleCopy: bundleCopy,
+      runDirectory: runDirectory, filesBefore: filesBefore, command: resolved.display,
+      isolation: isolation, input: input, startedAt: startedAt, clockStart: clockStart, emit: emit
+    )
+  }
+
+  /// Spawns the resolved command, accumulates output, computes artifacts, and
+  /// assembles the final result. Shared by the sandboxed and (labeled)
+  /// reduced-isolation shapes so there is exactly one executor path.
+  private func spawn(
+    executable: URL,
+    arguments: [String],
+    bundleCopy: URL,
+    runDirectory: URL,
+    filesBefore: Set<String>,
+    command: String,
+    isolation: RunIsolation,
+    input: RunInput,
+    startedAt: Date,
+    clockStart: ContinuousClock.Instant,
+    emit: @escaping @Sendable (RunStreamEvent) -> Void
+  ) async -> SmokeRunResult {
 
     let accumulator = OutputAccumulator()
     let outcome = await processRunner.run(
@@ -203,7 +274,7 @@ struct SmokeRunner {
 
     let result = SmokeRunResult(
       runnability: .terminalRunnable,
-      command: resolved.display,
+      command: command,
       exitCode: outcome.exitCode,
       stdout: accumulator.stdout(),
       stderr: stderr,
@@ -233,6 +304,32 @@ struct SmokeRunner {
       stdout: "",
       stderr: stderr,
       durationMs: 0,
+      timedOut: false,
+      outputArtifacts: [],
+      startedAt: startedAt,
+      isolation: .notRun,
+      origin: input.origin
+    )
+  }
+
+  /// A module classified runnable that we deliberately did **not** execute —
+  /// because staging failed, the entrypoint escaped the bundle, or the
+  /// sandbox couldn't be applied and fallback wasn't permitted. `isolation`
+  /// is `.notRun` and the reason is in `stderr`; `passed` stays false.
+  private func failed(
+    reason: String,
+    command: String,
+    input: RunInput,
+    startedAt: Date,
+    clockStart: ContinuousClock.Instant
+  ) -> SmokeRunResult {
+    SmokeRunResult(
+      runnability: .terminalRunnable,
+      command: command,
+      exitCode: nil,
+      stdout: "",
+      stderr: reason,
+      durationMs: elapsedMs(since: clockStart),
       timedOut: false,
       outputArtifacts: [],
       startedAt: startedAt,
@@ -391,10 +488,24 @@ struct ProcessSandboxRunner: SandboxedProcessRunner {
         return
       }
 
+      // Put the child in its own process group so a timeout can kill the
+      // *whole tree* (forked grandchildren — `subprocess`, workers — not just
+      // the direct child). Doing this from the parent races the child's exec,
+      // but `setpgid` succeeds while the child is still in our session; only
+      // when it returns 0 do we own a dedicated group safe to signal with a
+      // negative pid (security review, 2026-06-15).
+      let pid = process.processIdentifier
+      let ownsGroup = pid > 0 && setpgid(pid, pid) == 0
+
       timeoutBox.start(seconds: timeoutSeconds) { [weak process] in
         guard let process, process.isRunning else { return }
         timedOut.set()
-        process.terminate()
+        if ownsGroup {
+          // SIGKILL the entire group; -pid targets the child's group, never ours.
+          kill(-pid, SIGKILL)
+        } else {
+          process.terminate()
+        }
       }
     }
   }

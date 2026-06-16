@@ -44,8 +44,10 @@ enum RunnabilityClassifier {
   ]
 
   static func classify(_ input: RunInput) -> Runnability {
-    // No resolvable entrypoint → we genuinely can't tell how to run it.
-    guard input.entrypoints.contains(where: { !$0.path.isEmpty }) else {
+    // No *safe* resolvable entrypoint → we genuinely can't tell how to run
+    // it (an unsafe path — absolute, `..`, or a `-flag` — is refused, not
+    // guessed at).
+    guard input.entrypoints.contains(where: { EntrypointResolver.isSafeEntrypointPath($0.path) }) else {
       return .cannotDetermine
     }
 

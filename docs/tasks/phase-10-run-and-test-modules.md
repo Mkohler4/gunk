@@ -441,12 +441,15 @@ explicit doc + decisions, or structural work builds on the wrong look.)
 > (streaming + buffered core, throwaway bundle copy, scoped writes, no
 > inherited env, hard timeout). Tested in `SmokeRunnerTests.swift` (25 cases:
 > classification, command resolution, profile, fake-executor orchestration,
-> real-`/bin/sh` pass/fail/timeout/cwd). `swift build` + `swift test` green
-> (172 total, 0 failures). **No store writes, no UI.** Still needs Mark to
-> approve the ADR + run the security-review subagent before anything calls
-> the runner. **Note:** `sandbox-exec` cannot nest, so the live-sandbox path
-> only applies when gunk runs unsandboxed (the normal case); CI/agents that
-> run sandboxed exercise the pure logic + fallback.
+> real-`/bin/sh` pass/fail/timeout/cwd). `swift build` + `swift test` green.
+> **No store writes, no UI.** The **security-review subagent has run** and its
+> three medium findings are addressed (fail-closed when the sandbox can't be
+> applied — never a silent downgrade; entrypoint-path validation +
+> in-bundle containment; process-group teardown on timeout); see ADR-0016
+> §"Hardening from the security review." Still needs Mark to approve the ADR
+> before anything calls the runner. **Note:** `sandbox-exec` cannot nest, so
+> the live-sandbox path only applies when gunk runs unsandboxed (the normal
+> case); CI/agents that run sandboxed exercise the pure logic + fallback.
 
 ### Goal
 A reusable, **sandbox-bounded** capability to execute a module's entrypoint
