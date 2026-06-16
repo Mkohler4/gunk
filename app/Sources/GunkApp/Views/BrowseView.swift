@@ -45,15 +45,21 @@ struct BrowseView: View {
   /// is wired up, the Agent-ready treatment flips to needs-setup copy that
   /// opens the one-click setup sheet (ux §4.5, D8; T-8.10).
   var mcpNeedsSetup = false
-  var openBundle: (URL) -> Void = { NSWorkspace.shared.open($0) }
   var onShowSettings: () -> Void = {}
   /// Opens the shell-owned MCP setup sheet (T-8.10) — every needs-setup
   /// affordance routes here instead of Settings.
   var onShowMCPSetup: () -> Void = {}
   /// Summons the shell-owned run inspector (T-8.6) from this view's entry
-  /// points: a source row's "View runs" and the module detail's "Last run".
+  /// points: a source row's "View runs".
   var onShowRuns: (RunInspectorContext) -> Void = { _ in }
+  /// Navigates to the full module page (T-10.4): selecting a module pushes the
+  /// shell's `module(gunkId)` route instead of opening the interim inline pane.
+  var onOpenModule: (Int64) -> Void = { _ in }
 
+  /// The grid's selection ring. Selection no longer drives an inline detail
+  /// pane (T-10.4 navigates to a page) — it survives navigation so that on
+  /// breadcrumb-back the last-opened cell stays highlighted (the CP-F "keep
+  /// grid scroll + selection" decision).
   @State private var selectedGunkId: Int64?
   @State private var showSourcesPanel = false
 
@@ -75,16 +81,10 @@ struct BrowseView: View {
   /// How long a freshly created module keeps its highlight (ux §4.4).
   private static let arrivalHighlightLifetime: Duration = .seconds(2)
 
-  /// Pane contract from ux §3.2/§4.6 (D10), relaxed for the 232pt mockup
-  /// sidebar: browser ≥ 400, detail 300–440, and both must fit at the 960pt
-  /// window minimum (960 − 232 = 728 ≥ 400 + 300 + spacing). The detail
-  /// width is computed explicitly because HStack's own negotiation over two
-  /// flexible panes can overshoot the proposal (it sizes the bounded detail
-  /// pane before the browser clamps to its minimum), which cropped both
-  /// edges at the minimum window size.
+  /// Browser pane minimum from ux §3.2/§4.6 (D10): the grid never drops below
+  /// 400pt. With the inline detail pane retired (T-10.4) the grid owns the
+  /// whole detail area, so the old detail-pane width band is gone.
   private static let browserMinWidth: CGFloat = 400
-  private static let detailMinWidth: CGFloat = 300
-  private static let detailMaxWidth: CGFloat = 440
 
   /// Grid metrics from the toolbox-v2 mockup: `--card: 262px` min cell width,
   /// up to 3 columns. At the 960pt window minimum the browser pane is ~440pt,
@@ -99,34 +99,12 @@ struct BrowseView: View {
 
   var body: some View {
     GeometryReader { proxy in
-      // The resting "Select a module" placeholder is gone (T-8.3b follow-up
-      // 1): with nothing selected the grid owns the full width. The inline
-      // pane only appears for a selected module, and remains interim until
-      // the module-detail surface is re-decided (module-run-v1 proposes a
-      // full page; sheet-vs-page is Mark's call, Phase 10).
-      let detail = selectedGunkId.flatMap { model.detail(for: $0) }
-      let detailWidth = max(
-        Self.detailMinWidth,
-        min(
-          Self.detailMaxWidth,
-          proxy.size.width - Self.browserMinWidth - BrandMetrics.Spacing.md
-        )
-      )
-      let browserWidth = detail == nil
-        ? proxy.size.width
-        : proxy.size.width - detailWidth - BrandMetrics.Spacing.md
-
-      HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
-        browserPane(width: browserWidth)
-          .frame(minWidth: Self.browserMinWidth, maxWidth: .infinity, maxHeight: .infinity)
-
-        if let detail {
-          detailPane(for: detail)
-            .frame(width: detailWidth)
-            .frame(maxHeight: .infinity)
-        }
-      }
-      .frame(maxWidth: .infinity, maxHeight: .infinity)
+      // The interim inline detail pane is gone (T-10.4): selecting a module
+      // navigates to a full breadcrumb page instead, so the grid always owns
+      // the full width. The selection ring survives navigation (see
+      // `selectedGunkId`) so back-navigation lands on the highlighted cell.
+      browserPane(width: proxy.size.width)
+        .frame(minWidth: Self.browserMinWidth, maxWidth: .infinity, maxHeight: .infinity)
     }
     .onAppear {
       // D12: run-completion freshness is handled by the shell, which calls
@@ -684,7 +662,7 @@ struct BrowseView: View {
       isHero: slot.isHero,
       isSelected: selectedGunkId == slot.item.id,
       isArrived: arrivedGunkIds.contains(slot.item.id),
-      onSelect: { selectedGunkId = slot.item.id }
+      onSelect: { openModule(slot.item.id) }
     )
   }
 
@@ -725,8 +703,16 @@ struct BrowseView: View {
       isMostUsed: isMostUsed,
       isSelected: selectedGunkId == item.id,
       isArrived: arrivedGunkIds.contains(item.id),
-      onSelect: { selectedGunkId = item.id }
+      onSelect: { openModule(item.id) }
     )
+  }
+
+  /// Selecting a module sets the grid's selection ring and navigates to the
+  /// full module page (T-10.4). Selection is set before navigation so the cell
+  /// is already highlighted when the user comes back.
+  private func openModule(_ gunkId: Int64) {
+    selectedGunkId = gunkId
+    onOpenModule(gunkId)
   }
 
   /// One trust verdict per cell: extracted modules are agent-ready, the
@@ -744,46 +730,13 @@ struct BrowseView: View {
     return .notInToolbox
   }
 
-  // MARK: Detail
-
-  /// Interim presentation only: the inline right pane goes away when the
-  /// module-detail surface is re-decided (module-run-v1 proposes a full
-  /// page, Phase 10). Detail *functionality* (trust readout, files, bundle,
-  /// actions) survives wherever it lands.
-  private func detailPane(for detail: BrowseModuleDetail) -> some View {
-    ModuleDetailView(
-      detail: detail,
-      // Same membership rule as `BrowseModel.approvalQueue` (and therefore
-      // the sidebar badge), so the review block can never disagree with
-      // either.
-      needsApproval: model.approvalFilter(for: detail.item) == .needsApproval,
-      approvalThreshold: model.confidenceThreshold,
-      mcpNeedsSetup: mcpNeedsSetup,
-      openBundle: openBundle,
-      onShowMCPSetup: onShowMCPSetup,
-      onApprove: {
-        // Approve feedback (T-8.4): the Agent-ready line transitions to its
-        // success state in place; `settle` gives the landing overshoot.
-        withAnimation(BrandMotion.settle) {
-          model.approve(gunkId: detail.item.gunk.id)
-        }
-      },
-      onReject: { model.reject(gunkId: detail.item.gunk.id) },
-      onRerun: { model.reclassify(sourceId: detail.item.source.id) },
-      onDelete: { model.delete(gunkId: detail.item.gunk.id) },
-      onShowRuns: { onShowRuns(.source(detail.item.source.id)) }
-    )
-  }
-
   // MARK: Selection
 
   /// ux §3.2: filter changes never steal or re-assign the selection. The
-  /// selection survives the active scope hiding its cell (T-8.4: approving a
-  /// queued module under the needs-approval scope must keep the detail open
-  /// so its post-approve feedback stays visible — the cell never silently
-  /// vanishes from under the user). Selection clears only when the module no
-  /// longer exists (deleted or rejected), collapsing the inline pane back to
-  /// the full-width grid.
+  /// selection ring survives the active scope hiding its cell and survives
+  /// navigation to the module page (T-10.4), so breadcrumb-back lands on the
+  /// highlighted cell. Selection clears only when the module no longer exists
+  /// (deleted or rejected).
   private func synchronizeSelection() {
     if let selectedGunkId,
        !model.loadedGunkIds.contains(selectedGunkId) {
@@ -954,406 +907,6 @@ private struct LibraryIntakeZone: View {
   }
 }
 
-// MARK: - Module detail
-
-private struct ModuleDetailView: View {
-  let detail: BrowseModuleDetail
-  /// Queue membership by `BrowseModel`'s rule — drives the review block.
-  let needsApproval: Bool
-  /// The auto-accept gate the queue rule computes from
-  /// (`BrowseModel.confidenceThreshold`), so the threshold copy below and
-  /// the queue behavior can never disagree.
-  let approvalThreshold: Double
-  let mcpNeedsSetup: Bool
-  let openBundle: (URL) -> Void
-  let onShowMCPSetup: () -> Void
-  let onApprove: () -> Void
-  let onReject: () -> Void
-  let onRerun: () -> Void
-  let onDelete: () -> Void
-  /// Opens the run inspector at this module's source (T-8.6). Deliberately
-  /// a quiet text affordance: the module-run-v1 full page will own run
-  /// provenance properly (Phase 10) — this is the interim door, not a
-  /// destination treatment.
-  let onShowRuns: () -> Void
-
-  @State private var showRejectConfirmation = false
-
-  var body: some View {
-    ScrollView {
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-        header
-        agentReadyLine
-        reviewSection
-        actionsRow
-        runabilitySection
-        bundleSection
-        filesSection
-        sharedDependenciesSection
-        entrypointsSection
-        verificationDetailsSection
-      }
-      .frame(maxWidth: .infinity, alignment: .topLeading)
-      .padding(.bottom, BrandMetrics.Spacing.sm)
-      // Approve feedback in place: the review block leaves and the
-      // Agent-ready line lands its success state on the same surface.
-      .animation(BrandMotion.settle, value: needsApproval)
-    }
-  }
-
-  // MARK: Review (T-8.4 — approval folded into the detail)
-
-  /// Approve/reject for a queued module, above the actions row. Interim
-  /// home: moves with the rest of this view when module detail is
-  /// re-decided (module-run-v1, Phase 10).
-  @ViewBuilder
-  private var reviewSection: some View {
-    if needsApproval {
-      DetailSection(title: "Needs approval", systemImage: "exclamationmark.triangle") {
-        Text(confidenceContextLine)
-          .font(BrandTypography.callout)
-          .foregroundStyle(BrandColors.textPrimary)
-
-        Text("Approving extracts the module and makes it available to your agent through MCP.")
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-
-        HStack(spacing: BrandMetrics.Spacing.sm) {
-          Button(action: onApprove) {
-            Label("Approve", systemImage: "checkmark.circle")
-          }
-          .buttonStyle(.brandPrimary)
-          .help("Approve and extract \(detail.item.gunk.name)")
-
-          Button(role: .destructive) {
-            showRejectConfirmation = true
-          } label: {
-            Label("Reject", systemImage: "xmark.circle")
-          }
-          .buttonStyle(.brandDestructive)
-          .help("Reject and permanently delete \(detail.item.gunk.name)")
-          .confirmationDialog(
-            "Reject \(detail.item.gunk.name)?",
-            isPresented: $showRejectConfirmation,
-            titleVisibility: .visible
-          ) {
-            Button("Reject and delete", role: .destructive, action: onReject)
-            Button("Cancel", role: .cancel) {}
-          } message: {
-            Text("Rejecting permanently deletes this module from your library. This cannot be undone.")
-          }
-        }
-        .padding(.top, BrandMetrics.Spacing.xs)
-      }
-      .transition(.opacity)
-    }
-  }
-
-  /// "62% — below the 70% auto-accept threshold": confidence shown with the
-  /// context of the gate that actually queued it.
-  private var confidenceContextLine: String {
-    let confidence = (detail.item.gunk.confidence ?? 0)
-      .formatted(.percent.precision(.fractionLength(0)))
-    let threshold = approvalThreshold
-      .formatted(.percent.precision(.fractionLength(0)))
-    return "\(confidence) — below the \(threshold) auto-accept threshold"
-  }
-
-  private var header: some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-      Text(detail.item.gunk.name)
-        .font(BrandTypography.headline)
-        .foregroundStyle(BrandColors.textPrimary)
-        .lineLimit(2)
-
-      if let purpose = detail.item.gunk.purpose {
-        Text(purpose)
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-
-      HStack(spacing: BrandMetrics.Spacing.xs) {
-        TagChip(detail.item.source.name)
-        TagChip(detail.item.gunk.language ?? "Unknown language")
-        TagChip(
-          (detail.item.gunk.confidence ?? 0).formatted(.percent.precision(.fractionLength(0)))
-        )
-      }
-      .padding(.top, BrandMetrics.Spacing.xs)
-
-      Button(action: onShowRuns) {
-        HStack(spacing: BrandMetrics.Spacing.xs) {
-          Image(systemName: "clock.arrow.circlepath")
-          Text("Last run")
-          Image(systemName: "chevron.forward")
-        }
-        .font(BrandTypography.caption)
-        .foregroundStyle(BrandColors.textSecondary)
-      }
-      .buttonStyle(.plain)
-      .help("Inspect the latest extraction run for \(detail.item.source.name)")
-    }
-  }
-
-  /// The MCP payoff truth line (ux §4.5, D8), derived from `extractedAt` —
-  /// no new store state. The needs-setup variant opens the one-click setup
-  /// sheet (T-8.10) — no needs-setup affordance routes to Settings anymore.
-  @ViewBuilder
-  private var agentReadyLine: some View {
-    if mcpNeedsSetup {
-      Button(action: onShowMCPSetup) {
-        HStack(spacing: BrandMetrics.Spacing.sm) {
-          StatusBadge(
-            "MCP not set up",
-            variant: .warning,
-            systemImage: "exclamationmark.triangle"
-          )
-          Text("Connect your agent")
-            .font(BrandTypography.caption)
-            .foregroundStyle(BrandColors.textSecondary)
-        }
-      }
-      .buttonStyle(.plain)
-      .help("Connect your agent through MCP")
-    } else if detail.item.gunk.extractedAt != nil {
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        StatusBadge("Agent-ready", variant: .success, systemImage: "sparkles")
-        Text("Available to your agent through MCP.")
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-    } else {
-      HStack(spacing: BrandMetrics.Spacing.sm) {
-        StatusBadge("Not agent-visible yet", variant: .neutral, systemImage: "circle.dashed")
-        Text("Approve this module to extract it for agents.")
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-    }
-  }
-
-  /// Re-run and delete live here exclusively — destructive and heavyweight
-  /// actions get the deliberate surface, not the row (ux §3.2).
-  private var actionsRow: some View {
-    HStack(spacing: BrandMetrics.Spacing.sm) {
-      Button {
-        onRerun()
-      } label: {
-        Label("Re-run source", systemImage: "arrow.triangle.2.circlepath")
-      }
-      .buttonStyle(.brandSecondary)
-      .help("Re-run decomposition for \(detail.item.source.name)")
-
-      Button(role: .destructive, action: onDelete) {
-        Label("Delete", systemImage: "trash")
-      }
-      .buttonStyle(.brandDestructive)
-      .help("Delete \(detail.item.gunk.name)")
-    }
-  }
-
-  private var runabilitySection: some View {
-    DetailSection(title: "Runability", systemImage: "checkmark.seal") {
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-        statusRow(title: "Self-contained for AI reuse", status: selfContainmentStatus)
-        Text("Checks whether module-owned imports stay inside the bundle and claimed entrypoints are present.")
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-        statusRow(title: "Standalone runnable project", status: buildStatus)
-        Text("Separate from self-containment: many gunks are reusable feature or library slices that still need a host project, installed packages, or runtime configuration.")
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
-      }
-    }
-  }
-
-  private var bundleSection: some View {
-    DetailSection(title: "Bundle path", systemImage: "folder") {
-      if let bundlePath = detail.bundlePath {
-        Text(bundlePath)
-          .font(BrandTypography.mono)
-          .foregroundStyle(BrandColors.textSecondary)
-          .textSelection(.enabled)
-          .lineLimit(3)
-          .truncationMode(.middle)
-
-        Button {
-          openBundle(URL(fileURLWithPath: bundlePath))
-        } label: {
-          Label("Open in Finder", systemImage: "folder")
-        }
-        .buttonStyle(.brandSecondary)
-      } else {
-        emptyText("No extracted bundle path recorded.")
-      }
-    }
-  }
-
-  private var filesSection: some View {
-    DetailSection(title: "Owned files", systemImage: "doc.text") {
-      if detail.ownedFiles.isEmpty {
-        emptyText("No owned files recorded.")
-      } else {
-        pathList(detail.ownedFiles)
-      }
-    }
-  }
-
-  private var sharedDependenciesSection: some View {
-    DetailSection(title: "Shared dependencies", systemImage: "link") {
-      if detail.sharedDependencies.isEmpty {
-        emptyText("No shared dependencies recorded.")
-      } else {
-        pathList(detail.sharedDependencies)
-      }
-    }
-  }
-
-  private var entrypointsSection: some View {
-    DetailSection(title: "Entrypoints", systemImage: "arrow.right.circle") {
-      if detail.entrypoints.isEmpty {
-        emptyText("No confident entrypoints recorded.")
-      } else {
-        pathList(detail.entrypoints.map(\.label))
-      }
-    }
-  }
-
-  @ViewBuilder
-  private var verificationDetailsSection: some View {
-    if let selfContainment = detail.selfContainment, !selfContainment.passed {
-      DetailSection(title: "Self-containment details", systemImage: "exclamationmark.triangle") {
-        if !selfContainment.danglingImports.isEmpty {
-          Text("Dangling imports")
-            .font(BrandTypography.caption.weight(.semibold))
-            .foregroundStyle(BrandColors.textPrimary)
-          pathList(selfContainment.danglingImports.map(danglingImportLabel))
-        }
-
-        if !selfContainment.missingEntrypoints.isEmpty {
-          Text("Missing entrypoints")
-            .font(BrandTypography.caption.weight(.semibold))
-            .foregroundStyle(BrandColors.textPrimary)
-          pathList(selfContainment.missingEntrypoints.map(missingEntrypointLabel))
-        }
-      }
-    }
-
-    if let buildVerification = detail.buildVerification {
-      DetailSection(title: "Build verification", systemImage: "hammer") {
-        if let command = buildVerification.command {
-          Text(command)
-            .font(BrandTypography.mono)
-            .foregroundStyle(BrandColors.textSecondary)
-            .textSelection(.enabled)
-        }
-
-        Text(buildVerification.log)
-          .font(BrandTypography.mono)
-          .foregroundStyle(BrandColors.textSecondary)
-          .textSelection(.enabled)
-          .lineLimit(8)
-      }
-    }
-  }
-
-  private func statusRow(title: String, status: DetailStatus) -> some View {
-    HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.sm) {
-      Text(title)
-        .font(BrandTypography.callout)
-        .foregroundStyle(BrandColors.textPrimary)
-      Spacer(minLength: BrandMetrics.Spacing.sm)
-      StatusBadge(status.label, variant: status.variant, systemImage: status.systemImage)
-    }
-  }
-
-  private func pathList(_ values: [String]) -> some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-      ForEach(values, id: \.self) { value in
-        Text(value)
-          .font(BrandTypography.mono)
-          .foregroundStyle(BrandColors.textSecondary)
-          .textSelection(.enabled)
-          .lineLimit(2)
-          .truncationMode(.middle)
-      }
-    }
-  }
-
-  private func emptyText(_ text: String) -> some View {
-    Text(text)
-      .font(BrandTypography.caption)
-      .foregroundStyle(BrandColors.textTertiary)
-  }
-
-  private func danglingImportLabel(_ importRecord: RunTrace.DanglingImport) -> String {
-    let target = importRecord.resolvedTarget ?? importRecord.moduleSpecifier ?? "unknown target"
-    return "\(importRecord.fromPath) -> \(target) (\(importRecord.reason))"
-  }
-
-  private func missingEntrypointLabel(_ entrypoint: RunTrace.MissingEntrypoint) -> String {
-    if let symbol = entrypoint.symbol {
-      return "\(entrypoint.path) · \(symbol) (\(entrypoint.reason))"
-    }
-
-    return "\(entrypoint.path) (\(entrypoint.reason))"
-  }
-
-  private var selfContainmentStatus: DetailStatus {
-    guard let selfContainment = detail.selfContainment else {
-      return DetailStatus(label: "Not verified", variant: .neutral, systemImage: "questionmark.circle")
-    }
-
-    if selfContainment.passed {
-      return DetailStatus(label: "Passed", variant: .success, systemImage: "checkmark.circle")
-    }
-
-    return DetailStatus(label: "Needs attention", variant: .warning, systemImage: "exclamationmark.triangle")
-  }
-
-  private var buildStatus: DetailStatus {
-    guard let buildVerification = detail.buildVerification else {
-      return DetailStatus(label: "Not verified", variant: .neutral, systemImage: "questionmark.circle")
-    }
-
-    if buildVerification.skipped {
-      return DetailStatus(label: "Skipped", variant: .neutral, systemImage: "minus.circle")
-    }
-
-    if buildVerification.built {
-      return DetailStatus(label: "Passed", variant: .success, systemImage: "checkmark.circle")
-    }
-
-    return DetailStatus(label: "Failed", variant: .danger, systemImage: "xmark.circle")
-  }
-}
-
-private struct DetailStatus {
-  let label: String
-  let variant: StatusBadge.Variant
-  let systemImage: String
-}
-
-/// A glass detail card with a branded section header.
-private struct DetailSection<Content: View>: View {
-  let title: String
-  let systemImage: String
-  @ViewBuilder let content: Content
-
-  var body: some View {
-    GlassCard(
-      padding: BrandMetrics.Spacing.md,
-      cornerRadius: BrandMetrics.Radius.medium,
-      elevated: false
-    ) {
-      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-        SectionHeader(title, systemImage: systemImage)
-        content
-      }
-      .frame(maxWidth: .infinity, alignment: .leading)
-    }
-  }
-}
+// `ModuleDetailView`, `DetailStatus`, and `DetailSection` moved to
+// `ModulePageView.swift` (T-10.4): module detail is a full breadcrumb page now,
+// not an inline pane.

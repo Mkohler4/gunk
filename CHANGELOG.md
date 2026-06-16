@@ -37,6 +37,25 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   clipped controls, no layout shifts.
 
 ### Added
+- `gunk.app` full module page + breadcrumb navigation (T-10.4, the CP-F page
+  shell). Clicking a module now **navigates** to a full page (`ModulePageView`)
+  under a glass breadcrumb (`‹ Library › <source> › <module>`) instead of
+  opening the interim inline `ModuleDetailView` pane — the inline pane is gone
+  and the grid always owns full width. The page lifts every former detail
+  capability onto a solid-graphite spine: the trust verdict state line, title +
+  purpose, the provenance line (`From <source> · <language> · Extracted with
+  <model> · <provider> · view run →`, where `view run →` reuses the existing
+  extraction-run inspector scoped to the source), a 3-up trust readout
+  (Confidence / Self-contained / Build), the approve/reject review block, owned
+  files / shared deps / entrypoints, the bundle path, the self-containment +
+  build-verification details, and a footer actions row (Open in Finder / Re-run
+  source / Delete, destructive right-aligned and confirmed). Navigation is a
+  typed `module(gunkId)` route on the shell's `NavigationStack`; the grid lives
+  at the stack root so breadcrumb-back preserves its scroll + selection (the
+  CP-F decision). The breadcrumb gains a compact trailing trust chip once the
+  page is scrolled. A `GUNK_DEBUG_MODULE_PAGE=first|<id>` screenshot hook pushes
+  the page at launch. The proof/run console + coverage ledger (module-run-v2)
+  land on this shell in T-10.5+. Build + tests green (189 tests).
 - `gunk.app` proof-loop storage (T-10.3, CP-H). Schema **v6** adds two
   additive, nullable tables that make smoke-run proof durable (it survives
   `RunTrace` pruning, unlike today's trace-JSON build receipt): `smoke_runs`
