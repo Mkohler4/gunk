@@ -31,16 +31,9 @@ struct ModulePageView: View {
 
   @State private var showRejectConfirmation = false
   @State private var showDeleteConfirmation = false
-  /// The breadcrumb's trailing trust chip appears only once the page is
-  /// scrolled (per the second reference PNG) — at rest the verdict reads on
-  /// the page state line instead, so the two never shout the same thing.
-  @State private var showsStateChip = false
 
-  /// Content stays in a readable left column rather than stretching the full
-  /// (now sidebar-free) window width; the breadcrumb bar spans the full width.
-  private static let contentMaxWidth: CGFloat = 900
-  /// How far the page must scroll before the breadcrumb gains its trust chip.
-  private static let chipRevealThreshold: CGFloat = 24
+  /// Fixed width of the coverage-ledger column; the run console takes the rest.
+  private static let ledgerWidth: CGFloat = 300
 
   var body: some View {
     Group {
@@ -61,26 +54,20 @@ struct ModulePageView: View {
   // MARK: Page
 
   private func page(for detail: BrowseModuleDetail) -> some View {
-    let verdict = verdict(for: detail)
-
     return ScrollView {
       VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
-        stateLine(verdict)
-        titleAndPurpose(detail)
-        provenanceLine(detail)
+        titleRow(detail)
         agentReadyLine(detail)
         reviewSection(detail)
-        trustReadout(detail)
-        callItSection(detail)
-        runConsoleSection(detail)
-        bundleSection(detail)
-        filesSection(detail)
-        requirementsSection(detail)
-        entrypointsSection(detail)
-        verificationDetailsSection(detail)
+        if detail.bundlePath != nil {
+          stage(detail)
+        }
         footerActions(detail)
+        advancedFooter(detail)
       }
-      .frame(maxWidth: Self.contentMaxWidth, alignment: .leading)
+      // Fill the window: the page stretches to whatever width the resized
+      // window gives it (the run console grows, the ledger keeps its rail), so
+      // resizing actually reflows the page instead of leaving a dead margin.
       .frame(maxWidth: .infinity, alignment: .topLeading)
       .padding(.horizontal, BrandMetrics.Spacing.lg)
       .padding(.bottom, BrandMetrics.Spacing.xl)
@@ -90,54 +77,109 @@ struct ModulePageView: View {
       // the inline pane unchanged).
       .animation(BrandMotion.settle, value: needsApproval(detail))
     }
-    .onScrollGeometryChange(for: Bool.self) { geometry in
-      geometry.contentOffset.y > Self.chipRevealThreshold
-    } action: { _, isScrolled in
-      withAnimation(BrandMotion.quick) {
-        showsStateChip = isScrolled
-      }
-    }
     .safeAreaInset(edge: .top, spacing: 0) {
+      // Full-bleed: the header is a glass strip fused to the top edge, not a
+      // floating bordered card. Its own content padding aligns the crumb with
+      // the page body; scrolled content reads through the glass beneath it.
       ModulePageBreadcrumb(
         sourceName: detail.item.source.name,
         moduleName: detail.item.gunk.name,
-        verdict: verdict,
-        showsStateChip: showsStateChip,
+        readyToConnect: CoverageLedgerView.isReadyToConnect(
+          model: model,
+          gunkId: detail.item.gunk.id
+        ),
         onBack: onBack
       )
-      .padding(.horizontal, BrandMetrics.Spacing.lg)
-      .padding(.top, BrandMetrics.Spacing.md)
-      .padding(.bottom, BrandMetrics.Spacing.sm)
     }
   }
 
-  // MARK: State line + title
+  // MARK: Title row (slim — does not compete with the console)
 
-  /// The module-run-v1 top state line: the trust verdict in its color, plus
-  /// `· ★ Golden` when a golden example is pinned. Golden state is net-new and
-  /// arrives with the proof loop (T-10.9+), so the marker stays dormant until
-  /// then — the shell is ready for it.
-  private func stateLine(_ verdict: ModuleCellState) -> some View {
-    HStack(spacing: BrandMetrics.Spacing.xs) {
-      Text(verdict.label)
-        .font(BrandTypography.callout.weight(.semibold))
-        .foregroundStyle(verdict.color)
-    }
-    .accessibilityLabel("Status: \(verdict.label)")
-  }
+  /// The module-run-v2 slim title row: name + purpose on the left, a quiet
+  /// `<language> capability` badge on the right. The trust verdict lives on the
+  /// breadcrumb chip (and the ledger sign-off), so the page top no longer
+  /// repeats it as a separate state line.
+  private func titleRow(_ detail: BrowseModuleDetail) -> some View {
+    HStack(alignment: .bottom, spacing: BrandMetrics.Spacing.md) {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        Text(detail.item.gunk.name)
+          .font(BrandTypography.title)
+          .foregroundStyle(BrandColors.textPrimary)
+          .lineLimit(2)
 
-  private func titleAndPurpose(_ detail: BrowseModuleDetail) -> some View {
-    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-      Text(detail.item.gunk.name)
-        .font(BrandTypography.title)
-        .foregroundStyle(BrandColors.textPrimary)
-        .lineLimit(3)
-
-      if let purpose = detail.item.gunk.purpose {
-        Text(purpose)
-          .font(BrandTypography.body)
-          .foregroundStyle(BrandColors.textSecondary)
+        if let purpose = detail.item.gunk.purpose {
+          Text(purpose)
+            .font(BrandTypography.body)
+            .foregroundStyle(BrandColors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
       }
+
+      Spacer(minLength: 0)
+
+      if let language = detail.item.gunk.language {
+        HStack(spacing: BrandMetrics.Spacing.xs) {
+          Text(language)
+            .foregroundStyle(BrandColors.Provider.openAI)
+          Text("capability")
+            .foregroundStyle(BrandColors.textTertiary)
+        }
+        .font(BrandTypography.caption.weight(.semibold))
+        .fixedSize()
+      }
+    }
+  }
+
+  // MARK: The stage (run console hero + coverage ledger)
+
+  /// The page hero: the run console (module-run-v2, `RunConsoleStageView`) takes
+  /// the lead column, the coverage ledger the trailing rail. One object, one
+  /// focus — the developer runs, judges, and reads coverage without leaving it.
+  private func stage(_ detail: BrowseModuleDetail) -> some View {
+    HStack(alignment: .top, spacing: BrandMetrics.Spacing.xl) {
+      RunConsoleStageView(model: model, detail: detail)
+        .id(detail.item.gunk.id)
+        .frame(maxWidth: .infinity, alignment: .top)
+
+      CoverageLedgerView(model: model, gunkId: detail.item.gunk.id)
+        .frame(width: Self.ledgerWidth, alignment: .top)
+    }
+  }
+
+  // MARK: Advanced footer (module details, fully demoted)
+
+  /// Everything that used to crowd the page — provenance, the trust readout,
+  /// requirements, the "Call it" snippet, files, entrypoints, bundle path, and
+  /// the verification details — collapses into one quiet disclosure
+  /// (module-run-v2). Closed by default; the proof loop is the spine, the
+  /// details are there *if you want them*.
+  private func advancedFooter(_ detail: BrowseModuleDetail) -> some View {
+    DisclosureGroup {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+        provenanceLine(detail)
+        callItSection(detail)
+        trustReadout(detail)
+        requirementsSection(detail)
+        filesSection(detail)
+        entrypointsSection(detail)
+        bundleSection(detail)
+        verificationDetailsSection(detail)
+      }
+      .padding(.top, BrandMetrics.Spacing.md)
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "gearshape")
+          .foregroundStyle(BrandColors.textTertiary)
+        Text("Advanced — provenance, requirements, files & how it was extracted")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textTertiary)
+        Spacer(minLength: 0)
+      }
+    }
+    .tint(BrandColors.textTertiary)
+    .padding(.top, BrandMetrics.Spacing.sm)
+    .overlay(alignment: .top) {
+      Rectangle().fill(BrandColors.separator).frame(height: 1)
     }
   }
 
@@ -283,20 +325,6 @@ struct ModulePageView: View {
     let snippets = model.callItSnippets(for: detail)
     if !snippets.isEmpty {
       CallItView(snippets: snippets)
-    }
-  }
-
-  // MARK: Try it (T-10.7 — smoke run console)
-
-  /// The smoke-run console: the developer's "Try it" door (T-10.7). Shown only
-  /// once a module has an extracted bundle to stage; until then there is
-  /// nothing to run. This is the *smoke run* — it never merges with the
-  /// `view run →` extraction inspector (the two-surfaces rule).
-  @ViewBuilder
-  private func runConsoleSection(_ detail: BrowseModuleDetail) -> some View {
-    if detail.bundlePath != nil {
-      RunConsoleView(model: model, detail: detail)
-        .id(detail.item.gunk.id)
     }
   }
 
@@ -632,49 +660,85 @@ struct ModulePageView: View {
 
 // MARK: - Breadcrumb (the glass controls layer)
 
-/// The module page's breadcrumb bar — the floating glass controls layer over
-/// the solid graphite page: `‹ Library` back, then `<source> › <module>`. When
-/// the page is scrolled it gains a compact trailing trust chip (per the second
-/// reference PNG), so the verdict stays visible once the page state line has
-/// scrolled away.
+/// The module page's breadcrumb bar (module-run-v2 `.bar`) — a full-bleed glass
+/// header strip fused to the top of the page (no bordered box, no separating
+/// rule). A taller bar carrying the `‹ Library` back chip, the
+/// `<source> › <module>` trail, and an always-on trailing **bar state** —
+/// `Ready to connect` (green) once coverage earns it, `In review` (amber) until
+/// then — mirroring the design's `.bar-state`.
 private struct ModulePageBreadcrumb: View {
   let sourceName: String
   let moduleName: String
-  let verdict: ModuleCellState
-  let showsStateChip: Bool
+  /// Drives the trailing bar state (green/amber) — the coverage sign-off, not
+  /// the trust verdict, exactly as the v2 design's `.bar-state` reads.
+  let readyToConnect: Bool
   let onBack: () -> Void
+
+  /// The bar's content height, before padding — keeps the glass bar tall enough
+  /// to read as the design's 54px control strip rather than a thin link row.
+  private static let barContentHeight: CGFloat = 30
 
   var body: some View {
     HStack(spacing: BrandMetrics.Spacing.sm) {
-      Button(action: onBack) {
-        HStack(spacing: BrandMetrics.Spacing.xs) {
-          Image(systemName: "chevron.backward")
-          Text("Library")
-        }
-        .font(BrandTypography.callout.weight(.medium))
-        .foregroundStyle(BrandColors.accent)
-      }
-      .buttonStyle(.plain)
-      .help("Back to the Library")
-      .accessibilityLabel("Back to the Library")
+      backChip
 
       separator
-      crumb(sourceName, color: BrandColors.textSecondary)
+      crumb(sourceName, color: BrandColors.textTertiary, weight: .regular)
       separator
-      crumb(moduleName, color: BrandColors.textPrimary)
+      crumb(moduleName, color: BrandColors.textPrimary, weight: .semibold)
 
       Spacer(minLength: BrandMetrics.Spacing.sm)
 
-      if showsStateChip {
-        StatusBadge(verdict.label, variant: verdict.badgeVariant, systemImage: verdict.badgeSystemImage)
-          .transition(.opacity.combined(with: .move(edge: .trailing)))
-      }
+      barState
     }
-    .padding(.horizontal, BrandMetrics.Spacing.md)
-    .padding(.vertical, BrandMetrics.Spacing.sm)
+    .frame(minHeight: Self.barContentHeight)
+    .padding(.horizontal, BrandMetrics.Spacing.lg)
+    .padding(.vertical, BrandMetrics.Spacing.md)
     .frame(maxWidth: .infinity, alignment: .leading)
-    .brandGlass(cornerRadius: BrandMetrics.Radius.medium)
+    // No box, no separating rule: a borderless, shadowless glass strip (the
+    // "glass neomorphic" header) rather than a bordered card.
+    .headerGlass()
     .accessibilityElement(children: .contain)
+  }
+
+  /// The back affordance as a subtle pill chip (design `.back`): a quiet white
+  /// fill + hairline, white text — not an accent-green link.
+  private var backChip: some View {
+    Button(action: onBack) {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "chevron.backward")
+        Text("Library")
+      }
+      .font(BrandTypography.callout.weight(.semibold))
+      .foregroundStyle(BrandColors.textPrimary)
+      .padding(.horizontal, BrandMetrics.Spacing.md)
+      .padding(.vertical, BrandMetrics.Spacing.sm)
+      .background(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.small, style: .continuous)
+          .fill(Color.white.opacity(0.06))
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: BrandMetrics.Radius.small, style: .continuous)
+          .strokeBorder(Color.white.opacity(0.09))
+      )
+    }
+    .buttonStyle(.plain)
+    .help("Back to the Library")
+    .accessibilityLabel("Back to the Library")
+  }
+
+  /// The always-on trailing state: a colored dot + label (design `.bar-state`).
+  private var barState: some View {
+    let color = readyToConnect ? BrandColors.accent : BrandColors.warning
+    return HStack(spacing: BrandMetrics.Spacing.xs) {
+      Circle()
+        .fill(color)
+        .frame(width: 8, height: 8)
+      Text(readyToConnect ? "Ready to connect" : "In review")
+        .font(BrandTypography.callout.weight(.semibold))
+        .foregroundStyle(color)
+    }
+    .fixedSize()
   }
 
   private var separator: some View {
@@ -683,9 +747,9 @@ private struct ModulePageBreadcrumb: View {
       .foregroundStyle(BrandColors.textTertiary)
   }
 
-  private func crumb(_ text: String, color: Color) -> some View {
+  private func crumb(_ text: String, color: Color, weight: Font.Weight) -> some View {
     Text(text)
-      .font(BrandTypography.callout)
+      .font(BrandTypography.callout.weight(weight))
       .foregroundStyle(color)
       .lineLimit(1)
       .truncationMode(.middle)

@@ -59,6 +59,13 @@ final class MainWindowController: NSObject {
     let hostingController = NSHostingController(
       rootView: AppLaunchView(runtime: AppRuntime.shared)
     )
+    // Let SwiftUI drive *only* the minimum size from `AppLaunchView`'s
+    // `.frame(minWidth:minHeight:)`. `.minSize` enforces the floor while
+    // leaving the ceiling open, so the window stays freely resizable upward —
+    // the page's own dead-margin cap was the real "not resizable" bug, not this.
+    // The default `.preferredContentSize` would instead pin the window to the
+    // view's ideal size; an empty set drops the minimum entirely.
+    hostingController.sizingOptions = [.minSize]
     // Default first-launch frame per ux §4.6; the autosave name set in
     // `register` keeps the user's last size on subsequent launches.
     let window = NSWindow(
@@ -69,6 +76,13 @@ final class MainWindowController: NSObject {
     )
 
     window.contentViewController = hostingController
+    // Enforce the floor at the window level (AppKit, not SwiftUI); the ceiling
+    // is left at AppKit's default (unbounded) so the page resizes freely up to
+    // the display.
+    window.contentMinSize = NSSize(width: 960, height: 600)
+    // Enable native full-screen (the green button → fill the screen) and let
+    // the window zoom to the full visible frame.
+    window.collectionBehavior.insert(.fullScreenPrimary)
     window.center()
     register(window: window)
     hostedWindow = window

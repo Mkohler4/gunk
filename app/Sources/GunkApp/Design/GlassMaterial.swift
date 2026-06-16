@@ -92,6 +92,47 @@ extension View {
   ) -> some View {
     modifier(GlassMaterial(cornerRadius: cornerRadius, elevated: elevated))
   }
+
+  /// A full-bleed glass *header* strip — the soft, edge-to-edge counterpart to
+  /// `brandGlass`'s floating card. No rounded box, no stroke, no drop shadow,
+  /// and no separating hairline: just blurred brand glass fused to the top of
+  /// the page so scrolled content reads through it. This is the "glass
+  /// neomorphic" header treatment (vs. the old-school bordered bar).
+  func headerGlass() -> some View {
+    modifier(HeaderGlassMaterial())
+  }
+}
+
+/// See `View.headerGlass()`. Kept separate from `GlassMaterial` because a
+/// header has none of the card chrome (corner radius, border, sheen, shadow)
+/// — those are exactly the "box / separating line" the design rejects.
+private struct HeaderGlassMaterial: ViewModifier {
+  func body(content: Content) -> some View {
+    #if compiler(>=6.2)
+      if #available(macOS 26.0, *) {
+        content
+          .background(.clear)
+          .glassEffect(
+            .regular.tint(BrandColors.surfaceGlass.opacity(BrandMetrics.Glass.tintOpacity)),
+            in: .rect(cornerRadius: 0)
+          )
+      } else {
+        fallback(content: content)
+      }
+    #else
+      fallback(content: content)
+    #endif
+  }
+
+  private func fallback(content: Content) -> some View {
+    content.background {
+      ZStack {
+        Rectangle().fill(.ultraThinMaterial)
+        Rectangle().fill(BrandColors.surfaceGlass.opacity(BrandMetrics.Glass.tintOpacity))
+      }
+      .ignoresSafeArea()
+    }
+  }
 }
 
 #Preview("Glass material") {

@@ -47,6 +47,10 @@ final class RunConsoleModel {
   private(set) var lastRunWasSwapped = false
   /// A just-saved example's name, for the brief "Saved" confirmation.
   private(set) var savedExampleName: String?
+  /// Increments each time a run finishes (consent → run → done). The v2 run
+  /// console (`RunConsoleStageView`) observes this to transition into its
+  /// result + verdict state without polling the async run task.
+  private(set) var runsCompleted: Int = 0
 
   /// Dev-only screenshot override (see `applyDebugOverride`): forces the
   /// classification so the neutral "not runnable here" state can be staged.
@@ -250,6 +254,7 @@ final class RunConsoleModel {
       }
       self.runStartedAt = nil
       self.phase = .idle
+      self.runsCompleted += 1
     }
   }
 

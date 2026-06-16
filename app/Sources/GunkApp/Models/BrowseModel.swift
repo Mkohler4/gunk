@@ -684,6 +684,14 @@ final class BrowseModel {
     }
   }
 
+  /// The saved examples for a module — the coverage ledger's fixture list
+  /// (T-10.10 owns the full re-run UI; this read powers the v2 ledger's
+  /// passing-checks / failing / known-limits sections). Returns `[]` on a store
+  /// read failure rather than surfacing an error for a passive readout.
+  func examples(for gunkId: Int64) -> [ModuleExample] {
+    (try? store.listExamples(gunkId: gunkId)) ?? []
+  }
+
   private func loadItems() throws -> [BrowseItem] {
     let sourcesById = Dictionary(uniqueKeysWithValues: try store.listSources().map { ($0.id, $0) })
 
