@@ -9,6 +9,9 @@ struct ManifestInput: Equatable, Sendable {
   let license: DetectedLicense
   let redactions: [Redaction]
   let extractedAt: Date
+  /// Portability readout persisted into `gunk.yml` (T-10.6). Defaults to empty
+  /// so callers that do not derive requirements still write a well-formed block.
+  var requirements: ModuleRequirements = .empty
 }
 
 struct ManifestArtifact: Equatable, Sendable {
@@ -62,6 +65,10 @@ final class ManifestWriter {
     lines.append("deps:")
     lines.append("  package_managers: []")
     lines.append("  packages: []")
+    lines.append("requirements:")
+    lines.append("  runtime: \(yaml(input.requirements.runtime))")
+    appendIndentedList(input.requirements.packages, key: "packages", indent: "  ", to: &lines)
+    appendIndentedList(input.requirements.env, key: "env", indent: "  ", to: &lines)
     if entrypoints.isEmpty {
       lines.append("entrypoints: []")
     } else {
@@ -142,6 +149,16 @@ final class ManifestWriter {
 
     lines.append("\(key):")
     lines.append(contentsOf: values.map { "  - \(yaml($0))" })
+  }
+
+  private func appendIndentedList(_ values: [String], key: String, indent: String, to lines: inout [String]) {
+    if values.isEmpty {
+      lines.append("\(indent)\(key): []")
+      return
+    }
+
+    lines.append("\(indent)\(key):")
+    lines.append(contentsOf: values.map { "\(indent)  - \(yaml($0))" })
   }
 
   private func yaml(_ value: String?) -> String {

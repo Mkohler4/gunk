@@ -673,6 +673,131 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertNil(detail.buildVerification)
   }
 
+  // MARK: Requirements readout (T-10.6)
+
+  func testDetailReadsRequirementsFromManifest() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let tempDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    let manifestURL = tempDirectory.appendingPathComponent("gunk.yml")
+    try """
+    schema_version: 0
+    deps:
+      package_managers: []
+      packages: []
+    requirements:
+      runtime: "Python ≥ 3.11"
+      packages:
+        - "ebooklib"
+        - "markdownify"
+      env:
+        - "OUTPUT_DIR"
+    entrypoints:
+      - path: "convert.py"
+        symbol: null
+    """.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "convert",
+      purpose: "EPUB to markdown",
+      language: "Python",
+      confidence: 0.92,
+      bundlePath: tempDirectory.path,
+      manifestPath: manifestURL.path,
+      extractedAt: 300
+    )
+    try store.addGunkFile(gunkId: gunk.id, relpath: "convert.py", size: 42)
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertEqual(detail.requirements?.runtime, "Python ≥ 3.11")
+    XCTAssertEqual(detail.requirements?.packages, ["ebooklib", "markdownify"])
+    XCTAssertEqual(detail.requirements?.env, ["OUTPUT_DIR"])
+  }
+
+  func testDetailReadsEmptyRequirementsAsNonNilEmptyLists() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let tempDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    let manifestURL = tempDirectory.appendingPathComponent("gunk.yml")
+    try """
+    schema_version: 0
+    requirements:
+      runtime: null
+      packages: []
+      env: []
+    entrypoints: []
+    """.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "bare",
+      purpose: nil,
+      language: nil,
+      confidence: 0.92,
+      bundlePath: tempDirectory.path,
+      manifestPath: manifestURL.path,
+      extractedAt: 300
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertEqual(detail.requirements?.runtime, nil)
+    XCTAssertEqual(detail.requirements?.packages, [])
+    XCTAssertEqual(detail.requirements?.env, [])
+  }
+
+  func testDetailRequirementsNilWhenBlockAbsent() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "source", path: "/tmp/source")
+    let tempDirectory = FileManager.default.temporaryDirectory
+      .appendingPathComponent(UUID().uuidString)
+    try FileManager.default.createDirectory(at: tempDirectory, withIntermediateDirectories: true)
+    defer {
+      try? FileManager.default.removeItem(at: tempDirectory)
+    }
+
+    let manifestURL = tempDirectory.appendingPathComponent("gunk.yml")
+    try """
+    schema_version: 0
+    entrypoints: []
+    """.write(to: manifestURL, atomically: true, encoding: .utf8)
+
+    let gunk = try store.insertGunk(
+      sourceId: source.id,
+      name: "legacy",
+      purpose: nil,
+      language: "Swift",
+      confidence: 0.92,
+      bundlePath: tempDirectory.path,
+      manifestPath: manifestURL.path,
+      extractedAt: 300
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    XCTAssertNil(detail.requirements)
+  }
+
   // MARK: Call it snippet (T-10.5)
 
   func testCallItSnippetPythonWithSymbolImportsAndCalls() {

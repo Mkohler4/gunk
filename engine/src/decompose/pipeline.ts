@@ -34,6 +34,7 @@ import { TracingLLMClient, type LLMClient } from "../llm/client.js";
 import type { EmbeddingProvider } from "../llm/embeddings.js";
 import { EmbeddingIndex } from "../search/embeddingIndex.js";
 import { Extractor } from "../extract/extractor.js";
+import { deriveRuntime, type ModuleRequirements } from "../extract/requirements.js";
 import { BuildVerifier } from "../extract/buildVerify.js";
 
 import { scanFolder } from "../ingest/scanner.js";
@@ -41,7 +42,7 @@ import { ContextBuilder } from "../ingest/contextBuilder.js";
 import { dartPackageNameFromManifests, ImportResolver } from "../analyze/importResolver.js";
 import { CodeGraphBuilder } from "../analyze/codeGraph.js";
 import { DependencyManifestParser } from "../analyze/dependencyManifest.js";
-import { CapabilityFingerprintBuilder } from "../analyze/capabilityFingerprint.js";
+import { CapabilityFingerprintBuilder, type CapabilityFingerprint } from "../analyze/capabilityFingerprint.js";
 import { createTreeSitterSymbolExtractor, type SymbolExtractor } from "../analyze/symbolExtractor.js";
 
 import { survey } from "./survey.js";
@@ -262,7 +263,11 @@ export class DecompositionPipeline {
 
     // 10. persist
     const persisted = await this.stage("persist", 0.92, () => {
-      const rows = this.persist(persistable.keep, source);
+      const rows = this.persist(persistable.keep, source, {
+        fingerprints,
+        fingerprintBuilder,
+        manifestContents,
+      });
       return { value: rows, counts: { persisted: rows.length } };
     });
 
@@ -356,9 +361,14 @@ export class DecompositionPipeline {
   private persist(
     evaluations: { module: Module; decision: string }[],
     source: Source,
-  ): { gunk: Gunk; decision: string }[] {
+    context: {
+      fingerprints: CapabilityFingerprint[];
+      fingerprintBuilder: CapabilityFingerprintBuilder;
+      manifestContents: Record<string, string>;
+    },
+  ): { gunk: Gunk; decision: string; requirements: ModuleRequirements }[] {
     const sourceFileByPath = new Map(filesForSource(this.db, source.id).map((f) => [f.relpath, f]));
-    const persisted: { gunk: Gunk; decision: string }[] = [];
+    const persisted: { gunk: Gunk; decision: string; requirements: ModuleRequirements }[] = [];
 
     for (const evaluation of evaluations) {
       const module = evaluation.module;
@@ -379,12 +389,23 @@ export class DecompositionPipeline {
         seen.add(relpath);
         addGunkFile(this.db, gunk.id, relpath, sourceFileByPath.get(relpath)?.size ?? null);
       }
-      persisted.push({ gunk, decision: evaluation.decision });
+      // The aggregate fingerprint is the faithful per-module dependency surface:
+      // imports matched against declared manifests, plus scanned env vars. Pair
+      // it with a repo-derived runtime line for the T-10.6 portability readout.
+      const aggregate = context.fingerprintBuilder.aggregate(context.fingerprints, new Set(module.files));
+      const requirements: ModuleRequirements = {
+        runtime: deriveRuntime(module.language, context.manifestContents),
+        packages: aggregate.importedDependencies,
+        env: aggregate.envVars,
+      };
+      persisted.push({ gunk, decision: evaluation.decision, requirements });
     }
     return persisted;
   }
 
-  private async extractAccepted(persisted: { gunk: Gunk; decision: string }[]): Promise<Gunk[]> {
+  private async extractAccepted(
+    persisted: { gunk: Gunk; decision: string; requirements: ModuleRequirements }[],
+  ): Promise<Gunk[]> {
     const extractor = new Extractor(this.db, {
       gunkHome: this.gunkHome,
       confidenceThreshold: this.confidenceThreshold,
@@ -393,9 +414,9 @@ export class DecompositionPipeline {
     const index = this.embeddingProvider ? new EmbeddingIndex(this.db, this.embeddingProvider) : null;
     const gunks: Gunk[] = [];
 
-    for (const { gunk, decision } of persisted) {
+    for (const { gunk, decision, requirements } of persisted) {
       if (decision === "accepted") {
-        extractor.extract(gunk);
+        extractor.extract(gunk, requirements);
         const extracted = gunkById(this.db, gunk.id) ?? gunk;
         if (index) {
           try {

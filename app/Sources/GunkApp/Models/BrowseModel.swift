@@ -252,6 +252,10 @@ struct BrowseModuleDetail: Equatable, Sendable {
   let bundlePath: String?
   let selfContainment: BrowseSelfContainmentResult?
   let buildVerification: BrowseBuildVerificationResult?
+  /// The portability readout (T-10.6), read from the bundle's `gunk.yml`.
+  /// `nil` for bundles extracted before the block existed — the page then
+  /// shows `none` honestly rather than inventing requirements.
+  let requirements: ModuleRequirements?
 }
 
 private struct BrowseTraceModuleRecord: Equatable {
@@ -501,7 +505,8 @@ final class BrowseModel {
       entrypoints: entrypoints,
       bundlePath: item.gunk.bundlePath,
       selfContainment: selfContainmentByGunkId[gunkId],
-      buildVerification: buildVerification(for: item.gunk)
+      buildVerification: buildVerification(for: item.gunk),
+      requirements: manifestRequirements(for: item.gunk)
     )
   }
 
@@ -663,6 +668,80 @@ final class BrowseModel {
     }
 
     return entrypoints
+  }
+
+  /// Reads the `requirements:` block (T-10.6) from the bundle's `gunk.yml`,
+  /// using the same lightweight line parser as `manifestEntrypoints`. Returns
+  /// `nil` when the block is absent (older bundles) so the page degrades to
+  /// `none` instead of inventing requirements.
+  private func manifestRequirements(for gunk: Gunk) -> ModuleRequirements? {
+    guard let manifestPath = gunk.manifestPath,
+          let contents = try? String(contentsOfFile: manifestPath, encoding: .utf8) else {
+      return nil
+    }
+
+    var inRequirements = false
+    var sawBlock = false
+    var runtime: String?
+    var packages: [String] = []
+    var env: [String] = []
+    // Which nested list the indented `- value` lines currently belong to.
+    var currentList: String?
+
+    for rawLine in contents.split(separator: "\n", omittingEmptySubsequences: false) {
+      let line = String(rawLine)
+      if line == "requirements:" {
+        inRequirements = true
+        sawBlock = true
+        continue
+      }
+
+      guard inRequirements else {
+        continue
+      }
+
+      // A non-indented line ends the block.
+      if !line.hasPrefix(" ") {
+        break
+      }
+
+      let trimmed = line.trimmingCharacters(in: .whitespaces)
+
+      // Keys directly under `requirements:` are indented two spaces; list items
+      // are indented four. Distinguish them so `- foo` is not read as a key.
+      if line.hasPrefix("  ") && !line.hasPrefix("    ") {
+        if trimmed.hasPrefix("runtime:") {
+          runtime = yamlValue(after: "runtime:", in: trimmed)
+          currentList = nil
+        } else if trimmed.hasPrefix("packages:") {
+          currentList = yamlIsInlineEmptyList(after: "packages:", in: trimmed) ? nil : "packages"
+        } else if trimmed.hasPrefix("env:") {
+          currentList = yamlIsInlineEmptyList(after: "env:", in: trimmed) ? nil : "env"
+        } else {
+          currentList = nil
+        }
+      } else if trimmed.hasPrefix("-"), let currentList,
+                let value = yamlValue(after: "-", in: trimmed) {
+        switch currentList {
+        case "packages":
+          packages.append(value)
+        case "env":
+          env.append(value)
+        default:
+          break
+        }
+      }
+    }
+
+    guard sawBlock else {
+      return nil
+    }
+
+    return ModuleRequirements(runtime: runtime, packages: packages, env: env)
+  }
+
+  private func yamlIsInlineEmptyList(after prefix: String, in line: String) -> Bool {
+    line.dropFirst(prefix.count).trimmingCharacters(in: .whitespaces) == "[]"
   }
 
   private func yamlValue(after prefix: String, in line: String) -> String? {

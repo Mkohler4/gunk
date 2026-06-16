@@ -23,6 +23,7 @@ final class Extractor {
   private let redactor: SecretRedactor
   private let manifestWriter: ManifestWriter
   private let licenseDetector: LicenseDetector
+  private let requirementsDeriver: RequirementsDeriver
   private let now: () -> Int64
 
   init(
@@ -33,6 +34,7 @@ final class Extractor {
     redactor: SecretRedactor = SecretRedactor(),
     manifestWriter: ManifestWriter = ManifestWriter(),
     licenseDetector: LicenseDetector = LicenseDetector(),
+    requirementsDeriver: RequirementsDeriver = RequirementsDeriver(),
     now: @escaping () -> Int64 = Store.currentTimeInMilliseconds
   ) {
     self.store = store
@@ -42,6 +44,7 @@ final class Extractor {
     self.redactor = redactor
     self.manifestWriter = manifestWriter
     self.licenseDetector = licenseDetector
+    self.requirementsDeriver = requirementsDeriver
     self.now = now
   }
 
@@ -80,6 +83,11 @@ final class Extractor {
     }
 
     let extractedAt = now()
+    let requirements = requirementsDeriver.derive(
+      language: gunk.language,
+      sourceRoot: sourceRoot,
+      fileManager: fileManager
+    )
     let artifact = manifestWriter.artifact(
       input: ManifestInput(
         gunk: gunk,
@@ -89,7 +97,8 @@ final class Extractor {
         sourceCommit: shortCommitHash(sourceRoot: sourceRoot),
         license: try licenseDetector.detect(sourceRoot: sourceRoot),
         redactions: redactions,
-        extractedAt: Date(timeIntervalSince1970: Double(extractedAt) / 1_000)
+        extractedAt: Date(timeIntervalSince1970: Double(extractedAt) / 1_000),
+        requirements: requirements
       )
     )
 
