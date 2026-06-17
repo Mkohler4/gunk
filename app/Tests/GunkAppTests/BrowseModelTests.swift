@@ -798,6 +798,93 @@ final class BrowseModelTests: XCTestCase {
     XCTAssertNil(detail.requirements)
   }
 
+  // MARK: How this works analysis (T-10.14)
+
+  func testAnalysisNilUntilGenerated() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(store: store, source: source, name: "mod", tags: [], confidence: 0.9)
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+
+    model.refresh()
+
+    XCTAssertNil(model.analysis(for: gunk.id))
+    XCTAssertFalse(model.isAnalyzing(gunk.id))
+  }
+
+  func testAnalysisInputCarriesModuleSignals() throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(
+      store: store,
+      source: source,
+      name: "mod",
+      tags: [],
+      language: "Python",
+      confidence: 0.9,
+      files: ["src/a.py", "src/b.py"]
+    )
+    let model = BrowseModel(store: store, loadRunTraces: { [] })
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let input = model.analysisInput(for: detail)
+    XCTAssertEqual(input.name, "mod")
+    XCTAssertEqual(input.purpose, "mod purpose")
+    XCTAssertEqual(input.language, "Python")
+    XCTAssertEqual(input.ownedFiles, ["src/a.py", "src/b.py"])
+  }
+
+  func testGenerateAnalysisCachesAndPersists() async throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(
+      store: store, source: source, name: "mod", tags: [], confidence: 0.9, files: ["src/a.py"]
+    )
+    let content = ModuleAnalysisContent(
+      summary: "Summary.", dataFlow: ["one"], keyFunctions: [], touches: [], limits: []
+    )
+    let model = BrowseModel(
+      store: store,
+      loadRunTraces: { [] },
+      generateAnalysis: { _ in GeneratedAnalysis(content: content, model: "test-model") }
+    )
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+    XCTAssertNil(model.analysis(for: gunk.id))
+
+    let produced = await model.generateAnalysis(for: detail)
+
+    XCTAssertEqual(produced?.content, content)
+    XCTAssertEqual(model.analysis(for: gunk.id)?.content, content)
+    XCTAssertEqual(model.analysis(for: gunk.id)?.model, "test-model")
+    XCTAssertFalse(model.isAnalyzing(gunk.id))
+
+    // Durable: a fresh model reads it back from the store after a refresh.
+    let reopened = BrowseModel(store: store, loadRunTraces: { [] })
+    reopened.refresh()
+    XCTAssertEqual(reopened.analysis(for: gunk.id)?.content, content)
+  }
+
+  func testGenerateAnalysisSurfacesErrorAndLeavesCacheEmpty() async throws {
+    let store = try makeStore()
+    let source = try store.insertSource(name: "src", path: "/tmp/src")
+    let gunk = try insertGunk(store: store, source: source, name: "mod", tags: [], confidence: 0.9)
+    let model = BrowseModel(
+      store: store,
+      loadRunTraces: { [] },
+      generateAnalysis: { _ in throw ModuleAnalysisError.emptyAnalysis }
+    )
+    model.refresh()
+    let detail = try XCTUnwrap(model.detail(for: gunk.id))
+
+    let produced = await model.generateAnalysis(for: detail)
+
+    XCTAssertNil(produced)
+    XCTAssertNil(model.analysis(for: gunk.id))
+    XCTAssertNotNil(model.errorMessage)
+  }
+
   // MARK: Call it snippet (T-10.5)
 
   func testCallItSnippetPythonWithSymbolImportsAndCalls() {

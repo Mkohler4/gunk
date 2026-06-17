@@ -7,6 +7,30 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- `gunk.app` "How this works" on-demand analysis (T-10.14): a single quiet
+  disclosure on the module page opens an AI-written walkthrough of the module's
+  design — a plain-language summary, the data flow (input → transform →
+  output), the key functions, what it touches, and its honest limits. The long
+  form of the T-10.8 input signature. **Decision (recorded in the schema v7
+  comment): generated app-side and cached on first request**, not at engine
+  extraction — the engine extractor makes no LLM call and the manual-approve
+  path is pure Swift with no engine, so an engine-only cache would leave every
+  manually-approved and older module permanently unanalyzed; generating in the
+  app (where the user's provider/model/key already live) is one mechanism that
+  covers every module. The analysis is cached in a new **app-only, additive
+  schema v7** (`module_analyses`, keyed per module, upsert-in-place); opening
+  reads the cache and is **instant** — a live model call never happens at view
+  time. Unanalyzed/older modules show a quiet "Not analyzed yet" with a single
+  on-demand "Analyze this module" action (the refining-loop rule — a model is
+  never auto-summoned on page open). Mono is used only for the code references
+  inside the analysis. A `GUNK_DEBUG_HOW_IT_WORKS=closed|open|missing`
+  screenshot hook stages the states. New `ModuleAnalysisComposer`,
+  `LiveModuleAnalysisGenerator`, store methods, and tests across `StoreTests`,
+  `BrowseModelTests`, and `ModuleAnalysisComposerTests`. v7 is app-only with
+  **no** `mcp/src/schema/v7.sql` — the gunk-mcp and TS-engine migrators pin
+  `LATEST_VERSION = 4` and early-return, and every read uses explicit column
+  lists, so v7 is invisible to them (parity check unaffected). Build + tests
+  green (257 passing, 1 sandbox-availability skip).
 - `gunk.app` UI-module detection (T-10.13, deferred scope): the runnability
   classifier now flags a module as a `ui-module` not-runnable-here class from
   **entrypoint shape** (a safe entrypoint ending in
@@ -27,6 +51,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests green (243 passing, 1 sandbox-availability skip).
 
 ### Removed
+- `gunk.app` phase-10 close-out (T-10.15): deleted the orphaned legacy
+  `RunConsoleView` — superseded by `RunConsoleStageView` (the module-run-v2
+  presentation) when the run console v2 landed in T-10.9, yet never
+  instantiated anywhere (`rg` confirmed zero references, including the
+  screenshot hooks, which live on the still-used `RunConsoleModel`). T-10.13
+  had even updated its deferred-label copy — editing dead code, the same "kept
+  for reuse" trap Phase 9 flagged. Its file was renamed to
+  `RunConsoleModel.swift` to match its sole surviving content;
+  `RunConsoleModel` and the `GUNK_DEBUG_RUN_CONSOLE` staging are intact. The
+  inline `ModuleDetailView` was already gone (T-10.4 moved its capabilities
+  onto the page; only docstrings still name it). ADR-0017 (MCP run tool) moved
+  to **Accepted** (implemented in T-10.12) and both Phase 10 ADRs (0016/0017)
+  are now linked from the roadmap; Phase 10 roadmap items checked off and
+  `docs/retros/phase-10.md` written. Regression pass at 960×600 and default
+  width across the module page and every run state confirmed the toolbox-v2
+  constraints (graphite surfaces, mono only for paths/code/terminal, accent
+  green only on earned meaning, glass on the controls layer) and the
+  two-surfaces rule (smoke run ≠ extraction inspector) hold. Schema-parity
+  check still passes (v0–v4 only; v5/v6/v7 are app-only). Build + tests green
+  (257 passing, 1 sandbox-availability skip).
 - `gunk.app` phase-9 close-out (T-9.7): removed the orphaned `ProviderBadge`
   component. T-9.2 (#165) reworked it into a brand "token" and kept it "for
   reuse", but the card switched to `ProviderWatermark` and the list row to

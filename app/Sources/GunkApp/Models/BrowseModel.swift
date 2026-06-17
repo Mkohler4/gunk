@@ -336,6 +336,11 @@ final class BrowseModel {
   typealias ExtractGunk = @MainActor (Gunk) throws -> Void
   typealias ReclassifySource = @MainActor (Int64) throws -> Void
   typealias LoadRunTraces = @MainActor () -> [RunTrace]
+  /// The "How this works" generation seam (T-10.14). Injected so tests drive it
+  /// with a canned analysis; the production default resolves the user's
+  /// provider/model/key and calls the model. Only ever invoked by an explicit
+  /// developer action — never on page open.
+  typealias GenerateAnalysis = @MainActor (ModuleAnalysisInput) async throws -> GeneratedAnalysis
 
   private let store: Store
   /// The auto-accept gate the approval queue is computed from
@@ -352,6 +357,7 @@ final class BrowseModel {
   /// so the smoke-run orchestration is testable with a canned executor; the
   /// production default wraps runs in `sandbox-exec` (ADR-0016).
   private let smokeRunner: SmokeRunner
+  private let generateAnalysisClosure: GenerateAnalysis
 
   private(set) var sections: [BrowseSection] = []
   private(set) var approvalQueue: [BrowseItem] = []
@@ -377,6 +383,13 @@ final class BrowseModel {
   private var traceModuleRecords: [Int64: BrowseTraceModuleRecord] = [:]
   private var selfContainmentByGunkId: [Int64: BrowseSelfContainmentResult] = [:]
   private var buildVerificationByBundlePath: [String: BrowseBuildVerificationResult] = [:]
+  /// Cached "How this works" analyses (T-10.14), loaded from the store once per
+  /// refresh so `analysis(for:)` is a pure lookup — the disclosure opens
+  /// instantly and never triggers a model call.
+  private var analysisByGunkId: [Int64: ModuleAnalysis] = [:]
+  /// Modules whose analysis is generating right now, so the disclosure can show
+  /// a quiet "Analyzing…" state without a second concurrent request.
+  private(set) var analyzingGunkIds: Set<Int64> = []
   /// Trace-derived provenance, used only as the fallback when a module has no
   /// durable stored value (T-9.2). Shared resolution with `ProvenanceBackfill`.
   private var traceProvenance = RunTraceProvenanceIndex(traces: [])
@@ -389,7 +402,8 @@ final class BrowseModel {
     loadRunTraces: @escaping LoadRunTraces = {
       RunTraceStore().recentTraces(limit: 250)
     },
-    smokeRunner: SmokeRunner = SmokeRunner()
+    smokeRunner: SmokeRunner = SmokeRunner(),
+    generateAnalysis: GenerateAnalysis? = nil
   ) {
     self.store = store
     self.confidenceThreshold = confidenceThreshold
@@ -402,12 +416,16 @@ final class BrowseModel {
     self.reclassifySource = reclassifySource
     self.loadRunTraces = loadRunTraces
     self.smokeRunner = smokeRunner
+    self.generateAnalysisClosure = generateAnalysis ?? { input in
+      try await LiveModuleAnalysisGenerator.generate(input: input)
+    }
   }
 
   func refresh() {
     do {
       let items = try loadItems()
       self.items = items
+      analysisByGunkId = try store.listModuleAnalyses()
       indexTraces(loadRunTraces(), items: items)
       approvalQueue = items
         .filter(isPendingApproval)
@@ -566,6 +584,66 @@ final class BrowseModel {
       purpose: detail.item.gunk.purpose,
       requirements: detail.requirements
     )
+  }
+
+  // MARK: - "How this works" analysis (T-10.14)
+
+  /// The cached "How this works" analysis for a module, or `nil` when none has
+  /// been generated yet. A pure lookup over the cache loaded at refresh — the
+  /// disclosure opens instantly and never blocks on a live model call.
+  func analysis(for gunkId: Int64) -> ModuleAnalysis? {
+    analysisByGunkId[gunkId]
+  }
+
+  /// Whether a module's analysis is being generated right now (drives the quiet
+  /// "Analyzing…" state).
+  func isAnalyzing(_ gunkId: Int64) -> Bool {
+    analyzingGunkIds.contains(gunkId)
+  }
+
+  /// Assembles the generation input from what the detail already carries — the
+  /// long-form sibling of `inputSignature(for:)`, reading the same module
+  /// signals (no new store state).
+  func analysisInput(for detail: BrowseModuleDetail) -> ModuleAnalysisInput {
+    ModuleAnalysisInput(
+      name: detail.item.gunk.name,
+      purpose: detail.item.gunk.purpose,
+      language: detail.item.gunk.language,
+      entrypoints: detail.entrypoints,
+      requirements: detail.requirements,
+      ownedFiles: detail.ownedFiles,
+      callItSnippets: callItSnippets(for: detail)
+    )
+  }
+
+  /// Generate (or regenerate) a module's analysis on **explicit** demand, then
+  /// cache it (schema v7) and update the in-memory cache so the next open is
+  /// instant. Only ever called from a developer action — never on page open.
+  /// Returns `nil` and surfaces an error on failure, leaving any prior cache
+  /// untouched.
+  @discardableResult
+  func generateAnalysis(for detail: BrowseModuleDetail) async -> ModuleAnalysis? {
+    let gunkId = detail.item.gunk.id
+    guard !analyzingGunkIds.contains(gunkId) else {
+      return analysisByGunkId[gunkId]
+    }
+
+    analyzingGunkIds.insert(gunkId)
+    defer { analyzingGunkIds.remove(gunkId) }
+
+    do {
+      let generated = try await generateAnalysisClosure(analysisInput(for: detail))
+      let stored = try store.upsertModuleAnalysis(
+        gunkId: gunkId,
+        content: generated.content,
+        model: generated.model
+      )
+      analysisByGunkId[gunkId] = stored
+      return stored
+    } catch {
+      errorMessage = error.localizedDescription
+      return nil
+    }
   }
 
   /// The runnability classification (T-10.2) for a module, computed up front so

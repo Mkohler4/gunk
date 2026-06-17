@@ -62,6 +62,7 @@ struct ModulePageView: View {
         if detail.bundlePath != nil {
           stage(detail)
         }
+        HowThisWorksView(model: model, detail: detail)
         footerActions(detail)
         advancedFooter(detail)
       }
@@ -844,6 +845,241 @@ private struct CallItView: View {
       try? await Task.sleep(for: .seconds(1.6))
       guard !Task.isCancelled else { return }
       withAnimation(BrandMotion.quick) { didCopy = false }
+    }
+  }
+}
+
+// MARK: - How this works (T-10.14)
+
+/// The single quiet "How this works" disclosure: the long-form, AI-written
+/// analysis of the module's design (data flow, key functions, what it touches,
+/// its limits — the long form of the T-10.8 input signature). Closed by
+/// default; opening reads the cached analysis (`BrowseModel.analysis(for:)`),
+/// so it is instant and never triggers a live model call. Older/unanalyzed
+/// modules show a quiet "not analyzed yet" with a single on-demand "Analyze"
+/// action — a model is never auto-summoned on open. Lives inside the page (no
+/// modal, no chatbot); mono is used **only** for the code references inside it.
+private struct HowThisWorksView: View {
+  let model: BrowseModel
+  let detail: BrowseModuleDetail
+
+  /// The screenshot hook (`GUNK_DEBUG_HOW_IT_WORKS=open|missing|closed`), read
+  /// once so the open/missing states can be captured without a real model call
+  /// or a seeded store row. Absent in normal runs.
+  private enum DebugState: String {
+    case open
+    case missing
+    case closed
+  }
+
+  private let debugState: DebugState?
+  @State private var isExpanded: Bool
+
+  init(model: BrowseModel, detail: BrowseModuleDetail) {
+    self.model = model
+    self.detail = detail
+    let debug = ProcessInfo.processInfo.environment["GUNK_DEBUG_HOW_IT_WORKS"]
+      .flatMap(DebugState.init(rawValue:))
+    self.debugState = debug
+    // Stage the open/missing states expanded for the screenshot hook; closed by
+    // default otherwise (the disclosure is a quiet, opt-in affordance).
+    _isExpanded = State(initialValue: debug == .open || debug == .missing)
+  }
+
+  /// The analysis to render: the debug sample when the `open` hook is set,
+  /// otherwise the real cache. `missing` forces the not-analyzed branch.
+  private var analysis: ModuleAnalysis? {
+    if debugState == .missing {
+      return nil
+    }
+    if debugState == .open {
+      return .sample
+    }
+    return model.analysis(for: detail.item.gunk.id)
+  }
+
+  private var isAnalyzing: Bool {
+    model.isAnalyzing(detail.item.gunk.id)
+  }
+
+  var body: some View {
+    DisclosureGroup(isExpanded: $isExpanded) {
+      Group {
+        if let analysis {
+          analysisBody(analysis)
+        } else {
+          notAnalyzed
+        }
+      }
+      .padding(.top, BrandMetrics.Spacing.md)
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "wand.and.stars")
+          .foregroundStyle(BrandColors.textTertiary)
+        Text("How this works")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textTertiary)
+        Spacer(minLength: 0)
+      }
+    }
+    .tint(BrandColors.textTertiary)
+    .padding(.top, BrandMetrics.Spacing.sm)
+    .overlay(alignment: .top) {
+      Rectangle().fill(BrandColors.separator).frame(height: 1)
+    }
+  }
+
+  // MARK: Analysed
+
+  private func analysisBody(_ analysis: ModuleAnalysis) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+      if !analysis.content.summary.isEmpty {
+        Text(analysis.content.summary)
+          .font(BrandTypography.body)
+          .foregroundStyle(BrandColors.textPrimary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      if !analysis.content.dataFlow.isEmpty {
+        section("Data flow") {
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+            ForEach(Array(analysis.content.dataFlow.enumerated()), id: \.offset) { index, step in
+              HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.sm) {
+                Text("\(index + 1).")
+                  .font(BrandTypography.caption.weight(.semibold))
+                  .foregroundStyle(BrandColors.textTertiary)
+                Text(step)
+                  .font(BrandTypography.callout)
+                  .foregroundStyle(BrandColors.textSecondary)
+                  .fixedSize(horizontal: false, vertical: true)
+              }
+            }
+          }
+        }
+      }
+
+      if !analysis.content.keyFunctions.isEmpty {
+        section("Key functions") {
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+            ForEach(Array(analysis.content.keyFunctions.enumerated()), id: \.offset) { _, function in
+              VStack(alignment: .leading, spacing: 2) {
+                // Mono only here — these are code references.
+                Text(function.name)
+                  .font(BrandTypography.mono)
+                  .foregroundStyle(BrandColors.textPrimary)
+                  .textSelection(.enabled)
+                if !function.role.isEmpty {
+                  Text(function.role)
+                    .font(BrandTypography.caption)
+                    .foregroundStyle(BrandColors.textSecondary)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if !analysis.content.touches.isEmpty {
+        section("What it touches") {
+          bulletList(analysis.content.touches)
+        }
+      }
+
+      if !analysis.content.limits.isEmpty {
+        section("Known limits") {
+          bulletList(analysis.content.limits)
+        }
+      }
+
+      analyzedFooter(analysis)
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  /// The honesty footer — which model wrote it. Quiet (tertiary); the analysis
+  /// is a convenience, not earned trust, so it stays off the accent vocabulary.
+  @ViewBuilder
+  private func analyzedFooter(_ analysis: ModuleAnalysis) -> some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      if let model = analysis.model, !model.isEmpty {
+        Text("Analyzed with \(model)")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textTertiary)
+      }
+      Spacer(minLength: 0)
+      Button("Re-analyze", action: analyze)
+        .buttonStyle(.plain)
+        .font(BrandTypography.caption)
+        .foregroundStyle(BrandColors.textTertiary)
+        .disabled(isAnalyzing)
+        .help("Generate the analysis again")
+    }
+    .padding(.top, BrandMetrics.Spacing.xs)
+  }
+
+  // MARK: Not analysed
+
+  private var notAnalyzed: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      if isAnalyzing {
+        HStack(spacing: BrandMetrics.Spacing.sm) {
+          ProgressView().controlSize(.small)
+          Text("Analyzing…")
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textSecondary)
+        }
+      } else {
+        Text("Not analyzed yet.")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textSecondary)
+        Text("Generate a short, AI-written walkthrough of how this module is built.")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textTertiary)
+          .fixedSize(horizontal: false, vertical: true)
+        Button(action: analyze) {
+          Label("Analyze this module", systemImage: "wand.and.stars")
+        }
+        .buttonStyle(.brandSecondary)
+        .help("Generate the \"How this works\" analysis")
+      }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private func analyze() {
+    // Debug states are static screenshots — never fire a real model call.
+    guard debugState == nil else { return }
+    Task { await model.generateAnalysis(for: detail) }
+  }
+
+  // MARK: Building blocks
+
+  private func section<Content: View>(
+    _ title: String,
+    @ViewBuilder content: () -> Content
+  ) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+      Text(title)
+        .font(BrandTypography.caption.weight(.semibold))
+        .foregroundStyle(BrandColors.textTertiary)
+      content()
+    }
+  }
+
+  private func bulletList(_ values: [String]) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+      ForEach(Array(values.enumerated()), id: \.offset) { _, value in
+        HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.sm) {
+          Text("•")
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textTertiary)
+          Text(value)
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+        }
+      }
     }
   }
 }

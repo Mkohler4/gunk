@@ -1,6 +1,6 @@
 # ADR-0017: MCP `run_gunk` tool — the agent's execute door
 
-- **Status:** Proposed
+- **Status:** Accepted (2026-06-17) — implemented in T-10.12 (#180)
 - **Date:** 2026-06-16
 - **Deciders:** Mark Kohler
 - **Phase:** 10 (Run & test modules) — gate **CP-K**

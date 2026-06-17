@@ -1,5 +1,5 @@
 enum Schema {
-  static let version = 6
+  static let version = 7
 
   static let migrations = [
     (version: 0, sql: v0),
@@ -8,7 +8,8 @@ enum Schema {
     (version: 3, sql: v3),
     (version: 4, sql: v4),
     (version: 5, sql: v5),
-    (version: 6, sql: v6)
+    (version: 6, sql: v6),
+    (version: 7, sql: v7)
   ]
 
   // Keep byte-for-byte identical to mcp/src/schema/v0.sql. See ADR-0006.
@@ -287,5 +288,40 @@ CREATE TABLE smoke_runs (
 );
 
 CREATE INDEX smoke_runs_gunk_idx ON smoke_runs(gunk_id, created_at DESC);
+""" + "\n"
+
+  // The "How this works" cache (T-10.14). One row per module holds the
+  // long-form, AI-written design analysis (the long form of the T-10.8 input
+  // signature) so opening the disclosure reads the cache and is instant — a
+  // live model call never happens at view time. `content` is the JSON of the
+  // structured analysis (summary, data flow, key functions, what it touches,
+  // its limits); `model` records which model wrote it for the honesty footer;
+  // `generated_at` is when. `gunk_id` is the primary key so generating again
+  // upserts in place (one analysis per module).
+  //
+  // Decision (recorded here rather than as a standalone ADR — nothing below is
+  // hard to reverse, it is one additive table): the analysis is generated
+  // **app-side and cached on first request**, not at engine extraction. The
+  // engine extractor (`engine/src/extract/extractor.ts`) makes no LLM call, and
+  // the manual-approve path is pure Swift with no engine at all — so an
+  // "engine-only at extraction" cache would leave every manually-approved and
+  // every older module permanently unanalyzed. Generating in the app (where the
+  // user's chosen provider/model and key already live) is one mechanism that
+  // covers every module uniformly, satisfies "generated once + cached + instant
+  // on open", and lets older modules generate on demand (the refining-loop
+  // rule) instead of auto-summoning a model on every page open.
+  //
+  // APP-ONLY — intentionally has NO mcp/src/schema/v7.sql counterpart, exactly
+  // like v5/v6: both the gunk-mcp and TS-engine migrators pin
+  // `LATEST_VERSION = 4` and early-return on any store at/above it, so neither
+  // trips on a v7 store; every MCP/engine read uses an explicit column list, so
+  // this table is invisible to them.
+  static let v7 = """
+CREATE TABLE module_analyses (
+  gunk_id INTEGER PRIMARY KEY REFERENCES gunks(id) ON DELETE CASCADE,
+  content TEXT NOT NULL,
+  model TEXT,
+  generated_at INTEGER NOT NULL
+);
 """ + "\n"
 }

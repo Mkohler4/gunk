@@ -377,35 +377,43 @@ badge.
 > ladder), and all ten open questions are resolved there. Runtime scope is
 > **terminal-only** this phase; the improve loop is **capture-and-queue**
 > (re-extraction deferred).
+>
+> **Architecture ADRs (both Accepted):**
+> [ADR-0016](adr/0016-sandbox-execution-model.md) (sandbox execution model —
+> the Seatbelt-wrapped `SmokeRunner` behind both run doors) and
+> [ADR-0017](adr/0017-mcp-run-tool.md) (the MCP `run_gunk` execute tool, the
+> agent's door, shipped in T-10.12).
 
-- [ ] **Smoke run ("Try it")**: execute a module's entrypoint against its
-      extracted bundle in a sandbox, persist the receipt (when, pass/fail,
-      duration, output). Receipt-first per module-run-v1: the primary
-      evidence is the before/after Proof card **on the full module page**
-      (the "detail sheet" is superseded); the raw command + log demote to a
+- [x] **Smoke run ("Try it")** (T-10.7): execute a module's entrypoint against
+      its extracted bundle in a sandbox, persist the receipt (when, pass/fail,
+      duration, output). Receipt-first; the raw command + log demote to a
       disclosure. First-run consent treatment (it executes extracted code);
       states: never-tried / consent / running / passed / failed / resting
-      receipt. Build verification already stores a command + log, so the
-      store pattern exists
-- [ ] **Copyable invocation snippet** per module, generated from the stored
-      entrypoints + symbols ("how do I use this" in one glance)
-- [ ] **Requirements readout**: reshape shared-dependency *paths* into "to
-      run this elsewhere you need" — runtime, packages, env vars (parsed
-      from bundle manifests; absorbs the old "dependencies + versions
-      panel" item from Phase 9)
-- [ ] Tested badge: new store field + leveling rule (badge tier scales with
-      how much the module was tested) — this becomes the marketplace ranking
-      signal in Phase 12, and smoke-run receipts are the first *honest*
-      usage signal for the Library's `heroRank` `FUTURE` seam (never
-      fabricate usage numbers)
-- [ ] Runs stay **receipts, not a dashboard**: the extraction-run inspector
-      (T-8.6) answers "what did gunk do"; the smoke run answers "what does
-      the module do" — two surfaces, linked from the module, never merged
+      receipt. (The v2 run console + coverage ledger superseded the v1 Proof
+      card.)
+- [x] **Copyable invocation snippet** (T-10.5) per module, generated from the
+      stored entrypoints + symbols ("how do I use this" in one glance)
+- [x] **Requirements readout** (T-10.6): reshape shared-dependency *paths* into
+      "to run this elsewhere you need" — runtime, packages, env vars (parsed
+      from bundle manifests; absorbs the old "dependencies + versions panel"
+      item from Phase 9)
+- [x] Tested/coverage metric (T-10.9/T-10.11): **superseded the "Tested badge"
+      leveling idea per CP-F** — shipped as the honest **coverage ledger**
+      (happy path · your own inputs · edge cases · adversarial) + the
+      `Ready to connect` sign-off, not a tier badge. Smoke-run receipts remain
+      the first honest usage signal for the Library's `heroRank` `FUTURE` seam
+      (never fabricate usage numbers)
+- [x] Runs stay **receipts, not a dashboard** (T-10.7): the extraction-run
+      inspector (T-8.6) answers "what did gunk do"; the smoke run answers "what
+      does the module do" — two surfaces, linked from the module, never merged
 - [ ] UI-module runner: detect UI modules and **launch the browser** at the
-      module's served surface — in-app preview is explicitly out for now
-      (module-run-v1 revision of the old "launch/preview them from the app")
-- [ ] Explicitly out: dependency-graph visualizations, run-history charts,
-      in-app editing, metrics dashboards
+      module's served surface — in-app preview is explicitly out for now.
+      **Detection + the deferred "not yet" label landed (T-10.13); the actual
+      in-browser launch is deferred to a later phase** (CP-F descope)
+- [x] **"How this works" on-demand analysis** (T-10.14): one quiet disclosure
+      opens a cached AI walkthrough of a module's design (added at CP-F)
+- [x] Explicitly out (held): dependency-graph visualizations, run-history
+      charts, in-app editing, metrics dashboards
 
 ---
 
