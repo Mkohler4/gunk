@@ -372,32 +372,44 @@ final class BrowseModelTests: XCTestCase {
     )
   }
 
-  /// The review copy derives its threshold from the same constant the queue
-  /// rule gates on (T-8.4; B1: hard-coded 0.7 until Phase 11) — a module at
-  /// the threshold is auto-accepted, one below it is queued.
-  func testConfidenceThresholdExposedMatchesQueueGate() throws {
+  /// B1 regression: the Approval queue follows the user's
+  /// `llm.confidenceThreshold`, not the old hard-coded 0.7. A 0.80 module is
+  /// pending at 0.85 and auto-accepted at 0.60.
+  func testConfidenceThresholdSettingDrivesApprovalQueueMembership() throws {
     let store = try makeStore()
     let source = try store.insertSource(name: "source", path: "/tmp/source")
-    let belowThreshold = try insertGunk(
+    let reviewedAtHighThreshold = try insertGunk(
       store: store,
       source: source,
-      name: "below-threshold",
+      name: "threshold-sensitive",
       tags: [],
-      confidence: Extractor.defaultConfidenceThreshold - 0.01
+      confidence: 0.80
     )
-    _ = try insertGunk(
-      store: store,
-      source: source,
-      name: "at-threshold",
-      tags: [],
-      confidence: Extractor.defaultConfidenceThreshold
-    )
-    let model = BrowseModel(store: store)
+    let userDefaults = try temporaryUserDefaults()
+    userDefaults.set(0.85, forKey: LLMSettings.confidenceThresholdKey)
+    let model = BrowseModel(store: store, userDefaults: userDefaults)
 
     model.refresh()
 
-    XCTAssertEqual(model.confidenceThreshold, Extractor.defaultConfidenceThreshold)
-    XCTAssertEqual(model.approvalQueue.map(\.gunk.id), [belowThreshold.id])
+    XCTAssertEqual(model.confidenceThreshold, 0.85)
+    XCTAssertEqual(model.approvalQueue.map(\.gunk.id), [reviewedAtHighThreshold.id])
+
+    userDefaults.set(0.60, forKey: LLMSettings.confidenceThresholdKey)
+    model.refreshConfidenceThresholdFromSettings()
+
+    XCTAssertEqual(model.confidenceThreshold, 0.60)
+    XCTAssertTrue(model.approvalQueue.isEmpty)
+    XCTAssertEqual(model.approvalFilter(for: try XCTUnwrap(
+      model.detail(for: reviewedAtHighThreshold.id)?.item
+    )), .autoAccepted)
+  }
+
+  func testConfidenceThresholdFallsBackToEngineDefaultWhenUnset() throws {
+    let store = try makeStore()
+    let userDefaults = try temporaryUserDefaults()
+    let model = BrowseModel(store: store, userDefaults: userDefaults)
+
+    XCTAssertEqual(model.confidenceThreshold, LLMSettings.defaultConfidenceThreshold)
   }
 
   /// Approving under the needs-approval scope hides the cell but must not
@@ -1380,6 +1392,15 @@ final class BrowseModelTests: XCTestCase {
 
   private func makeStore(now: @escaping () -> Int64 = { 100 }) throws -> Store {
     try Store(databaseQueue: DatabaseQueue(), now: now)
+  }
+
+  private func temporaryUserDefaults() throws -> UserDefaults {
+    let suiteName = "BrowseModelTests-\(UUID().uuidString)"
+    let userDefaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+    addTeardownBlock {
+      userDefaults.removePersistentDomain(forName: suiteName)
+    }
+    return userDefaults
   }
 
   private func makeTrace(

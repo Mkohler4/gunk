@@ -346,13 +346,14 @@ final class BrowseModel {
   /// The auto-accept gate the approval queue is computed from
   /// (`isPendingApproval`). Exposed so review copy ("62% — below the 70%
   /// auto-accept threshold") derives from the same constant the queue rule
-  /// gates on and the two can never disagree. Note B1: this is hard-coded
-  /// to `Extractor.defaultConfidenceThreshold` (0.7) today; the Settings
-  /// slider is cosmetic until Phase 11.
-  let confidenceThreshold: Double
+  /// gates on and the two can never disagree. B1 fix: production reads the
+  /// user's `llm.confidenceThreshold`, falling back to the engine default only
+  /// when that setting is unset.
+  private(set) var confidenceThreshold: Double
   private let extractGunk: ExtractGunk
   private let reclassifySource: ReclassifySource
   private let loadRunTraces: LoadRunTraces
+  private let userDefaults: UserDefaults
   /// The sandbox runner that executes a module's entrypoint (T-10.2). Injected
   /// so the smoke-run orchestration is testable with a canned executor; the
   /// production default wraps runs in `sandbox-exec` (ADR-0016).
@@ -396,7 +397,8 @@ final class BrowseModel {
 
   init(
     store: Store,
-    confidenceThreshold: Double = Extractor.defaultConfidenceThreshold,
+    confidenceThreshold: Double? = nil,
+    userDefaults: UserDefaults = .standard,
     extractGunk: ExtractGunk? = nil,
     reclassifySource: @escaping ReclassifySource = { _ in },
     loadRunTraces: @escaping LoadRunTraces = {
@@ -407,6 +409,8 @@ final class BrowseModel {
   ) {
     self.store = store
     self.confidenceThreshold = confidenceThreshold
+      ?? LLMSettings.confidenceThreshold(userDefaults: userDefaults)
+    self.userDefaults = userDefaults
     self.extractGunk = extractGunk ?? { gunk in
       _ = try Extractor(
         store: store,
@@ -439,6 +443,10 @@ final class BrowseModel {
     } catch {
       errorMessage = error.localizedDescription
     }
+  }
+
+  func refreshConfidenceThresholdFromSettings() {
+    updateConfidenceThreshold(LLMSettings.confidenceThreshold(userDefaults: userDefaults))
   }
 
   func approve(gunkId: Int64) {
@@ -1132,6 +1140,19 @@ final class BrowseModel {
        !availableLanguages.contains(language) {
       filters.language = nil
     }
+  }
+
+  private func updateConfidenceThreshold(_ threshold: Double) {
+    guard confidenceThreshold != threshold else {
+      return
+    }
+
+    confidenceThreshold = threshold
+    approvalQueue = items
+      .filter(isPendingApproval)
+      .sorted(by: itemSort)
+    sanitizeFilters()
+    applyFilters()
   }
 
   private func availableSources(from items: [BrowseItem]) -> [Source] {

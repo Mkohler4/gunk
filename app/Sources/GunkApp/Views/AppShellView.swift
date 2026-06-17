@@ -714,7 +714,14 @@ struct AppShellView: View {
         secretStore: settingsSecretStore(),
         storePath: services.store.databasePath,
         loadSpendModel: { try SpendModel.load(store: services.store) },
-        mcpSetup: mcpSetup
+        mcpSetup: mcpSetup,
+        onOpenApproval: {
+          selection = .library
+          services.browseModel.filters.approval = .needsApproval
+        },
+        onConfidenceThresholdChanged: {
+          services.browseModel.refreshConfidenceThresholdFromSettings()
+        }
       )
     }
   }

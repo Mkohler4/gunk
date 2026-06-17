@@ -28,6 +28,7 @@ final class SourceProcessingRunnerTests: XCTestCase {
     let userDefaults = try temporaryUserDefaults()
     userDefaults.set(LLMProvider.openAI.rawValue, forKey: "llm.provider")
     userDefaults.set("gpt-fixture", forKey: "llm.model")
+    userDefaults.set(0.85, forKey: LLMSettings.confidenceThresholdKey)
 
     let launcher = FakeEngineLauncher(events: [
       .stage(stage: "scan", phase: "started", durationMs: nil, counts: [:]),
@@ -56,6 +57,7 @@ final class SourceProcessingRunnerTests: XCTestCase {
     XCTAssertTrue(arguments.contains("--trace"))
     assertFlag(arguments, "--provider", "openai")
     assertFlag(arguments, "--model", "gpt-fixture")
+    assertFlag(arguments, "--confidence", "0.85")
     assertFlag(arguments, "--source-id", String(source.id))
     assertFlag(arguments, "--db", databaseURL.path)
     XCTAssertEqual(launcher.lastEnvironment?["GUNK_API_KEY"], "sk-test")

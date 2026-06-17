@@ -25,7 +25,7 @@ final class SourceProcessingRunner {
 
   /// Default confidence threshold below which a module needs manual approval.
   /// Matches the engine's `confidenceThreshold` default.
-  static let defaultConfidenceThreshold = 0.7
+  static let defaultConfidenceThreshold = LLMSettings.defaultConfidenceThreshold
 
   init(
     store: Store,
@@ -184,11 +184,7 @@ final class SourceProcessingRunner {
   }
 
   private func confidenceThreshold() -> Double {
-    guard userDefaults.object(forKey: "llm.confidenceThreshold") != nil else {
-      return SourceProcessingRunner.defaultConfidenceThreshold
-    }
-
-    return userDefaults.double(forKey: "llm.confidenceThreshold")
+    LLMSettings.confidenceThreshold(userDefaults: userDefaults)
   }
 }
 

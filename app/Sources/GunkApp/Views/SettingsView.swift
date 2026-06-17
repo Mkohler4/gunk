@@ -257,7 +257,7 @@ struct SettingsView: View {
   @AppStorage(LLMProvider.anthropic.modelStorageKey) private var anthropicModel = LLMProvider.anthropic.defaultModel
   @AppStorage(LLMProvider.ollama.modelStorageKey) private var ollamaModel = LLMProvider.ollama.defaultModel
   @AppStorage(OllamaClient.baseURLStorageKey) private var ollamaBaseURLText = "http://localhost:11434"
-  @AppStorage("llm.confidenceThreshold") private var confidenceThreshold = 0.7
+  @AppStorage(LLMSettings.confidenceThresholdKey) private var confidenceThreshold = LLMSettings.defaultConfidenceThreshold
 
   @State private var selectedSection: SettingsSection
   @State private var statusSnapshot: SettingsStatusSnapshot?
@@ -273,6 +273,8 @@ struct SettingsView: View {
   @State private var arrivedFromMCP = false
   @State private var spendModel: SpendModel?
   @State private var spendErrorMessage: String?
+  @State private var isAdjustingConfidenceThreshold = false
+  @State private var showsStagedConfidenceDrag = false
   @FocusState private var focusedLocalModelField: LocalModelField?
 
   /// Shared with the shell's chip and the setup sheet (T-8.10): one
@@ -288,13 +290,15 @@ struct SettingsView: View {
   private let loadSpendModel: () throws -> SpendModel
   private let resolveEngine: () -> ResolvedEngine?
   private let openConfig: (URL) -> Void
+  private let onOpenApproval: () -> Void
+  private let onConfidenceThresholdChanged: () -> Void
   private static let hostedProviders: [LLMProvider] = [.anthropic, .openAI]
 
   init(
     provider: LLMProvider = .openAI,
     model: String? = nil,
     apiKey: String = "",
-    confidenceThreshold: Double = 0.7,
+    confidenceThreshold: Double = LLMSettings.defaultConfidenceThreshold,
     initialSection: SettingsSection = .providerKeys,
     mcpDeepLinkNonce: Int = 0,
     mcpDeepLinkOnAppear: Bool = false,
@@ -307,7 +311,9 @@ struct SettingsView: View {
     },
     resolveEngine: @escaping () -> ResolvedEngine? = { EngineBinary.resolve() },
     mcpSetup: MCPSetupModel? = nil,
-    openConfig: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
+    openConfig: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) },
+    onOpenApproval: @escaping () -> Void = {},
+    onConfidenceThresholdChanged: @escaping () -> Void = {}
   ) {
     self._providerRawValue = AppStorage(
       wrappedValue: provider.rawValue,
@@ -335,6 +341,8 @@ struct SettingsView: View {
     self.resolveEngine = resolveEngine
     self.mcpSetup = mcpSetup ?? MCPSetupModel()
     self.openConfig = openConfig
+    self.onOpenApproval = onOpenApproval
+    self.onConfidenceThresholdChanged = onConfidenceThresholdChanged
   }
 
   var body: some View {
@@ -375,6 +383,9 @@ struct SettingsView: View {
     }
     .onChange(of: providerRawValue) {
       refreshStatus()
+    }
+    .onChange(of: confidenceThreshold) {
+      onConfidenceThresholdChanged()
     }
     .onChange(of: selectedSection) {
       if selectedSection == .spend {
@@ -998,34 +1009,125 @@ struct SettingsView: View {
   private var processingSection: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
       sectionHeader(
-        "How extracted capabilities move into your toolbox.",
-        description: "This keeps the existing confidence setting in the new Processing section."
+        "How extracted capabilities move into your agent's toolbox.",
+        description: "Decide what gunk can add by itself, and what should wait for your review."
       )
 
       settingsPanel {
-        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-          HStack(alignment: .firstTextBaseline) {
-            Text("Confidence threshold")
-              .font(BrandTypography.headline)
-              .foregroundStyle(BrandColors.textPrimary)
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
+          HStack(alignment: .top, spacing: BrandMetrics.Spacing.lg) {
+            VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+              Text("Auto-accept threshold")
+                .font(BrandTypography.headline)
+                .foregroundStyle(BrandColors.textPrimary)
+
+              thresholdHelperText
+                .font(BrandTypography.body)
+                .foregroundStyle(BrandColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+
             Spacer(minLength: BrandMetrics.Spacing.md)
-            Text(confidenceThreshold.formatted(.number.precision(.fractionLength(2))))
-              .font(BrandTypography.mono)
-              .foregroundStyle(BrandColors.textSecondary)
+
+            Text(confidencePercentText)
+              .font(BrandTypography.display)
+              .foregroundStyle(BrandColors.accent)
+              .monospacedDigit()
+              .accessibilityLabel("Auto-accept threshold \(confidencePercentText)")
           }
 
-          Slider(value: $confidenceThreshold, in: 0...1, step: 0.05)
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+            HStack {
+              Text("APPROVAL")
+              Spacer()
+              Text("AUTO-ACCEPT")
+            }
+            .font(BrandTypography.caption.weight(.semibold))
+            .foregroundStyle(BrandColors.textSecondary)
 
-          HStack {
-            Text("Approval")
-            Spacer()
-            Text("Auto-accept")
+            thresholdSlider
+
+            HStack(alignment: .top) {
+              VStack(alignment: .leading, spacing: 2) {
+                Text("50%")
+                  .font(BrandTypography.mono)
+                  .foregroundStyle(BrandColors.textPrimary)
+                Text("more reaches you")
+                  .font(BrandTypography.caption)
+                  .foregroundStyle(BrandColors.textTertiary)
+              }
+
+              Spacer(minLength: BrandMetrics.Spacing.md)
+
+              VStack(alignment: .trailing, spacing: 2) {
+                Text("100%")
+                  .font(BrandTypography.mono)
+                  .foregroundStyle(BrandColors.textPrimary)
+                Text("more auto-accepts")
+                  .font(BrandTypography.caption)
+                  .foregroundStyle(BrandColors.textTertiary)
+              }
+            }
           }
-          .font(BrandTypography.caption)
-          .foregroundStyle(BrandColors.textSecondary)
+
+          Button {
+            onOpenApproval()
+          } label: {
+            Text("What is Approval? →")
+              .font(BrandTypography.callout.weight(.semibold))
+              .foregroundStyle(BrandColors.accent)
+          }
+          .buttonStyle(.plain)
+          .help("Open the Library scoped to modules that need approval")
         }
       }
     }
+  }
+
+  private var thresholdHelperText: Text {
+    var text = AttributedString("Modules at or above this auto-accept into your toolbox; below it they go to Approval for you to review.")
+    if let range = text.range(of: "auto-accept") {
+      text[range].inlinePresentationIntent = .stronglyEmphasized
+    }
+    if let range = text.range(of: "Approval") {
+      text[range].inlinePresentationIntent = .stronglyEmphasized
+    }
+    return Text(text)
+  }
+
+  private var thresholdSlider: some View {
+    GeometryReader { proxy in
+      ZStack(alignment: .topLeading) {
+        Slider(
+          value: confidenceThresholdBinding,
+          in: 0.5...1,
+          step: 0.05,
+          onEditingChanged: { isEditing in
+            isAdjustingConfidenceThreshold = isEditing
+          }
+        )
+        .padding(.top, showsConfidenceThresholdBubble ? 28 : 0)
+
+        if showsConfidenceThresholdBubble {
+          Text(confidencePercentText)
+            .font(BrandTypography.caption.weight(.semibold))
+            .monospacedDigit()
+            .foregroundStyle(BrandColors.backgroundPrimary)
+            .padding(.horizontal, BrandMetrics.Spacing.sm)
+            .padding(.vertical, BrandMetrics.Spacing.xs)
+            .background(
+              Capsule(style: .continuous)
+                .fill(BrandColors.accent)
+            )
+            .offset(x: confidenceBubbleOffset(width: proxy.size.width), y: 0)
+            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottom)))
+        }
+      }
+    }
+    .frame(height: showsConfidenceThresholdBubble ? 54 : 24)
+    .animation(BrandMotion.standard, value: showsConfidenceThresholdBubble)
+    .accessibilityLabel("Approval to auto-accept threshold")
+    .accessibilityValue(confidencePercentText)
   }
 
   private var pipelineHealthSection: some View {
@@ -1708,6 +1810,31 @@ struct SettingsView: View {
     return trimmed.isEmpty ? provider.defaultModel : trimmed
   }
 
+  private var confidencePercentText: String {
+    "\(Int((confidenceThreshold * 100).rounded()))%"
+  }
+
+  private var showsConfidenceThresholdBubble: Bool {
+    isAdjustingConfidenceThreshold || showsStagedConfidenceDrag
+  }
+
+  private var confidenceThresholdBinding: Binding<Double> {
+    Binding(
+      get: {
+        min(max(confidenceThreshold, 0.5), 1)
+      },
+      set: { newValue in
+        confidenceThreshold = newValue
+      }
+    )
+  }
+
+  private func confidenceBubbleOffset(width: CGFloat) -> CGFloat {
+    let normalized = CGFloat((confidenceThresholdBinding.wrappedValue - 0.5) / 0.5)
+    let bubbleWidth: CGFloat = 48
+    return min(max(normalized * width - bubbleWidth / 2, 0), max(0, width - bubbleWidth))
+  }
+
   private func refreshStatus() {
     statusSnapshot = SettingsStatusSnapshot.make(
       provider: selectedProvider,
@@ -1789,6 +1916,7 @@ struct SettingsView: View {
 
     applyProviderKeysDebugOverride()
     applyLocalModelDebugOverride()
+    applyProcessingDebugOverride()
   }
 
   private func applyProviderKeysDebugOverride() {
@@ -1888,6 +2016,16 @@ struct SettingsView: View {
       focusedLocalModelField = nil
     }
     refreshStatus()
+  }
+
+  private func applyProcessingDebugOverride() {
+    guard let fixture = ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_PROCESSING"] else {
+      return
+    }
+
+    selectedSection = .processing
+    confidenceThreshold = 0.85
+    showsStagedConfidenceDrag = fixture == "dragging"
   }
 
   private static func liveTestConnection(
