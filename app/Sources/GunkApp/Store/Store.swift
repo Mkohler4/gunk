@@ -489,11 +489,10 @@ final class Store {
             model,
             input_tokens,
             output_tokens,
-            cost_usd,
             started_at,
             finished_at
           )
-          VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
           """,
         arguments: [
           sourceId,
@@ -501,7 +500,6 @@ final class Store {
           model,
           inputTokens,
           outputTokens,
-          costUsd,
           startedAt,
           finishedAt
         ]
@@ -514,10 +512,70 @@ final class Store {
         model: model,
         inputTokens: inputTokens,
         outputTokens: outputTokens,
-        costUsd: costUsd,
+        costUsd: nil,
         startedAt: startedAt,
         finishedAt: finishedAt
       )
+    }
+  }
+
+  func listLLMRuns() throws -> [LLMRun] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            started_at,
+            finished_at
+          FROM llm_runs
+          ORDER BY started_at ASC, id ASC
+          """
+      )
+
+      return rows.map(Store.llmRun(from:))
+    }
+  }
+
+  func llmRunsForSource(_ sourceId: Int64) throws -> [LLMRun] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: """
+          SELECT
+            id,
+            source_id,
+            provider,
+            model,
+            input_tokens,
+            output_tokens,
+            started_at,
+            finished_at
+          FROM llm_runs
+          WHERE source_id = ?
+          ORDER BY started_at ASC, id ASC
+          """,
+        arguments: [sourceId]
+      )
+
+      return rows.map(Store.llmRun(from:))
+    }
+  }
+
+  func llmRunAggregatesByModel() throws -> [LLMRunAggregate] {
+    try databaseQueue.read { db in
+      try Store.llmRunAggregatesByModel(db)
+    }
+  }
+
+  func llmRunAggregatesByModel(sourceId: Int64) throws -> [LLMRunAggregate] {
+    try databaseQueue.read { db in
+      try Store.llmRunAggregatesByModel(db, sourceId: sourceId)
     }
   }
 
@@ -1060,6 +1118,65 @@ final class Store {
       relpath: row["relpath"],
       size: row["size"]
     )
+  }
+
+  private static func llmRun(from row: Row) -> LLMRun {
+    LLMRun(
+      id: row["id"],
+      sourceId: row["source_id"],
+      provider: row["provider"],
+      model: row["model"],
+      inputTokens: row["input_tokens"],
+      outputTokens: row["output_tokens"],
+      costUsd: nil,
+      startedAt: row["started_at"],
+      finishedAt: row["finished_at"]
+    )
+  }
+
+  private static func llmRunAggregate(from row: Row) -> LLMRunAggregate {
+    LLMRunAggregate(
+      provider: row["provider"],
+      model: row["model"],
+      inputTokens: row["input_tokens"],
+      outputTokens: row["output_tokens"],
+      runCount: row["run_count"],
+      hasUnknownTokens: row["has_unknown_tokens"]
+    )
+  }
+
+  private static func llmRunAggregatesByModel(
+    _ db: Database,
+    sourceId: Int64? = nil
+  ) throws -> [LLMRunAggregate] {
+    let whereClause = sourceId == nil ? "" : "WHERE source_id = ?"
+    let rows = try Row.fetchAll(
+      db,
+      sql: """
+        SELECT
+          provider,
+          model,
+          SUM(COALESCE(input_tokens, 0)) AS input_tokens,
+          SUM(COALESCE(output_tokens, 0)) AS output_tokens,
+          COUNT(id) AS run_count,
+          CASE
+            WHEN SUM(
+              CASE
+                WHEN input_tokens IS NULL OR output_tokens IS NULL THEN 1
+                ELSE 0
+              END
+            ) > 0 THEN 1
+            ELSE 0
+          END AS has_unknown_tokens
+        FROM llm_runs
+        \(whereClause)
+        GROUP BY provider, model
+        ORDER BY provider ASC, model ASC
+        """,
+      arguments: sourceId.map { [$0] } ?? []
+    )
+
+    return rows.map(Store.llmRunAggregate(from:))
   }
 
   private static func smokeRun(from row: Row) -> SmokeRunRecord {
