@@ -51,6 +51,26 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
   tests green (243 passing, 1 sandbox-availability skip).
 
 ### Removed
+- `gunk.app` phase-10 close-out (T-10.15): deleted the orphaned legacy
+  `RunConsoleView` — superseded by `RunConsoleStageView` (the module-run-v2
+  presentation) when the run console v2 landed in T-10.9, yet never
+  instantiated anywhere (`rg` confirmed zero references, including the
+  screenshot hooks, which live on the still-used `RunConsoleModel`). T-10.13
+  had even updated its deferred-label copy — editing dead code, the same "kept
+  for reuse" trap Phase 9 flagged. Its file was renamed to
+  `RunConsoleModel.swift` to match its sole surviving content;
+  `RunConsoleModel` and the `GUNK_DEBUG_RUN_CONSOLE` staging are intact. The
+  inline `ModuleDetailView` was already gone (T-10.4 moved its capabilities
+  onto the page; only docstrings still name it). ADR-0017 (MCP run tool) moved
+  to **Accepted** (implemented in T-10.12) and both Phase 10 ADRs (0016/0017)
+  are now linked from the roadmap; Phase 10 roadmap items checked off and
+  `docs/retros/phase-10.md` written. Regression pass at 960×600 and default
+  width across the module page and every run state confirmed the toolbox-v2
+  constraints (graphite surfaces, mono only for paths/code/terminal, accent
+  green only on earned meaning, glass on the controls layer) and the
+  two-surfaces rule (smoke run ≠ extraction inspector) hold. Schema-parity
+  check still passes (v0–v4 only; v5/v6/v7 are app-only). Build + tests green
+  (257 passing, 1 sandbox-availability skip).
 - `gunk.app` phase-9 close-out (T-9.7): removed the orphaned `ProviderBadge`
   component. T-9.2 (#165) reworked it into a brand "token" and kept it "for
   reuse", but the card switched to `ProviderWatermark` and the list row to

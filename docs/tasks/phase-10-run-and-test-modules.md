@@ -1481,6 +1481,25 @@ browser** at the module's served surface. In-app preview is explicitly out.
 
 **Owner:** agent
 **Checkpoint:** none
+**Status: landed (2026-06-17).** One quiet `How this works` disclosure on the
+module page opens a cached AI walkthrough (summary, data flow in → transform →
+out, key functions, what it touches, its limits — the long form of the T-10.8
+input signature). **Decision (the task's "decide and report"): generated
+app-side and cached on first request, not at engine extraction.** The engine
+extractor makes no LLM call and the manual-approve path is pure Swift with no
+engine, so an engine-only cache would leave every manually-approved and older
+module permanently unanalyzed; generating in the app (where the user's
+provider/model/key already live) is one mechanism that covers every module and
+honors the constraints — instant on open (cache read in schema v7
+`module_analyses`, app-only/additive), never a live call at view time, never
+auto-summoned on open (unanalyzed modules show a quiet "Not analyzed yet" with a
+single on-demand "Analyze" action — the refining-loop rule). Mono only for the
+code references. Lives in `ModuleAnalysis`/`ModuleAnalysisComposer`/
+`LiveModuleAnalysisGenerator` + `BrowseModel` + the `ModulePageView` disclosure;
+a `GUNK_DEBUG_HOW_IT_WORKS=closed|open|missing` hook stages the states. Build +
+tests green (257 passing, 1 sandbox-availability skip). The human-in-the-loop
+confirmation (opening it on a real module, instant + accurate-enough) is Mark's
+gate.
 
 ### Goal
 A quiet, single disclosure on the module page that opens an AI-written
