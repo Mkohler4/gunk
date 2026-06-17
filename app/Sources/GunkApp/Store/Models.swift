@@ -57,6 +57,15 @@ struct LLMRun: Equatable, Identifiable, Sendable {
   let finishedAt: Int64?
 }
 
+struct LLMRunAggregate: Equatable, Sendable {
+  let provider: String
+  let model: String
+  let inputTokens: Int64
+  let outputTokens: Int64
+  let runCount: Int
+  let hasUnknownTokens: Bool
+}
+
 struct GunkEmbedding: Equatable, Identifiable, Sendable {
   var id: Int64 { gunkId }
 

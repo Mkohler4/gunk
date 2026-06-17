@@ -260,23 +260,185 @@ final class StoreTests: XCTestCase {
       model: "gpt-5",
       inputTokens: 1000,
       outputTokens: 200,
-      costUsd: 0.12,
       finishedAt: 150
     )
 
+    XCTAssertGreaterThan(run.id, 0)
+    XCTAssertEqual(run.sourceId, source.id)
+    XCTAssertEqual(run.provider, "openai")
+    XCTAssertEqual(run.model, "gpt-5")
+    XCTAssertEqual(run.inputTokens, 1000)
+    XCTAssertEqual(run.outputTokens, 200)
+    XCTAssertEqual(run.startedAt, 100)
+    XCTAssertEqual(run.finishedAt, 150)
+  }
+
+  func testListLLMRunsReturnsStartedAtOrder() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+
+    let later = try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 10,
+      outputTokens: 2,
+      startedAt: 300
+    )
+    let earlier = try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      inputTokens: 20,
+      outputTokens: 4,
+      startedAt: 200
+    )
+
+    XCTAssertEqual(try store.listLLMRuns().map(\.id), [earlier.id, later.id])
+  }
+
+  func testLLMRunsForSourceFiltersAndOrdersRuns() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let other = try store.insertSource(name: "other", path: "/code/other")
+
+    let included = try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      startedAt: 200
+    )
+    _ = try store.recordLLMRun(
+      sourceId: other.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      startedAt: 150
+    )
+    let alsoIncluded = try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      startedAt: 250
+    )
+
+    XCTAssertEqual(try store.llmRunsForSource(source.id).map(\.id), [included.id, alsoIncluded.id])
+  }
+
+  func testLLMRunAggregatesByModelGroupAndSumTokens() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 100,
+      outputTokens: 20
+    )
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 300,
+      outputTokens: 40
+    )
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "anthropic",
+      model: "claude-sonnet-4",
+      inputTokens: 500,
+      outputTokens: 60
+    )
+
     XCTAssertEqual(
-      run,
-      LLMRun(
-        id: run.id,
-        sourceId: source.id,
-        provider: "openai",
-        model: "gpt-5",
-        inputTokens: 1000,
-        outputTokens: 200,
-        costUsd: 0.12,
-        startedAt: 100,
-        finishedAt: 150
-      )
+      try store.llmRunAggregatesByModel(),
+      [
+        LLMRunAggregate(
+          provider: "anthropic",
+          model: "claude-sonnet-4",
+          inputTokens: 500,
+          outputTokens: 60,
+          runCount: 1,
+          hasUnknownTokens: false
+        ),
+        LLMRunAggregate(
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          inputTokens: 400,
+          outputTokens: 60,
+          runCount: 2,
+          hasUnknownTokens: false
+        )
+      ]
+    )
+  }
+
+  func testLLMRunAggregatesTreatNullTokensAsZeroAndFlagUnknowns() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: nil,
+      outputTokens: 20
+    )
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 300,
+      outputTokens: nil
+    )
+
+    XCTAssertEqual(
+      try store.llmRunAggregatesByModel(),
+      [
+        LLMRunAggregate(
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          inputTokens: 300,
+          outputTokens: 20,
+          runCount: 2,
+          hasUnknownTokens: true
+        )
+      ]
+    )
+  }
+
+  func testLLMRunAggregatesByModelCanFilterBySource() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let other = try store.insertSource(name: "other", path: "/code/other")
+
+    try store.recordLLMRun(
+      sourceId: source.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 100,
+      outputTokens: 20
+    )
+    try store.recordLLMRun(
+      sourceId: other.id,
+      provider: "openai",
+      model: "gpt-4.1-mini",
+      inputTokens: 900,
+      outputTokens: 90
+    )
+
+    XCTAssertEqual(
+      try store.llmRunAggregatesByModel(sourceId: source.id),
+      [
+        LLMRunAggregate(
+          provider: "openai",
+          model: "gpt-4.1-mini",
+          inputTokens: 100,
+          outputTokens: 20,
+          runCount: 1,
+          hasUnknownTokens: false
+        )
+      ]
     )
   }
 
