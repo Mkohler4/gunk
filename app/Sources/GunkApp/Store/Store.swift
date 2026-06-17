@@ -867,6 +867,86 @@ final class Store {
     )
   }
 
+  // MARK: - "How this works" analysis cache (T-10.14, v7)
+
+  /// Read the cached analysis for a module, or `nil` when none was generated
+  /// yet (older/just-extracted modules). The view reads this synchronously, so
+  /// opening the disclosure never blocks on a model call.
+  func moduleAnalysis(gunkId: Int64) throws -> ModuleAnalysis? {
+    try databaseQueue.read { db in
+      try Row.fetchOne(
+        db,
+        sql: """
+          SELECT gunk_id, content, model, generated_at
+          FROM module_analyses
+          WHERE gunk_id = ?
+          """,
+        arguments: [gunkId]
+      )
+      .flatMap(Store.moduleAnalysis(from:))
+    }
+  }
+
+  /// All cached analyses, keyed by module — the bulk read the model loads once
+  /// per refresh so `analysis(for:)` is a pure dictionary lookup.
+  func listModuleAnalyses() throws -> [Int64: ModuleAnalysis] {
+    try databaseQueue.read { db in
+      let rows = try Row.fetchAll(
+        db,
+        sql: "SELECT gunk_id, content, model, generated_at FROM module_analyses"
+      )
+
+      return rows.reduce(into: [:]) { result, row in
+        if let analysis = Store.moduleAnalysis(from: row) {
+          result[row["gunk_id"] as Int64] = analysis
+        }
+      }
+    }
+  }
+
+  /// Cache (or replace) a module's analysis. Keyed by `gunk_id`, so generating
+  /// again upserts in place — one analysis per module.
+  @discardableResult
+  func upsertModuleAnalysis(
+    gunkId: Int64,
+    content: ModuleAnalysisContent,
+    model: String?
+  ) throws -> ModuleAnalysis {
+    let generatedAt = now()
+    let encoded = String(decoding: try JSONEncoder().encode(content), as: UTF8.self)
+
+    try databaseQueue.write { db in
+      try db.execute(
+        sql: """
+          INSERT INTO module_analyses (gunk_id, content, model, generated_at)
+          VALUES (?, ?, ?, ?)
+          ON CONFLICT(gunk_id) DO UPDATE
+          SET content = excluded.content,
+              model = excluded.model,
+              generated_at = excluded.generated_at
+          """,
+        arguments: [gunkId, encoded, model, generatedAt]
+      )
+    }
+
+    return ModuleAnalysis(content: content, model: model, generatedAt: generatedAt)
+  }
+
+  private static func moduleAnalysis(from row: Row) -> ModuleAnalysis? {
+    let raw: String = row["content"]
+    guard let data = raw.data(using: .utf8),
+          let content = try? JSONDecoder().decode(ModuleAnalysisContent.self, from: data)
+    else {
+      return nil
+    }
+
+    return ModuleAnalysis(
+      content: content,
+      model: row["model"],
+      generatedAt: row["generated_at"]
+    )
+  }
+
   private static let smokeRunColumns = """
     SELECT
       id,

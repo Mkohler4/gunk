@@ -65,7 +65,7 @@ final class StoreTests: XCTestCase {
     XCTAssertEqual(try store.listSources().map(\.name), ["active"])
   }
 
-  func testMigrationsAreIdempotentThroughV6() throws {
+  func testMigrationsAreIdempotentThroughV7() throws {
     let queue = try DatabaseQueue()
 
     _ = try Store(databaseQueue: queue, now: { 100 })
@@ -75,7 +75,7 @@ final class StoreTests: XCTestCase {
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6, 7])
   }
 
   func testV0ToLatestUpgradePreservesSources() throws {
@@ -116,7 +116,7 @@ final class StoreTests: XCTestCase {
       try Row.fetchOne(db, sql: "SELECT source_id, relpath, size FROM files")
     }
 
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6, 7])
     XCTAssertEqual(
       source,
       Source(
@@ -442,7 +442,7 @@ final class StoreTests: XCTestCase {
     let versions = try queue.read { db in
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6, 7])
 
     // The old row opens cleanly with null attribution (it renders the neutral
     // mark) until backfill resolves it.
@@ -494,12 +494,95 @@ final class StoreTests: XCTestCase {
     let versions = try queue.read { db in
       try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
     }
-    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6])
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6, 7])
 
     // The new tables exist and start empty on an upgraded store.
     XCTAssertEqual(try store.smokeRuns(gunkId: 1), [])
     XCTAssertEqual(try store.listExamples(gunkId: 1), [])
     XCTAssertNil(try store.mostRecentSmokeRun(gunkId: 1))
+  }
+
+  // MARK: - T-10.14 (v7): "How this works" analysis cache
+
+  func testV6StoreUpgradesToV7WithEmptyAnalyses() throws {
+    let queue = try DatabaseQueue()
+
+    // Build a store at v6 (pre-analysis) with one module, then open it.
+    try queue.write { db in
+      for migration in Schema.migrations where migration.version <= 6 {
+        try db.execute(sql: migration.sql)
+        try db.execute(
+          sql: "INSERT INTO schema_version (version, applied_at) VALUES (?, ?)",
+          arguments: [migration.version, 100]
+        )
+      }
+
+      try db.execute(
+        sql: "INSERT INTO sources (id, name, path, dropped_at) VALUES (?, ?, ?, ?)",
+        arguments: [1, "legacy", "/code/legacy", 100]
+      )
+      try db.execute(
+        sql: "INSERT INTO gunks (id, source_id, name) VALUES (?, ?, ?)",
+        arguments: [1, 1, "legacy-module"]
+      )
+    }
+
+    let store = try Store(databaseQueue: queue, now: { 200 })
+
+    let versions = try queue.read { db in
+      try Int.fetchAll(db, sql: "SELECT version FROM schema_version")
+    }
+    XCTAssertEqual(versions, [0, 1, 2, 3, 4, 5, 6, 7])
+
+    // The cache exists and starts empty on an upgraded store.
+    XCTAssertNil(try store.moduleAnalysis(gunkId: 1))
+    XCTAssertEqual(try store.listModuleAnalyses().count, 0)
+  }
+
+  func testUpsertModuleAnalysisPersistsAndReadsBack() throws {
+    let (store, _) = try makeStore(now: 555)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "module")
+
+    let content = ModuleAnalysisContent(
+      summary: "Slugifies a string.",
+      dataFlow: ["Reads text.", "Lowercases and hyphenates."],
+      keyFunctions: [AnalysisFunction(name: "slugify(_:)", role: "The entrypoint.")],
+      touches: ["No I/O."],
+      limits: ["ASCII only."]
+    )
+
+    let stored = try store.upsertModuleAnalysis(gunkId: gunk.id, content: content, model: "gpt-4.1-mini")
+    XCTAssertEqual(stored.content, content)
+    XCTAssertEqual(stored.model, "gpt-4.1-mini")
+    XCTAssertEqual(stored.generatedAt, 555)
+
+    let read = try XCTUnwrap(try store.moduleAnalysis(gunkId: gunk.id))
+    XCTAssertEqual(read, stored)
+
+    let all = try store.listModuleAnalyses()
+    XCTAssertEqual(all[gunk.id], stored)
+  }
+
+  func testUpsertModuleAnalysisReplacesInPlace() throws {
+    let (store, _) = try makeStore(now: 100)
+    let source = try store.insertSource(name: "source", path: "/code/source")
+    let gunk = try store.insertGunk(sourceId: source.id, name: "module")
+
+    let first = ModuleAnalysisContent(
+      summary: "First.", dataFlow: [], keyFunctions: [], touches: [], limits: []
+    )
+    let second = ModuleAnalysisContent(
+      summary: "Second.", dataFlow: ["Step."], keyFunctions: [], touches: [], limits: []
+    )
+
+    try store.upsertModuleAnalysis(gunkId: gunk.id, content: first, model: "a")
+    try store.upsertModuleAnalysis(gunkId: gunk.id, content: second, model: "b")
+
+    let read = try XCTUnwrap(try store.moduleAnalysis(gunkId: gunk.id))
+    XCTAssertEqual(read.content, second)
+    XCTAssertEqual(read.model, "b")
+    XCTAssertEqual(try store.listModuleAnalyses().count, 1)
   }
 
   func testInsertSmokeRunRoundTrips() throws {
