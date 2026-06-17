@@ -97,7 +97,10 @@ struct AppShellView: View {
     // runs can land on another section via GUNK_DEBUG_SECTION.
     let debugSection = ProcessInfo.processInfo.environment["GUNK_DEBUG_SECTION"]
       .flatMap(AppSection.init(rawValue:))
-    _selection = State(initialValue: debugSection ?? .library)
+    let hasSettingsDebug = ProcessInfo.processInfo.environment.keys.contains { key in
+      key.hasPrefix("GUNK_DEBUG_SETTINGS_")
+    }
+    _selection = State(initialValue: debugSection ?? (hasSettingsDebug ? .settings : .library))
   }
 
   /// Fixed sidebar width — the toolbox-v2 mockup's 232pt (Mark's review:

@@ -105,6 +105,54 @@ final class SpendModelTests: XCTestCase {
     XCTAssertEqual(model.totalRunCount, 2)
   }
 
+  func testProjectionUsesEstimatedTotalAndReportsUnknownPriceGaps() {
+    let model = SpendModel(
+      aggregates: [
+        LLMRunAggregate(
+          provider: "openai",
+          model: "known-model",
+          inputTokens: 1_000_000,
+          outputTokens: 500_000,
+          runCount: 1,
+          hasUnknownTokens: false
+        ),
+        LLMRunAggregate(
+          provider: "openai",
+          model: "custom-fine-tune",
+          inputTokens: 4_000_000,
+          outputTokens: 2_000_000,
+          runCount: 1,
+          hasUnknownTokens: false
+        )
+      ],
+      priceTable: Self.testPriceTable
+    )
+
+    XCTAssertEqual(model.projectedMonthlySpend.estimatedUSD, 4.0, accuracy: 0.000_001)
+    XCTAssertEqual(model.projectedMonthlySpend.unknownPriceRowCount, 1)
+    XCTAssertTrue(model.projectedMonthlySpend.hasUnknownPriceGaps)
+  }
+
+  func testProjectionTreatsLocalRowsAsKnownFreeRows() {
+    let model = SpendModel(
+      aggregates: [
+        LLMRunAggregate(
+          provider: "ollama",
+          model: "local-model",
+          inputTokens: 4_000_000,
+          outputTokens: 2_000_000,
+          runCount: 3,
+          hasUnknownTokens: false
+        )
+      ],
+      priceTable: Self.testPriceTable
+    )
+
+    XCTAssertEqual(model.projectedMonthlySpend.estimatedUSD, 0, accuracy: 0.000_001)
+    XCTAssertEqual(model.projectedMonthlySpend.unknownPriceRowCount, 0)
+    XCTAssertFalse(model.projectedMonthlySpend.hasUnknownPriceGaps)
+  }
+
   private static let testPriceTable = PriceTable(
     priceTableVersion: "test-v1",
     effectiveDate: "2099-01-01",

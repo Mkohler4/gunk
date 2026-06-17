@@ -1,6 +1,17 @@
 import Foundation
 
 struct SpendModel: Equatable, Sendable {
+  struct Projection: Equatable, Sendable {
+    let estimatedUSD: Double
+    let unknownPriceRowCount: Int
+    let priceTableVersion: String
+    let effectiveDate: String
+
+    var hasUnknownPriceGaps: Bool {
+      unknownPriceRowCount > 0
+    }
+  }
+
   struct Row: Equatable, Identifiable, Sendable {
     var id: String { "\(provider)::\(model)" }
 
@@ -21,6 +32,15 @@ struct SpendModel: Equatable, Sendable {
   let unknownPriceRowCount: Int
   let priceTableVersion: String
   let effectiveDate: String
+
+  var projectedMonthlySpend: Projection {
+    Projection(
+      estimatedUSD: totalUSD,
+      unknownPriceRowCount: unknownPriceRowCount,
+      priceTableVersion: priceTableVersion,
+      effectiveDate: effectiveDate
+    )
+  }
 
   init(
     aggregates: [LLMRunAggregate],

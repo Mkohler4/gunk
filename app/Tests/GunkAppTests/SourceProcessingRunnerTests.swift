@@ -29,6 +29,8 @@ final class SourceProcessingRunnerTests: XCTestCase {
     userDefaults.set(LLMProvider.openAI.rawValue, forKey: "llm.provider")
     userDefaults.set("gpt-fixture", forKey: "llm.model")
     userDefaults.set(0.85, forKey: LLMSettings.confidenceThresholdKey)
+    userDefaults.set(true, forKey: LLMSettings.monthlyCostCapEnabledKey)
+    userDefaults.set(0.01, forKey: LLMSettings.monthlyCostCapUSDKey)
 
     let launcher = FakeEngineLauncher(events: [
       .stage(stage: "scan", phase: "started", durationMs: nil, counts: [:]),
@@ -61,6 +63,7 @@ final class SourceProcessingRunnerTests: XCTestCase {
     assertFlag(arguments, "--source-id", String(source.id))
     assertFlag(arguments, "--db", databaseURL.path)
     XCTAssertEqual(launcher.lastEnvironment?["GUNK_API_KEY"], "sk-test")
+    XCTAssertFalse(arguments.contains("--monthly-cost-cap"))
   }
 
   func testPersistsProvenanceForExtractedModules() async throws {

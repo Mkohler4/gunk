@@ -258,6 +258,8 @@ struct SettingsView: View {
   @AppStorage(LLMProvider.ollama.modelStorageKey) private var ollamaModel = LLMProvider.ollama.defaultModel
   @AppStorage(OllamaClient.baseURLStorageKey) private var ollamaBaseURLText = "http://localhost:11434"
   @AppStorage(LLMSettings.confidenceThresholdKey) private var confidenceThreshold = LLMSettings.defaultConfidenceThreshold
+  @AppStorage(LLMSettings.monthlyCostCapEnabledKey) private var monthlyCostCapEnabled = false
+  @AppStorage(LLMSettings.monthlyCostCapUSDKey) private var monthlyCostCapUSD = LLMSettings.defaultMonthlyCostCapUSD
 
   @State private var selectedSection: SettingsSection
   @State private var statusSnapshot: SettingsStatusSnapshot?
@@ -325,7 +327,15 @@ struct SettingsView: View {
     )
     self._confidenceThreshold = AppStorage(
       wrappedValue: confidenceThreshold,
-      "llm.confidenceThreshold"
+      LLMSettings.confidenceThresholdKey
+    )
+    self._monthlyCostCapEnabled = AppStorage(
+      wrappedValue: false,
+      LLMSettings.monthlyCostCapEnabledKey
+    )
+    self._monthlyCostCapUSD = AppStorage(
+      wrappedValue: LLMSettings.defaultMonthlyCostCapUSD,
+      LLMSettings.monthlyCostCapUSDKey
     )
     self._selectedSection = State(initialValue: initialSection)
     self._editingAPIKey = State(initialValue: apiKey)
@@ -1081,6 +1091,41 @@ struct SettingsView: View {
           .help("Open the Library scoped to modules that need approval")
         }
       }
+
+      settingsPanel {
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
+          Toggle(isOn: $monthlyCostCapEnabled) {
+            VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+              Text("Warn me past a monthly cap")
+                .font(BrandTypography.headline)
+                .foregroundStyle(BrandColors.textPrimary)
+
+              Text("A soft budget. gunk shows a warning when projected spend crosses it — it never blocks a decomposition.")
+                .font(BrandTypography.body)
+                .foregroundStyle(BrandColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
+            }
+          }
+          .toggleStyle(.switch)
+
+          HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.md) {
+            Text("Monthly cap $")
+              .font(BrandTypography.callout.weight(.semibold))
+              .foregroundStyle(monthlyCostCapEnabled ? BrandColors.textPrimary : BrandColors.textSecondary)
+
+            TextField("25.00", value: monthlyCostCapBinding, format: .number.precision(.fractionLength(2)))
+              .textFieldStyle(.roundedBorder)
+              .frame(width: 120)
+              .monospacedDigit()
+              .disabled(!monthlyCostCapEnabled)
+              .accessibilityLabel("Monthly cap in estimated dollars")
+
+            Spacer(minLength: BrandMetrics.Spacing.md)
+          }
+
+          monthlyCostCapReadout
+        }
+      }
     }
   }
 
@@ -1128,6 +1173,42 @@ struct SettingsView: View {
     .animation(BrandMotion.standard, value: showsConfidenceThresholdBubble)
     .accessibilityLabel("Approval to auto-accept threshold")
     .accessibilityValue(confidencePercentText)
+  }
+
+  private var monthlyCostCapReadout: some View {
+    let projection = currentSpendProjection
+    let isOverCap = monthlyCostCapEnabled && monthlyCostCapUSD > 0 && projection.estimatedUSD > monthlyCostCapUSD
+    let color = isOverCap ? BrandColors.warning : BrandColors.textSecondary
+    let icon = isOverCap ? "exclamationmark.triangle" : "chart.bar.doc.horizontal"
+
+    return VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
+      HStack(alignment: .firstTextBaseline, spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: icon)
+          .font(BrandTypography.callout)
+          .foregroundStyle(color)
+
+        Text("Projected this month: \(Self.formatEstimatedUSD(projection.estimatedUSD)) ESTIMATED")
+          .font(BrandTypography.callout.weight(.semibold))
+          .foregroundStyle(isOverCap ? BrandColors.warning : BrandColors.textPrimary)
+          .monospacedDigit()
+      }
+
+      Text(monthlyCostCapProjectionCopy(projection: projection, isOverCap: isOverCap))
+        .font(BrandTypography.caption)
+        .foregroundStyle(BrandColors.textSecondary)
+        .fixedSize(horizontal: false, vertical: true)
+    }
+    .padding(BrandMetrics.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(isOverCap ? BrandColors.warning.opacity(BrandMetrics.Control.tintedFillOpacity) : BrandColors.backgroundSecondary)
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(isOverCap ? BrandColors.warning.opacity(0.55) : .clear)
+    )
+    .accessibilityLabel(monthlyCostCapAccessibilityLabel(projection: projection, isOverCap: isOverCap))
   }
 
   private var pipelineHealthSection: some View {
@@ -1829,6 +1910,54 @@ struct SettingsView: View {
     )
   }
 
+  private var monthlyCostCapBinding: Binding<Double> {
+    Binding(
+      get: { monthlyCostCapUSD },
+      set: { newValue in
+        monthlyCostCapUSD = max(0, newValue)
+      }
+    )
+  }
+
+  private var currentSpendProjection: SpendModel.Projection {
+    (spendModel ?? .fixtureEmpty).projectedMonthlySpend
+  }
+
+  private func monthlyCostCapProjectionCopy(
+    projection: SpendModel.Projection,
+    isOverCap: Bool
+  ) -> String {
+    let capCopy: String
+    if monthlyCostCapEnabled, monthlyCostCapUSD > 0 {
+      capCopy = isOverCap
+        ? "This is over your \(Self.formatEstimatedUSD(monthlyCostCapUSD)) estimated monthly cap. The cap is warn-only; decompositions still run."
+        : "This is under your \(Self.formatEstimatedUSD(monthlyCostCapUSD)) estimated monthly cap. The cap is warn-only; decompositions still run."
+    } else if monthlyCostCapEnabled {
+      capCopy = "Enter a cap above $0. The cap is warn-only; decompositions still run."
+    } else {
+      capCopy = "Off by default. Turn this on to show a warning when the estimate crosses your soft budget."
+    }
+
+    guard projection.hasUnknownPriceGaps else {
+      return "\(capCopy) Based on estimated decomposition spend from the price table."
+    }
+
+    let noun = projection.unknownPriceRowCount == 1 ? "model" : "models"
+    return "\(capCopy) Projection excludes \(projection.unknownPriceRowCount) \(noun) with no price on file."
+  }
+
+  private func monthlyCostCapAccessibilityLabel(
+    projection: SpendModel.Projection,
+    isOverCap: Bool
+  ) -> String {
+    let state = isOverCap ? "Over cap" : "Projected spend"
+    return "\(state), \(Self.formatEstimatedUSD(projection.estimatedUSD)) estimated"
+  }
+
+  private static func formatEstimatedUSD(_ value: Double) -> String {
+    String(format: "$%.2f", value)
+  }
+
   private func confidenceBubbleOffset(width: CGFloat) -> CGFloat {
     let normalized = CGFloat((confidenceThresholdBinding.wrappedValue - 0.5) / 0.5)
     let bubbleWidth: CGFloat = 48
@@ -2026,6 +2155,27 @@ struct SettingsView: View {
     selectedSection = .processing
     confidenceThreshold = 0.85
     showsStagedConfidenceDrag = fixture == "dragging"
+
+    switch fixture {
+    case "cap-off":
+      monthlyCostCapEnabled = false
+      monthlyCostCapUSD = 25
+      spendModel = .fixturePopulated
+    case "cap-under":
+      monthlyCostCapEnabled = true
+      monthlyCostCapUSD = 25
+      spendModel = .fixturePopulated
+    case "cap-exceeded":
+      monthlyCostCapEnabled = true
+      monthlyCostCapUSD = 5
+      spendModel = .fixturePopulated
+    case "cap-unknown":
+      monthlyCostCapEnabled = true
+      monthlyCostCapUSD = 25
+      spendModel = .fixtureUnknownPrice
+    default:
+      break
+    }
   }
 
   private static func liveTestConnection(
