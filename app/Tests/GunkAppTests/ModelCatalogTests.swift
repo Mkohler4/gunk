@@ -74,6 +74,19 @@ final class ModelCatalogTests: XCTestCase {
     XCTAssertEqual(options, ModelCatalog.options(for: .openAI))
   }
 
+  func testRememberedModelCanAddCustomRowForInactiveProvider() {
+    let options = ModelCatalog.menuOptions(
+      for: .anthropic,
+      selectedProvider: .openAI,
+      selectedModelId: "gpt-4.1-mini",
+      rememberedModelId: "claude-haiku-3-20240307"
+    )
+
+    XCTAssertEqual(options.count, ModelCatalog.options(for: .anthropic).count + 1)
+    XCTAssertEqual(options.last?.modelId, "claude-haiku-3-20240307")
+    XCTAssertEqual(options.last?.subtitle, ModelCatalog.customOptionSubtitle)
+  }
+
   func testNoCustomRowForEmptyOrWhitespaceSavedModel() {
     for savedModel in ["", "   ", "\n"] {
       let options = ModelCatalog.menuOptions(

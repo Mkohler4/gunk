@@ -170,17 +170,43 @@ enum SettingsSection: String, CaseIterable, Identifiable {
   }
 }
 
+private enum ProviderTestStatus: Equatable {
+  case idle
+  case testing
+  case success(milliseconds: Int)
+  case failure(String)
+}
+
+private struct ProviderBanner: Equatable {
+  enum Variant {
+    case success
+    case failure
+  }
+
+  let variant: Variant
+  let title: String
+  let message: String
+}
+
 @MainActor
 struct SettingsView: View {
   @AppStorage("llm.provider") private var providerRawValue = LLMProvider.openAI.rawValue
   @AppStorage("llm.model") private var model = LLMProvider.openAI.defaultModel
+  @AppStorage(LLMProvider.openAI.modelStorageKey) private var openAIModel = LLMProvider.openAI.defaultModel
+  @AppStorage(LLMProvider.anthropic.modelStorageKey) private var anthropicModel = LLMProvider.anthropic.defaultModel
+  @AppStorage(LLMProvider.ollama.modelStorageKey) private var ollamaModel = LLMProvider.ollama.defaultModel
   @AppStorage("llm.confidenceThreshold") private var confidenceThreshold = 0.7
 
   @State private var selectedSection: SettingsSection
-  @State private var apiKey: String
   @State private var statusSnapshot: SettingsStatusSnapshot?
-  @State private var statusMessage: String?
-  @State private var isTestingConnection = false
+  @State private var savedProviderKeys: [LLMProvider: String] = [:]
+  @State private var keyReadErrors: [LLMProvider: String] = [:]
+  @State private var editingProvider: LLMProvider?
+  @State private var editingAPIKey: String
+  @State private var editingModel: String
+  @State private var providerTestStatuses: [LLMProvider: ProviderTestStatus] = [:]
+  @State private var providerBanner: ProviderBanner?
+  @State private var removeCandidate: LLMProvider?
   @State private var arrivedFromMCP = false
   @State private var spendModel: SpendModel?
   @State private var spendErrorMessage: String?
@@ -197,6 +223,7 @@ struct SettingsView: View {
   private let loadSpendModel: () throws -> SpendModel
   private let resolveEngine: () -> ResolvedEngine?
   private let openConfig: (URL) -> Void
+  private static let hostedProviders: [LLMProvider] = [.anthropic, .openAI]
 
   init(
     provider: LLMProvider = .openAI,
@@ -229,7 +256,8 @@ struct SettingsView: View {
       "llm.confidenceThreshold"
     )
     self._selectedSection = State(initialValue: initialSection)
-    self._apiKey = State(initialValue: apiKey)
+    self._editingAPIKey = State(initialValue: apiKey)
+    self._editingModel = State(initialValue: model ?? provider.defaultModel)
     self.mcpDeepLinkNonce = mcpDeepLinkNonce
     self.mcpDeepLinkOnAppear = mcpDeepLinkOnAppear
     self.secretStore = secretStore
@@ -255,7 +283,9 @@ struct SettingsView: View {
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
     .background(BrandColors.backgroundPrimary)
     .onAppear {
-      loadSecret(for: selectedProvider)
+      migrateLegacyActiveModelIfNeeded()
+      syncActiveModelFromMemory()
+      refreshProviderKeyStates()
       refreshStatus()
       refreshSpend()
       applySettingsDebugOverride()
@@ -266,6 +296,9 @@ struct SettingsView: View {
     .onChange(of: model) {
       refreshStatus()
     }
+    .onChange(of: providerRawValue) {
+      refreshStatus()
+    }
     .onChange(of: selectedSection) {
       if selectedSection == .spend {
         refreshSpend()
@@ -273,6 +306,21 @@ struct SettingsView: View {
     }
     .onChange(of: mcpDeepLinkNonce) {
       activateMCPDeepLink()
+    }
+    .confirmationDialog(
+      "Remove API key?",
+      isPresented: removeConfirmationBinding,
+      titleVisibility: .visible,
+      presenting: removeCandidate
+    ) { provider in
+      Button("Remove \(provider.rawValue) key", role: .destructive) {
+        removeProviderKey(provider)
+      }
+      Button("Cancel", role: .cancel) {
+        removeCandidate = nil
+      }
+    } message: { provider in
+      Text("This clears the \(provider.rawValue) Keychain slot. The remembered model stays in Settings.")
     }
   }
 
@@ -394,135 +442,322 @@ struct SettingsView: View {
         description: "gunk talks to hosted models on your behalf. Hosted keys stay in your system Keychain, never in gunk's database."
       )
 
+      if let providerBanner {
+        providerBannerView(providerBanner)
+      }
+
       settingsPanel {
         VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-          HStack(spacing: BrandMetrics.Spacing.sm) {
-            Image(systemName: "arrow.right")
-              .font(BrandTypography.callout)
-              .foregroundStyle(BrandColors.textSecondary)
-            Text("Active provider for new decompositions")
-              .font(BrandTypography.headline)
-              .foregroundStyle(BrandColors.textPrimary)
-          }
-
-          Picker("Provider", selection: providerBinding) {
-            ForEach(LLMProvider.allCases) { provider in
-              Text(provider.rawValue).tag(provider)
-            }
-          }
-          .pickerStyle(.segmented)
-
-          Text("Decompositions will run on \(selectedProvider.rawValue) `\(modelForDisplay)`.")
-            .font(BrandTypography.caption)
-            .foregroundStyle(BrandColors.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
+          activeProviderHeader
+          activeHostedProviderSelector
+          activeProviderConsequence
         }
       }
 
       settingsPanel {
-        VStack(alignment: .leading, spacing: 0) {
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
           HStack(alignment: .center, spacing: BrandMetrics.Spacing.sm) {
-            Text("Saved provider")
-              .font(BrandTypography.callout)
+            Text("Saved providers")
+              .font(BrandTypography.headline)
+              .foregroundStyle(BrandColors.textPrimary)
+
+            Text("OpenAI and Anthropic")
+              .font(BrandTypography.caption)
               .foregroundStyle(BrandColors.textSecondary)
 
             Spacer(minLength: BrandMetrics.Spacing.md)
 
-            StatusBadge("Active", variant: .success)
+            Button {
+              addProvider()
+            } label: {
+              Label("Add provider", systemImage: "plus")
+            }
+            .buttonStyle(.brandSecondary)
+            .disabled(firstProviderWithoutKey == nil)
           }
-          .padding(.bottom, BrandMetrics.Spacing.md)
 
           Divider()
             .background(BrandColors.separator)
             .padding(.horizontal, -BrandMetrics.Spacing.lg)
 
-          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-            HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
-              ProviderMark(provider: selectedProvider.rawValue, size: 22)
-
-              VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-                HStack(spacing: BrandMetrics.Spacing.sm) {
-                  Text(selectedProvider.rawValue)
-                    .font(BrandTypography.headline)
-                    .foregroundStyle(BrandColors.textPrimary)
-
-                  keyStateBadge
-                }
-
-                HStack(spacing: BrandMetrics.Spacing.md) {
-                  Text("MODEL \(modelForDisplay)")
-                  if selectedProvider != .ollama {
-                    Text("KEY \(maskedAPIKey)")
-                  }
-                }
-                .font(BrandTypography.mono)
-                .foregroundStyle(BrandColors.textSecondary)
-                .lineLimit(1)
-                .truncationMode(.middle)
-              }
-
-              Spacer(minLength: BrandMetrics.Spacing.md)
-
-              Button(isTestingConnection ? "Testing..." : "Test connection") {
-                Task {
-                  await runConnectionTest()
-                }
-            }
-            .buttonStyle(.brandSecondary)
-            .disabled(isTestingConnection)
-          }
-
-            VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-              Text("Model")
-                .font(BrandTypography.callout)
-                .foregroundStyle(BrandColors.textSecondary)
-              TextField("Model", text: $model)
-                .textFieldStyle(.roundedBorder)
-            }
-
-            if selectedProvider != .ollama {
-              VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
-                Text("API key")
-                  .font(BrandTypography.callout)
-                  .foregroundStyle(BrandColors.textSecondary)
-                SecureField("API key", text: $apiKey)
-                  .textFieldStyle(.roundedBorder)
-              }
-            } else {
-              StatusBadge("Runs locally · no key", variant: .neutral, systemImage: "desktopcomputer")
-            }
-
-            HStack(spacing: BrandMetrics.Spacing.sm) {
-              Image(systemName: "lock")
-                .font(BrandTypography.caption)
-                .foregroundStyle(BrandColors.textTertiary)
-              Text("Saved to your system Keychain, never to gunk's database.")
-                .font(BrandTypography.caption)
-                .foregroundStyle(BrandColors.textSecondary)
-
-              Spacer(minLength: BrandMetrics.Spacing.md)
-
-              Button("Save") {
-                save()
-              }
-              .buttonStyle(.brandPrimary)
-
-              if let statusMessage {
-                Text(statusMessage)
-                  .font(BrandTypography.caption)
-                  .foregroundStyle(BrandColors.textSecondary)
+          VStack(alignment: .leading, spacing: 0) {
+            ForEach(Self.hostedProviders) { provider in
+              providerRow(provider)
+              if provider != Self.hostedProviders.last {
+                Divider()
+                  .background(BrandColors.separator)
+                  .padding(.horizontal, -BrandMetrics.Spacing.lg)
               }
             }
           }
-          .padding(.top, BrandMetrics.Spacing.md)
         }
       }
 
-      Text("Keys are read from your macOS Keychain at call time. gunk's database stores only which provider is active and the chosen model.")
+      Text("Keys are read from your macOS Keychain at call time. gunk's database stores only which provider is active and each provider's chosen model.")
         .font(BrandTypography.caption)
         .foregroundStyle(BrandColors.textSecondary)
         .fixedSize(horizontal: false, vertical: true)
     }
+  }
+
+  private var activeProviderHeader: some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      Image(systemName: "arrow.right")
+        .font(BrandTypography.callout)
+        .foregroundStyle(BrandColors.textSecondary)
+      Text("Active hosted provider for new decompositions")
+        .font(BrandTypography.headline)
+        .foregroundStyle(BrandColors.textPrimary)
+    }
+  }
+
+  private var activeHostedProviderSelector: some View {
+    HStack(spacing: BrandMetrics.Spacing.sm) {
+      ForEach(Self.hostedProviders) { provider in
+        hostedProviderPill(provider)
+      }
+    }
+  }
+
+  private var activeProviderConsequence: some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+      if Self.hostedProviders.contains(selectedProvider) {
+        Text("Decompositions will run on \(selectedProvider.rawValue) `\(modelForDisplay(selectedProvider))`.")
+      } else {
+        Text("Ollama is active from the Local model flow. Choose a hosted provider here to run new decompositions on OpenAI or Anthropic.")
+      }
+
+      Text("Each provider keeps its own model, so switching here never overwrites what you typed.")
+        .foregroundStyle(BrandColors.textTertiary)
+    }
+    .font(BrandTypography.caption)
+    .foregroundStyle(BrandColors.textSecondary)
+    .fixedSize(horizontal: false, vertical: true)
+  }
+
+  private func hostedProviderPill(_ provider: LLMProvider) -> some View {
+    let isActive = selectedProvider == provider
+
+    return Button {
+      activateHostedProvider(provider)
+    } label: {
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        ProviderMark(provider: provider.rawValue, size: 18)
+        Text(provider.rawValue)
+          .font(BrandTypography.callout.weight(.medium))
+        if isActive {
+          Image(systemName: "checkmark")
+            .font(BrandTypography.caption.weight(.semibold))
+        }
+      }
+      .foregroundStyle(isActive ? BrandColors.backgroundPrimary : BrandColors.textPrimary)
+      .padding(.horizontal, BrandMetrics.Spacing.md)
+      .padding(.vertical, BrandMetrics.Spacing.sm)
+      .background(
+        Capsule()
+          .fill(isActive ? BrandColors.accent : BrandColors.surfaceGlass)
+      )
+      .overlay(
+        Capsule()
+          .strokeBorder(isActive ? .clear : BrandColors.separator)
+      )
+      .contentShape(Capsule())
+    }
+    .buttonStyle(.plain)
+  }
+
+  private func providerBannerView(_ banner: ProviderBanner) -> some View {
+    let color = banner.variant == .success ? BrandColors.success : BrandColors.danger
+    let icon = banner.variant == .success ? "checkmark.circle" : "xmark.circle"
+
+    return HStack(alignment: .top, spacing: BrandMetrics.Spacing.sm) {
+      Image(systemName: icon)
+        .font(BrandTypography.callout)
+        .foregroundStyle(color)
+
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        Text(banner.title)
+          .font(BrandTypography.callout.weight(.semibold))
+          .foregroundStyle(BrandColors.textPrimary)
+        Text(banner.message)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+    }
+    .padding(BrandMetrics.Spacing.md)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(color.opacity(BrandMetrics.Control.tintedFillOpacity))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(color.opacity(0.35))
+    )
+  }
+
+  private func providerRow(_ provider: LLMProvider) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+      HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
+        RoundedRectangle(cornerRadius: 3, style: .continuous)
+          .fill(hasSavedKey(provider) ? BrandColors.success : BrandColors.warning)
+          .frame(width: 9, height: 9)
+          .padding(.top, 7)
+
+        ProviderMark(provider: provider.rawValue, size: 22)
+
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+          HStack(spacing: BrandMetrics.Spacing.sm) {
+            Text(provider.rawValue)
+              .font(BrandTypography.headline)
+              .foregroundStyle(BrandColors.textPrimary)
+
+            providerKeyStateBadge(provider)
+
+            if selectedProvider == provider {
+              StatusBadge("Active", variant: .success)
+            }
+          }
+
+          HStack(spacing: BrandMetrics.Spacing.md) {
+            Text("KEY \(maskedAPIKey(for: provider))")
+            Text("MODEL \(modelForDisplay(provider))")
+          }
+          .font(BrandTypography.mono)
+          .foregroundStyle(BrandColors.textSecondary)
+          .lineLimit(1)
+          .truncationMode(.middle)
+
+          if let error = keyReadErrors[provider] {
+            Text(error)
+              .font(BrandTypography.caption)
+              .foregroundStyle(BrandColors.danger)
+              .fixedSize(horizontal: false, vertical: true)
+          }
+        }
+
+        Spacer(minLength: BrandMetrics.Spacing.md)
+
+        providerRowActions(provider)
+      }
+
+      if let testChip = providerTestChip(provider) {
+        testChip
+      }
+
+      if editingProvider == provider {
+        providerEditForm(provider)
+          .transition(.opacity.combined(with: .move(edge: .top)))
+      }
+    }
+    .padding(.vertical, BrandMetrics.Spacing.md)
+  }
+
+  private func providerRowActions(_ provider: LLMProvider) -> some View {
+    HStack(spacing: BrandMetrics.Spacing.xs) {
+      Button(testButtonTitle(provider)) {
+        Task {
+          await runConnectionTest(provider)
+        }
+      }
+      .buttonStyle(.brandSecondary)
+      .disabled(providerTestStatuses[provider] == .testing)
+
+      Button {
+        beginEditing(provider)
+      } label: {
+        Image(systemName: "pencil")
+      }
+      .buttonStyle(.brandIcon)
+      .help(hasSavedKey(provider) ? "Edit \(provider.rawValue) key and model" : "Add \(provider.rawValue) key")
+
+      Button {
+        removeCandidate = provider
+      } label: {
+        Image(systemName: "trash")
+      }
+      .buttonStyle(.brandIcon)
+      .disabled(!hasSavedKey(provider))
+      .help("Remove \(provider.rawValue) key")
+    }
+  }
+
+  @ViewBuilder
+  private func providerKeyStateBadge(_ provider: LLMProvider) -> some View {
+    if hasSavedKey(provider) {
+      StatusBadge("Key saved", variant: .success)
+    } else {
+      StatusBadge("No key", variant: .warning)
+    }
+  }
+
+  private func providerTestChip(_ provider: LLMProvider) -> AnyView? {
+    switch providerTestStatuses[provider] ?? .idle {
+    case .idle:
+      return nil
+    case .testing:
+      return AnyView(
+        StatusBadge("Testing...", variant: .neutral, systemImage: "arrow.clockwise")
+      )
+    case .success(let milliseconds):
+      return AnyView(
+        StatusBadge("Connected · \(milliseconds)ms", variant: .success, systemImage: "checkmark.circle")
+      )
+    case .failure(let message):
+      return AnyView(
+        StatusBadge(message, variant: .danger, systemImage: "xmark.circle")
+      )
+    }
+  }
+
+  private func providerEditForm(_ provider: LLMProvider) -> some View {
+    VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        Text("API key")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textSecondary)
+        SecureField(hasSavedKey(provider) ? "paste to replace" : "paste API key", text: $editingAPIKey)
+          .textFieldStyle(.roundedBorder)
+      }
+
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        Text("Model for \(provider.rawValue)")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.textSecondary)
+        TextField("Model", text: $editingModel)
+          .textFieldStyle(.roundedBorder)
+        Text("Remembered per provider — switching the active provider won't change this.")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textTertiary)
+      }
+
+      HStack(spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "lock")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textTertiary)
+        Text("Saved to your system Keychain, never to gunk's database.")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+
+        Spacer(minLength: BrandMetrics.Spacing.md)
+
+        Button("Cancel") {
+          cancelEditing()
+        }
+        .buttonStyle(.brandSecondary)
+
+        Button("Save key") {
+          saveProvider(provider)
+        }
+        .buttonStyle(.brandPrimary)
+      }
+    }
+    .padding(BrandMetrics.Spacing.md)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(BrandColors.backgroundSecondary)
+    )
   }
 
   private var localModelSection: some View {
@@ -889,86 +1124,241 @@ struct SettingsView: View {
     )
   }
 
-  private func save() {
-    do {
-      if selectedProvider != .ollama {
-        try secretStore.setSecret(apiKey, for: selectedProvider.secretAccount)
-      }
-      statusMessage = "Saved"
-      refreshStatus()
-    } catch {
-      statusMessage = error.localizedDescription
-      refreshStatus()
-    }
-  }
-
-  private func runConnectionTest() async {
-    isTestingConnection = true
-    defer { isTestingConnection = false }
-
-    do {
-      save()
-      try await testConnection(selectedProvider, model, apiKey)
-      statusMessage = "Connection ok"
-      refreshStatus()
-    } catch {
-      statusMessage = error.localizedDescription
-      refreshStatus()
-    }
-  }
-
   private var selectedProvider: LLMProvider {
     LLMProvider(rawValue: providerRawValue) ?? .openAI
   }
 
-  private var modelForDisplay: String {
-    let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
-    return trimmed.isEmpty ? selectedProvider.defaultModel : trimmed
-  }
-
-  private var maskedAPIKey: String {
-    if selectedProvider == .ollama {
-      return "not required"
-    }
-
-    let trimmed = apiKey.trimmingCharacters(in: .whitespacesAndNewlines)
-    guard !trimmed.isEmpty else {
-      return "not saved"
-    }
-
-    let suffix = String(trimmed.suffix(4))
-    return "••••••\(suffix)"
-  }
-
-  @ViewBuilder
-  private var keyStateBadge: some View {
-    if selectedProvider == .ollama {
-      StatusBadge("No key", variant: .neutral)
-    } else if apiKey.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
-      StatusBadge("No key", variant: .warning)
-    } else {
-      StatusBadge("Key saved", variant: .success)
-    }
-  }
-
-  private var providerBinding: Binding<LLMProvider> {
+  private var removeConfirmationBinding: Binding<Bool> {
     Binding(
-      get: { selectedProvider },
-      set: { newProvider in
-        providerRawValue = newProvider.rawValue
-        model = newProvider.defaultModel
-        loadSecret(for: newProvider)
-        refreshStatus()
+      get: { removeCandidate != nil },
+      set: { isPresented in
+        if !isPresented {
+          removeCandidate = nil
+        }
       }
     )
   }
 
-  private func loadSecret(for provider: LLMProvider) {
-    if provider == .ollama {
-      apiKey = ""
-    } else {
-      apiKey = (try? secretStore.secret(for: provider.secretAccount)) ?? ""
+  private var firstProviderWithoutKey: LLMProvider? {
+    Self.hostedProviders.first { !hasSavedKey($0) }
+  }
+
+  private func addProvider() {
+    guard let provider = firstProviderWithoutKey else {
+      return
     }
+    beginEditing(provider)
+  }
+
+  private func activateHostedProvider(_ provider: LLMProvider) {
+    let oldProvider = selectedProvider
+    rememberModel(model, for: oldProvider)
+    providerRawValue = provider.rawValue
+    syncActiveModelFromMemory()
+    providerBanner = ProviderBanner(
+      variant: .success,
+      title: "\(provider.rawValue) is active",
+      message: "\(oldProvider.rawValue)'s remembered model was left untouched."
+    )
+    refreshStatus()
+  }
+
+  private func beginEditing(_ provider: LLMProvider) {
+    editingProvider = provider
+    editingAPIKey = ""
+    editingModel = modelForDisplay(provider)
+    providerBanner = nil
+  }
+
+  private func cancelEditing() {
+    editingProvider = nil
+    editingAPIKey = ""
+    editingModel = ""
+  }
+
+  private func saveProvider(_ provider: LLMProvider) {
+    let trimmedKey = editingAPIKey.trimmingCharacters(in: .whitespacesAndNewlines)
+    let savedModel = normalizedModel(editingModel, provider: provider)
+
+    do {
+      if !trimmedKey.isEmpty {
+        try secretStore.setSecret(trimmedKey, for: provider.secretAccount)
+      }
+      rememberModel(savedModel, for: provider)
+      if selectedProvider == provider {
+        model = savedModel
+      }
+      editingProvider = nil
+      editingAPIKey = ""
+      editingModel = ""
+      providerTestStatuses[provider] = .idle
+      providerBanner = ProviderBanner(
+        variant: .success,
+        title: "\(provider.rawValue) saved",
+        message: "The key stays in Keychain and \(provider.rawValue)'s model is remembered separately."
+      )
+      refreshProviderKeyStates()
+      refreshStatus()
+      refreshSpend()
+    } catch {
+      providerBanner = ProviderBanner(
+        variant: .failure,
+        title: "\(provider.rawValue) was not saved",
+        message: error.localizedDescription
+      )
+      refreshProviderKeyStates()
+      refreshStatus()
+    }
+  }
+
+  private func removeProviderKey(_ provider: LLMProvider) {
+    do {
+      try secretStore.setSecret(nil, for: provider.secretAccount)
+      providerTestStatuses[provider] = .idle
+      providerBanner = ProviderBanner(
+        variant: .success,
+        title: "\(provider.rawValue) key removed",
+        message: "The Keychain slot was cleared. The remembered model stays available."
+      )
+      if editingProvider == provider {
+        cancelEditing()
+      }
+    } catch {
+      providerBanner = ProviderBanner(
+        variant: .failure,
+        title: "\(provider.rawValue) key was not removed",
+        message: error.localizedDescription
+      )
+    }
+    removeCandidate = nil
+    refreshProviderKeyStates()
+    refreshStatus()
+    refreshSpend()
+  }
+
+  private func runConnectionTest(_ provider: LLMProvider) async {
+    guard let apiKey = savedProviderKeys[provider]?.trimmingCharacters(in: .whitespacesAndNewlines),
+          !apiKey.isEmpty else {
+      providerTestStatuses[provider] = .failure("No key saved")
+      providerBanner = ProviderBanner(
+        variant: .failure,
+        title: "\(provider.rawValue) test failed",
+        message: "Save a \(provider.rawValue) API key before testing the connection."
+      )
+      return
+    }
+
+    providerTestStatuses[provider] = .testing
+    let started = Date()
+
+    do {
+      try await testConnection(provider, modelForDisplay(provider), apiKey)
+      let elapsed = max(1, Int(Date().timeIntervalSince(started) * 1000))
+      providerTestStatuses[provider] = .success(milliseconds: elapsed)
+      providerBanner = nil
+      refreshStatus()
+    } catch {
+      let message = shortTestError(error)
+      providerTestStatuses[provider] = .failure(message)
+      providerBanner = ProviderBanner(
+        variant: .failure,
+        title: "\(provider.rawValue) test failed",
+        message: "The saved key didn't authenticate. Edit the key and test again; nothing else changed."
+      )
+      refreshStatus()
+    }
+  }
+
+  private func refreshProviderKeyStates() {
+    var keys: [LLMProvider: String] = [:]
+    var errors: [LLMProvider: String] = [:]
+
+    for provider in Self.hostedProviders {
+      do {
+        keys[provider] = try secretStore.secret(for: provider.secretAccount) ?? ""
+      } catch {
+        keys[provider] = ""
+        errors[provider] = error.localizedDescription
+      }
+    }
+
+    savedProviderKeys = keys
+    keyReadErrors = errors
+  }
+
+  private func hasSavedKey(_ provider: LLMProvider) -> Bool {
+    let key = savedProviderKeys[provider] ?? ""
+    return !key.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+  }
+
+  private func maskedAPIKey(for provider: LLMProvider) -> String {
+    let trimmed = (savedProviderKeys[provider] ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      return "not saved"
+    }
+
+    return "••••••\(trimmed.suffix(4))"
+  }
+
+  private func testButtonTitle(_ provider: LLMProvider) -> String {
+    providerTestStatuses[provider] == .testing ? "Testing..." : "Test connection"
+  }
+
+  private func shortTestError(_ error: Error) -> String {
+    let message = error.localizedDescription
+    if let status = message.range(of: #"HTTP\s+(\d+)"#, options: .regularExpression) {
+      let code = message[status].replacingOccurrences(of: "HTTP ", with: "")
+      return "\(code) · connection failed"
+    }
+    return message
+  }
+
+  private func migrateLegacyActiveModelIfNeeded() {
+    let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !trimmed.isEmpty else {
+      return
+    }
+
+    let remembered = rememberedModel(for: selectedProvider)
+    if remembered == selectedProvider.defaultModel && trimmed != selectedProvider.defaultModel {
+      rememberModel(trimmed, for: selectedProvider)
+    }
+  }
+
+  private func syncActiveModelFromMemory() {
+    model = rememberedModel(for: selectedProvider)
+  }
+
+  private func rememberedModel(for provider: LLMProvider) -> String {
+    switch provider {
+    case .openAI:
+      return normalizedModel(openAIModel, provider: provider)
+    case .anthropic:
+      return normalizedModel(anthropicModel, provider: provider)
+    case .ollama:
+      return normalizedModel(ollamaModel, provider: provider)
+    }
+  }
+
+  private func rememberModel(_ value: String, for provider: LLMProvider) {
+    let normalized = normalizedModel(value, provider: provider)
+    switch provider {
+    case .openAI:
+      openAIModel = normalized
+    case .anthropic:
+      anthropicModel = normalized
+    case .ollama:
+      ollamaModel = normalized
+    }
+  }
+
+  private func modelForDisplay(_ provider: LLMProvider) -> String {
+    rememberedModel(for: provider)
+  }
+
+  private func normalizedModel(_ value: String, provider: LLMProvider) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? provider.defaultModel : trimmed
   }
 
   private func refreshStatus() {
@@ -1047,6 +1437,41 @@ struct SettingsView: View {
     if ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_MCP_DEEPLINK"] == "1" {
       activateMCPDeepLink()
     }
+
+    applyProviderKeysDebugOverride()
+  }
+
+  private func applyProviderKeysDebugOverride() {
+    guard let fixture = ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_PROVIDER_KEYS"] else {
+      return
+    }
+
+    selectedSection = .providerKeys
+    providerRawValue = LLMProvider.openAI.rawValue
+    openAIModel = "gpt-4.1-mini"
+    anthropicModel = "claude-sonnet-4-20250514"
+    syncActiveModelFromMemory()
+    refreshProviderKeyStates()
+
+    switch fixture {
+    case "edit":
+      beginEditing(.openAI)
+      editingAPIKey = "sk-proj-demo-replacement"
+      editingModel = "gpt-4.1"
+    case "test-ok":
+      providerTestStatuses[.openAI] = .success(milliseconds: 420)
+    case "test-failed":
+      providerTestStatuses[.anthropic] = .failure("401 · invalid key")
+      providerBanner = ProviderBanner(
+        variant: .failure,
+        title: "Anthropic test failed",
+        message: "The saved key didn't authenticate. Edit the key and test again; nothing else changed."
+      )
+    case "remove":
+      removeCandidate = .openAI
+    default:
+      break
+    }
   }
 
   private static func debugSpendModel() -> SpendModel? {
@@ -1062,6 +1487,27 @@ struct SettingsView: View {
     default:
       return nil
     }
+  }
+
+  static func debugProviderKeysSecretStore() -> SecretStore? {
+    guard let fixture = ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_PROVIDER_KEYS"] else {
+      return nil
+    }
+
+    let store = InMemorySecretStore()
+    switch fixture {
+    case "empty":
+      break
+    case "test-failed":
+      try? store.setSecret("sk-ant-invalid-demo", for: LLMProvider.anthropic.secretAccount)
+      try? store.setSecret("sk-proj-openai-demo", for: LLMProvider.openAI.secretAccount)
+    default:
+      try? store.setSecret("sk-proj-openai-demo", for: LLMProvider.openAI.secretAccount)
+      if fixture == "multi" || fixture == "test-ok" || fixture == "edit" || fixture == "remove" {
+        try? store.setSecret("sk-ant-demo", for: LLMProvider.anthropic.secretAccount)
+      }
+    }
+    return store
   }
 
   private static func liveTestConnection(

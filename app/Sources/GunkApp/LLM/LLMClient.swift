@@ -32,6 +32,17 @@ enum LLMProvider: String, CaseIterable, Identifiable {
       return "ollama-api-key"
     }
   }
+
+  var modelStorageKey: String {
+    switch self {
+    case .openAI:
+      return "llm.model.openai"
+    case .anthropic:
+      return "llm.model.anthropic"
+    case .ollama:
+      return "llm.model.ollama"
+    }
+  }
 }
 
 enum LLMRole: String, Codable, Equatable {

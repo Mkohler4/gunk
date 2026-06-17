@@ -112,18 +112,19 @@ enum ModelCatalog {
   static func menuOptions(
     for provider: LLMProvider,
     selectedProvider: LLMProvider,
-    selectedModelId: String
+    selectedModelId: String,
+    rememberedModelId: String? = nil
   ) -> [ModelOption] {
     var options = options(for: provider)
+    let providerModelId = rememberedModelId ?? (provider == selectedProvider ? selectedModelId : "")
 
-    if provider == selectedProvider,
-       !options.contains(where: { $0.modelId == selectedModelId }),
-       !selectedModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+    if !options.contains(where: { $0.modelId == providerModelId }),
+       !providerModelId.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
       options.append(
         ModelOption(
           provider: provider,
-          modelId: selectedModelId,
-          displayName: displayName(for: selectedModelId),
+          modelId: providerModelId,
+          displayName: displayName(for: providerModelId),
           subtitle: customOptionSubtitle
         )
       )
@@ -144,6 +145,9 @@ struct ModelSwitcher: View {
   /// extraction model can never disagree.
   @AppStorage("llm.provider") private var providerRawValue = LLMProvider.openAI.rawValue
   @AppStorage("llm.model") private var model = LLMProvider.openAI.defaultModel
+  @AppStorage(LLMProvider.openAI.modelStorageKey) private var openAIModel = LLMProvider.openAI.defaultModel
+  @AppStorage(LLMProvider.anthropic.modelStorageKey) private var anthropicModel = LLMProvider.anthropic.defaultModel
+  @AppStorage(LLMProvider.ollama.modelStorageKey) private var ollamaModel = LLMProvider.ollama.defaultModel
 
   var secretStore: SecretStore = KeychainStore()
   var onShowSettings: () -> Void = {}
@@ -305,7 +309,8 @@ struct ModelSwitcher: View {
     ModelCatalog.menuOptions(
       for: provider,
       selectedProvider: selectedProvider,
-      selectedModelId: model
+      selectedModelId: model,
+      rememberedModelId: rememberedModel(for: provider)
     )
   }
 
@@ -316,6 +321,7 @@ struct ModelSwitcher: View {
   /// Selecting only selects (T-8.8): write the same two storage keys
   /// Settings owns and get out of the way. Key entry stays in Settings.
   private func select(_ option: ModelOption) {
+    rememberModel(option.modelId, for: option.provider)
     providerRawValue = option.provider.rawValue
     model = option.modelId
     isMenuPresented = false
@@ -338,6 +344,34 @@ struct ModelSwitcher: View {
 
   private func refreshKeyedProviders() {
     keyedProviders = ModelCatalog.keyedProviders(hasKey: hasKey)
+  }
+
+  private func rememberedModel(for provider: LLMProvider) -> String {
+    switch provider {
+    case .openAI:
+      return normalizedModel(openAIModel, provider: provider)
+    case .anthropic:
+      return normalizedModel(anthropicModel, provider: provider)
+    case .ollama:
+      return normalizedModel(ollamaModel, provider: provider)
+    }
+  }
+
+  private func rememberModel(_ value: String, for provider: LLMProvider) {
+    let normalized = normalizedModel(value, provider: provider)
+    switch provider {
+    case .openAI:
+      openAIModel = normalized
+    case .anthropic:
+      anthropicModel = normalized
+    case .ollama:
+      ollamaModel = normalized
+    }
+  }
+
+  private func normalizedModel(_ value: String, provider: LLMProvider) -> String {
+    let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    return trimmed.isEmpty ? provider.defaultModel : trimmed
   }
 
   private func hasKey(_ provider: LLMProvider) -> Bool {
