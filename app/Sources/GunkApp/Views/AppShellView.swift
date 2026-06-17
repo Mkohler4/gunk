@@ -711,7 +711,11 @@ struct AppShellView: View {
         initialSection: settingsShouldShowMCPArrival ? .pipelineHealth : .providerKeys,
         mcpDeepLinkNonce: settingsMCPDeepLinkNonce,
         mcpDeepLinkOnAppear: settingsShouldShowMCPArrival,
+        secretStore: ProcessInfo.processInfo.environment["GUNK_DEBUG_NO_KEYCHAIN"] == "1"
+          ? InMemorySecretStore()
+          : KeychainStore(),
         storePath: services.store.databasePath,
+        loadSpendModel: { try SpendModel.load(store: services.store) },
         mcpSetup: mcpSetup
       )
     }

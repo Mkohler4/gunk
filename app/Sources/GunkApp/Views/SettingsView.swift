@@ -182,6 +182,8 @@ struct SettingsView: View {
   @State private var statusMessage: String?
   @State private var isTestingConnection = false
   @State private var arrivedFromMCP = false
+  @State private var spendModel: SpendModel?
+  @State private var spendErrorMessage: String?
 
   /// Shared with the shell's chip and the setup sheet (T-8.10): one
   /// `MCPClientConfigurator` source, so a toggle here re-checks everywhere.
@@ -192,6 +194,7 @@ struct SettingsView: View {
   private let secretStore: SecretStore
   private let testConnection: (LLMProvider, String, String) async throws -> Void
   private let storePath: String?
+  private let loadSpendModel: () throws -> SpendModel
   private let resolveEngine: () -> ResolvedEngine?
   private let openConfig: (URL) -> Void
 
@@ -206,6 +209,9 @@ struct SettingsView: View {
     secretStore: SecretStore = KeychainStore(),
     testConnection: @escaping (LLMProvider, String, String) async throws -> Void = SettingsView.liveTestConnection,
     storePath: String? = Store.defaultURL.path,
+    loadSpendModel: @escaping () throws -> SpendModel = {
+      try SpendModel.load(store: Store(path: Store.defaultURL))
+    },
     resolveEngine: @escaping () -> ResolvedEngine? = { EngineBinary.resolve() },
     mcpSetup: MCPSetupModel? = nil,
     openConfig: @escaping (URL) -> Void = { NSWorkspace.shared.open($0) }
@@ -229,6 +235,7 @@ struct SettingsView: View {
     self.secretStore = secretStore
     self.testConnection = testConnection
     self.storePath = storePath
+    self.loadSpendModel = loadSpendModel
     self.resolveEngine = resolveEngine
     self.mcpSetup = mcpSetup ?? MCPSetupModel()
     self.openConfig = openConfig
@@ -250,6 +257,7 @@ struct SettingsView: View {
     .onAppear {
       loadSecret(for: selectedProvider)
       refreshStatus()
+      refreshSpend()
       applySettingsDebugOverride()
       if mcpDeepLinkOnAppear {
         activateMCPDeepLink()
@@ -257,6 +265,11 @@ struct SettingsView: View {
     }
     .onChange(of: model) {
       refreshStatus()
+    }
+    .onChange(of: selectedSection) {
+      if selectedSection == .spend {
+        refreshSpend()
+      }
     }
     .onChange(of: mcpDeepLinkNonce) {
       activateMCPDeepLink()
@@ -547,20 +560,23 @@ struct SettingsView: View {
   private var spendSection: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.lg) {
       sectionHeader(
-        "What decompositions have cost you.",
-        description: "Estimated from real token usage."
+        "What decompositions have cost you, estimated from real token usage.",
+        description: "Grouped by provider and model, computed from the tokens recorded during decomposition."
       )
 
-      settingsPanel {
-        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-          Text("Spend")
-            .font(BrandTypography.headline)
-            .foregroundStyle(BrandColors.textPrimary)
-
-          Text("The token and estimated-cost readout will appear here after the spend UI task. No dollar figure is shown until it can be estimated from real stored tokens.")
-            .font(BrandTypography.body)
-            .foregroundStyle(BrandColors.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
+      if let spendErrorMessage {
+        spendErrorPanel(spendErrorMessage)
+      } else if let spendModel {
+        SpendView(model: spendModel)
+      } else {
+        settingsPanel {
+          HStack(spacing: BrandMetrics.Spacing.sm) {
+            ProgressView()
+              .controlSize(.small)
+            Text("Loading spend")
+              .font(BrandTypography.body)
+              .foregroundStyle(BrandColors.textSecondary)
+          }
         }
       }
     }
@@ -966,6 +982,50 @@ struct SettingsView: View {
     mcpSetup.refresh()
   }
 
+  private func refreshSpend() {
+    if let debugModel = Self.debugSpendModel() {
+      spendModel = debugModel
+      spendErrorMessage = nil
+      return
+    }
+
+    do {
+      spendModel = try loadSpendModel()
+      spendErrorMessage = nil
+    } catch {
+      spendModel = nil
+      spendErrorMessage = error.localizedDescription
+    }
+  }
+
+  private func spendErrorPanel(_ message: String) -> some View {
+    settingsPanel {
+      HStack(alignment: .top, spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "exclamationmark.triangle")
+          .font(BrandTypography.callout)
+          .foregroundStyle(BrandColors.warning)
+
+        VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+          Text("Spend is unavailable")
+            .font(BrandTypography.headline)
+            .foregroundStyle(BrandColors.textPrimary)
+          Text(message)
+            .font(BrandTypography.caption)
+            .foregroundStyle(BrandColors.textSecondary)
+            .fixedSize(horizontal: false, vertical: true)
+            .textSelection(.enabled)
+        }
+
+        Spacer(minLength: BrandMetrics.Spacing.md)
+
+        Button("Retry") {
+          refreshSpend()
+        }
+        .buttonStyle(.brandSecondary)
+      }
+    }
+  }
+
   private func activateMCPDeepLink() {
     withAnimation(BrandMotion.standard) {
       selectedSection = .pipelineHealth
@@ -974,6 +1034,11 @@ struct SettingsView: View {
   }
 
   private func applySettingsDebugOverride() {
+    if Self.debugSpendModel() != nil {
+      selectedSection = .spend
+      refreshSpend()
+    }
+
     if let rawSection = ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_SECTION"],
        let section = SettingsSection(rawValue: rawSection) {
       selectedSection = section
@@ -981,6 +1046,21 @@ struct SettingsView: View {
 
     if ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_MCP_DEEPLINK"] == "1" {
       activateMCPDeepLink()
+    }
+  }
+
+  private static func debugSpendModel() -> SpendModel? {
+    switch ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_SPEND"] {
+    case "populated":
+      return .fixturePopulated
+    case "unknown":
+      return .fixtureUnknownPrice
+    case "empty":
+      return .fixtureEmpty
+    case "local":
+      return .fixtureLocal
+    default:
+      return nil
     }
   }
 
