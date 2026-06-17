@@ -635,6 +635,11 @@ struct SettingsView: View {
 
   private func hostedProviderPill(_ provider: LLMProvider) -> some View {
     let isActive = selectedProvider == provider
+    // Selected state is tinted in the provider's own accent (the same color as
+    // its `ProviderMark`), not the loud full-bleed brand green — a calm,
+    // readable "selected" rather than a shouting block. No checkmark, so the
+    // pill never changes width when activated.
+    let providerAccent = BrandColors.providerAccent(for: provider.rawValue)
 
     return Button {
       activateHostedProvider(provider)
@@ -643,21 +648,24 @@ struct SettingsView: View {
         ProviderMark(provider: provider.rawValue, size: 18)
         Text(provider.rawValue)
           .font(BrandTypography.callout.weight(.medium))
-        if isActive {
-          Image(systemName: "checkmark")
-            .font(BrandTypography.caption.weight(.semibold))
-        }
       }
-      .foregroundStyle(isActive ? BrandColors.backgroundPrimary : BrandColors.textPrimary)
+      .foregroundStyle(BrandColors.textPrimary)
       .padding(.horizontal, BrandMetrics.Spacing.md)
       .padding(.vertical, BrandMetrics.Spacing.sm)
       .background(
         Capsule()
-          .fill(isActive ? BrandColors.accent : BrandColors.surfaceGlass)
+          .fill(
+            isActive
+              ? providerAccent.opacity(BrandMetrics.Control.tintedFillOpacity)
+              : BrandColors.surfaceGlass
+          )
       )
       .overlay(
         Capsule()
-          .strokeBorder(isActive ? .clear : BrandColors.separator)
+          .strokeBorder(
+            isActive ? providerAccent.opacity(0.6) : BrandColors.separator,
+            lineWidth: isActive ? 1.5 : 1
+          )
       )
       .contentShape(Capsule())
     }
