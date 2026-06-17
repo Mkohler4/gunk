@@ -19,6 +19,8 @@ final class SettingsStatusTests: XCTestCase {
     let snapshot = SettingsStatusSnapshot.make(
       provider: .openAI,
       model: "gpt-test",
+      ollamaModel: "llama3.2",
+      ollamaReachability: .unchecked,
       storePath: "/tmp/gunk/store.db",
       secretStore: InMemorySecretStore(),
       resolveEngine: { nil }
@@ -27,6 +29,8 @@ final class SettingsStatusTests: XCTestCase {
     XCTAssertEqual(snapshot.configuration.state, .ready)
     XCTAssertEqual(snapshot.apiKey.state, .needsSetup)
     XCTAssertEqual(snapshot.apiKey.value, "Missing")
+    XCTAssertEqual(snapshot.localModel.state, .ready)
+    XCTAssertEqual(snapshot.localModel.value, "Optional")
     XCTAssertEqual(snapshot.store.state, .ready)
     XCTAssertEqual(snapshot.engine.state, .needsSetup)
   }
@@ -39,6 +43,8 @@ final class SettingsStatusTests: XCTestCase {
     let snapshot = SettingsStatusSnapshot.make(
       provider: .openAI,
       model: "gpt-test",
+      ollamaModel: "llama3.2",
+      ollamaReachability: .reachable(model: "llama3.2", milliseconds: 42),
       storePath: "/tmp/gunk/store.db",
       secretStore: secretStore,
       resolveEngine: {
@@ -48,6 +54,8 @@ final class SettingsStatusTests: XCTestCase {
 
     XCTAssertEqual(snapshot.apiKey.state, .ready)
     XCTAssertEqual(snapshot.apiKey.value, "Saved in Keychain")
+    XCTAssertEqual(snapshot.localModel.state, .ready)
+    XCTAssertEqual(snapshot.localModel.value, "Reachable · llama3.2")
     XCTAssertEqual(snapshot.engine.state, .ready)
     XCTAssertEqual(snapshot.engine.value, engineURL.path)
   }
@@ -56,6 +64,8 @@ final class SettingsStatusTests: XCTestCase {
     let snapshot = SettingsStatusSnapshot.make(
       provider: .ollama,
       model: "",
+      ollamaModel: "llama3.2",
+      ollamaReachability: .unchecked,
       storePath: nil,
       secretStore: InMemorySecretStore(),
       resolveEngine: { nil }
@@ -64,6 +74,8 @@ final class SettingsStatusTests: XCTestCase {
     XCTAssertEqual(snapshot.configuration.state, .needsSetup)
     XCTAssertEqual(snapshot.apiKey.state, .ready)
     XCTAssertEqual(snapshot.apiKey.value, "Not required")
+    XCTAssertEqual(snapshot.localModel.state, .needsSetup)
+    XCTAssertEqual(snapshot.localModel.value, "Active · llama3.2")
     XCTAssertEqual(snapshot.store.state, .needsSetup)
     XCTAssertEqual(snapshot.store.value, "In-memory")
   }

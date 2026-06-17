@@ -38,7 +38,7 @@ enum LiveModuleAnalysisGenerator {
   ) async throws -> GeneratedAnalysis {
     let provider = selectedProvider(userDefaults)
     let model = selectedModel(for: provider, userDefaults)
-    let client = try makeClient(provider: provider, secretStore: secretStore)
+    let client = try makeClient(provider: provider, userDefaults: userDefaults, secretStore: secretStore)
 
     let response = try await client.complete(
       request: ModuleAnalysisComposer.request(for: input, model: model)
@@ -53,11 +53,12 @@ enum LiveModuleAnalysisGenerator {
 
   private static func makeClient(
     provider: LLMProvider,
+    userDefaults: UserDefaults,
     secretStore: SecretStore
   ) throws -> LLMClient {
     switch provider {
     case .ollama:
-      return OllamaClient()
+      return OllamaClient(baseURL: OllamaClient.configuredBaseURL(userDefaults: userDefaults))
     case .openAI:
       return OpenAIClient(apiKey: try requireKey(provider, secretStore))
     case .anthropic:

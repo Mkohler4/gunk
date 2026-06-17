@@ -96,6 +96,40 @@ final class LLMClientTests: XCTestCase {
     XCTAssertEqual(response.usage, LLMTokenUsage(inputTokens: 23, outputTokens: 5))
   }
 
+  func testOllamaListsLoadedModelsForReachability() async throws {
+    let sender = RecordingSender(
+      data: """
+      {
+        "models": [
+          { "name": "llama3.1:8b" },
+          { "name": "llama3.2" }
+        ]
+      }
+      """
+    )
+    let client = OllamaClient(
+      baseURL: URL(string: "http://example.local:11434")!,
+      sender: sender.send
+    )
+
+    let models = try await client.listModels()
+
+    XCTAssertEqual(sender.requests.first?.url?.absoluteString, "http://example.local:11434/api/tags")
+    XCTAssertEqual(models, ["llama3.1:8b", "llama3.2"])
+  }
+
+  func testOllamaNormalizesStoredBaseURL() throws {
+    XCTAssertEqual(
+      OllamaClient.normalizedBaseURL(from: "localhost:11434")?.absoluteString,
+      "http://localhost:11434"
+    )
+    XCTAssertEqual(
+      OllamaClient.normalizedBaseURL(from: "  http://10.0.0.2:11434/api/tags  ")?.absoluteString,
+      "http://10.0.0.2:11434"
+    )
+    XCTAssertNil(OllamaClient.normalizedBaseURL(from: "not a host with spaces"))
+  }
+
   func testKeychainRoundTrip() throws {
     let store = InMemorySecretStore()
 

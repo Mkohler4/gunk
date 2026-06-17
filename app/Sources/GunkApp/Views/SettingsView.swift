@@ -17,12 +17,15 @@ struct SettingsStatusItem: Equatable {
 struct SettingsStatusSnapshot: Equatable {
   let configuration: SettingsStatusItem
   let apiKey: SettingsStatusItem
+  let localModel: SettingsStatusItem
   let store: SettingsStatusItem
   let engine: SettingsStatusItem
 
   static func make(
     provider: LLMProvider,
     model: String,
+    ollamaModel: String,
+    ollamaReachability: LocalModelReachabilityState,
     storePath: String?,
     secretStore: SecretStore,
     resolveEngine: () -> ResolvedEngine?
@@ -30,6 +33,11 @@ struct SettingsStatusSnapshot: Equatable {
     SettingsStatusSnapshot(
       configuration: configurationStatus(provider: provider, model: model),
       apiKey: apiKeyStatus(provider: provider, secretStore: secretStore),
+      localModel: localModelStatus(
+        provider: provider,
+        model: ollamaModel,
+        reachability: ollamaReachability
+      ),
       store: storeStatus(path: storePath),
       engine: engineStatus(resolveEngine: resolveEngine)
     )
@@ -87,6 +95,47 @@ struct SettingsStatusSnapshot: Equatable {
         value: "Unavailable",
         message: error.localizedDescription,
         state: .unavailable
+      )
+    }
+  }
+
+  private static func localModelStatus(
+    provider: LLMProvider,
+    model: String,
+    reachability: LocalModelReachabilityState
+  ) -> SettingsStatusItem {
+    switch reachability {
+    case .reachable(let reachableModel, _):
+      let activeSuffix = provider == .ollama ? " Ollama is active for new decompositions." : " Hosted provider is in use."
+      return SettingsStatusItem(
+        title: "Local model (Ollama)",
+        value: "Reachable · \(reachableModel)",
+        message: "The local server answered and \(reachableModel) is loaded.\(activeSuffix)",
+        state: .ready
+      )
+    case .checking:
+      return SettingsStatusItem(
+        title: "Local model (Ollama)",
+        value: "Checking",
+        message: "Asking Ollama for its loaded models.",
+        state: .needsSetup
+      )
+    case .unreachable:
+      return SettingsStatusItem(
+        title: "Local model (Ollama)",
+        value: "Unreachable",
+        message: "Ollama is configured but the app cannot reach the local server.",
+        state: .unavailable
+      )
+    case .unchecked:
+      let trimmedModel = model.trimmingCharacters(in: .whitespacesAndNewlines)
+      return SettingsStatusItem(
+        title: "Local model (Ollama)",
+        value: provider == .ollama ? (trimmedModel.isEmpty ? "Active" : "Active · \(trimmedModel)") : "Optional",
+        message: provider == .ollama
+          ? "Run a reachability check to confirm the local server before processing."
+          : "Not configured — hosted provider is in use.",
+        state: provider == .ollama ? .needsSetup : .ready
       )
     }
   }
@@ -177,6 +226,18 @@ private enum ProviderTestStatus: Equatable {
   case failure(String)
 }
 
+enum LocalModelReachabilityState: Equatable {
+  case unchecked
+  case checking
+  case reachable(model: String, milliseconds: Int)
+  case unreachable(String)
+}
+
+private enum LocalModelField: Hashable {
+  case baseURL
+  case model
+}
+
 private struct ProviderBanner: Equatable {
   enum Variant {
     case success
@@ -195,6 +256,7 @@ struct SettingsView: View {
   @AppStorage(LLMProvider.openAI.modelStorageKey) private var openAIModel = LLMProvider.openAI.defaultModel
   @AppStorage(LLMProvider.anthropic.modelStorageKey) private var anthropicModel = LLMProvider.anthropic.defaultModel
   @AppStorage(LLMProvider.ollama.modelStorageKey) private var ollamaModel = LLMProvider.ollama.defaultModel
+  @AppStorage(OllamaClient.baseURLStorageKey) private var ollamaBaseURLText = "http://localhost:11434"
   @AppStorage("llm.confidenceThreshold") private var confidenceThreshold = 0.7
 
   @State private var selectedSection: SettingsSection
@@ -207,9 +269,11 @@ struct SettingsView: View {
   @State private var providerTestStatuses: [LLMProvider: ProviderTestStatus] = [:]
   @State private var providerBanner: ProviderBanner?
   @State private var removeCandidate: LLMProvider?
+  @State private var localReachability: LocalModelReachabilityState
   @State private var arrivedFromMCP = false
   @State private var spendModel: SpendModel?
   @State private var spendErrorMessage: String?
+  @FocusState private var focusedLocalModelField: LocalModelField?
 
   /// Shared with the shell's chip and the setup sheet (T-8.10): one
   /// `MCPClientConfigurator` source, so a toggle here re-checks everywhere.
@@ -219,6 +283,7 @@ struct SettingsView: View {
   private let mcpDeepLinkOnAppear: Bool
   private let secretStore: SecretStore
   private let testConnection: (LLMProvider, String, String) async throws -> Void
+  private let checkOllamaReachability: (URL) async throws -> [String]
   private let storePath: String?
   private let loadSpendModel: () throws -> SpendModel
   private let resolveEngine: () -> ResolvedEngine?
@@ -235,6 +300,7 @@ struct SettingsView: View {
     mcpDeepLinkOnAppear: Bool = false,
     secretStore: SecretStore = KeychainStore(),
     testConnection: @escaping (LLMProvider, String, String) async throws -> Void = SettingsView.liveTestConnection,
+    checkOllamaReachability: @escaping (URL) async throws -> [String] = SettingsView.liveOllamaReachabilityCheck,
     storePath: String? = Store.defaultURL.path,
     loadSpendModel: @escaping () throws -> SpendModel = {
       try SpendModel.load(store: Store(path: Store.defaultURL))
@@ -258,10 +324,12 @@ struct SettingsView: View {
     self._selectedSection = State(initialValue: initialSection)
     self._editingAPIKey = State(initialValue: apiKey)
     self._editingModel = State(initialValue: model ?? provider.defaultModel)
+    self._localReachability = State(initialValue: .unchecked)
     self.mcpDeepLinkNonce = mcpDeepLinkNonce
     self.mcpDeepLinkOnAppear = mcpDeepLinkOnAppear
     self.secretStore = secretStore
     self.testConnection = testConnection
+    self.checkOllamaReachability = checkOllamaReachability
     self.storePath = storePath
     self.loadSpendModel = loadSpendModel
     self.resolveEngine = resolveEngine
@@ -295,6 +363,15 @@ struct SettingsView: View {
     }
     .onChange(of: model) {
       refreshStatus()
+    }
+    .onChange(of: ollamaModel) {
+      if selectedProvider == .ollama {
+        model = normalizedModel(ollamaModel, provider: .ollama)
+      }
+      resetLocalReachability()
+    }
+    .onChange(of: ollamaBaseURLText) {
+      resetLocalReachability()
     }
     .onChange(of: providerRawValue) {
       refreshStatus()
@@ -769,25 +846,126 @@ struct SettingsView: View {
 
       settingsPanel {
         VStack(alignment: .leading, spacing: BrandMetrics.Spacing.md) {
-          HStack(spacing: BrandMetrics.Spacing.sm) {
+          HStack(alignment: .center, spacing: BrandMetrics.Spacing.sm) {
             StatusBadge("Runs locally · no key", variant: .neutral, systemImage: "desktopcomputer")
             if selectedProvider == .ollama {
               StatusBadge("Active", variant: .success, systemImage: "checkmark.circle")
             }
+            Spacer(minLength: BrandMetrics.Spacing.md)
+            localReachabilityBadge
           }
 
-          Text("Ollama currently uses the provider picker and model field in Provider & keys. Host, reachability, and loaded-model controls land in the Local model task.")
-            .font(BrandTypography.body)
-            .foregroundStyle(BrandColors.textSecondary)
-            .fixedSize(horizontal: false, vertical: true)
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+            Text("Host / base URL")
+              .font(BrandTypography.callout)
+              .foregroundStyle(BrandColors.textSecondary)
+            TextField("localhost:11434", text: $ollamaBaseURLText)
+              .textFieldStyle(.roundedBorder)
+              .focused($focusedLocalModelField, equals: .baseURL)
+            Text("Point this elsewhere if you run it on another host or port.")
+              .font(BrandTypography.caption)
+              .foregroundStyle(BrandColors.textTertiary)
+          }
 
-          Button("Open Provider & keys") {
-            withAnimation(BrandMotion.standard) {
-              selectedSection = .providerKeys
+          VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+            Text("Model")
+              .font(BrandTypography.callout)
+              .foregroundStyle(BrandColors.textSecondary)
+            TextField("llama3.2", text: localModelBinding)
+              .textFieldStyle(.roundedBorder)
+              .focused($focusedLocalModelField, equals: .model)
+            Text("Any model you've pulled in Ollama. gunk lists what's loaded when it can reach the host.")
+              .font(BrandTypography.caption)
+              .foregroundStyle(BrandColors.textTertiary)
+          }
+
+          localReachabilityPanel
+
+          Toggle(isOn: useLocalModelBinding) {
+            VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+              Text("Use local model for new decompositions")
+                .font(BrandTypography.callout.weight(.semibold))
+                .foregroundStyle(BrandColors.textPrimary)
+              Text(localToggleHelperText)
+                .font(BrandTypography.caption)
+                .foregroundStyle(BrandColors.textSecondary)
+                .fixedSize(horizontal: false, vertical: true)
             }
           }
-          .buttonStyle(.brandSecondary)
+          .toggleStyle(.switch)
+          .controlSize(.small)
+          .disabled(!localModelCanBecomeActive && selectedProvider != .ollama)
+
+          localEngineCaveat
         }
+      }
+    }
+  }
+
+  private var localReachabilityBadge: some View {
+    switch localReachability {
+    case .unchecked:
+      return StatusBadge("Not checked yet", variant: .neutral, systemImage: "questionmark.circle")
+    case .checking:
+      return StatusBadge("Checking", variant: .neutral, systemImage: "arrow.clockwise")
+    case .reachable(_, let milliseconds):
+      return StatusBadge("Reachable · \(milliseconds)ms", variant: .success, systemImage: "checkmark.circle")
+    case .unreachable:
+      return StatusBadge("Unreachable", variant: .danger, systemImage: "xmark.circle")
+    }
+  }
+
+  private var localReachabilityPanel: some View {
+    HStack(alignment: .top, spacing: BrandMetrics.Spacing.md) {
+      Image(systemName: localReachabilityIcon)
+        .font(BrandTypography.headline)
+        .foregroundStyle(localReachabilityColor)
+        .frame(width: 20)
+
+      VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs) {
+        Text(localReachabilityTitle)
+          .font(BrandTypography.callout.weight(.semibold))
+          .foregroundStyle(BrandColors.textPrimary)
+        Text(localReachabilityMessage)
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
+      }
+
+      Spacer(minLength: BrandMetrics.Spacing.md)
+
+      Button {
+        Task {
+          await checkLocalReachability()
+        }
+      } label: {
+        Label(localReachabilityButtonTitle, systemImage: "arrow.triangle.2.circlepath")
+      }
+      .buttonStyle(.brandSecondary)
+      .disabled(localReachability == .checking || normalizedOllamaBaseURL == nil)
+    }
+    .padding(BrandMetrics.Spacing.md)
+    .background(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .fill(localReachabilityColor.opacity(BrandMetrics.Control.tintedFillOpacity))
+    )
+    .overlay(
+      RoundedRectangle(cornerRadius: BrandMetrics.Radius.medium, style: .continuous)
+        .strokeBorder(localReachabilityColor.opacity(0.35))
+    )
+  }
+
+  @ViewBuilder
+  private var localEngineCaveat: some View {
+    if normalizedOllamaBaseURL != OllamaClient.defaultBaseURL {
+      HStack(alignment: .top, spacing: BrandMetrics.Spacing.sm) {
+        Image(systemName: "info.circle")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.warning)
+        Text("In-app checks and module analysis use this host. New decompositions still use the engine's built-in Ollama host, `localhost:11434`, until engine support for custom hosts lands.")
+          .font(BrandTypography.caption)
+          .foregroundStyle(BrandColors.textSecondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     }
   }
@@ -866,6 +1044,7 @@ struct SettingsView: View {
           if let statusSnapshot {
             statusRow(statusSnapshot.configuration)
             statusRow(statusSnapshot.apiKey)
+            statusRow(statusSnapshot.localModel)
             statusRow(statusSnapshot.store)
             statusRow(statusSnapshot.engine)
           }
@@ -1128,6 +1307,111 @@ struct SettingsView: View {
     LLMProvider(rawValue: providerRawValue) ?? .openAI
   }
 
+  private var normalizedOllamaBaseURL: URL? {
+    OllamaClient.normalizedBaseURL(from: ollamaBaseURLText)
+  }
+
+  private var ollamaHostDisplay: String {
+    normalizedOllamaBaseURL?.absoluteString.replacingOccurrences(of: "http://", with: "") ?? ollamaBaseURLText
+  }
+
+  private var localModelBinding: Binding<String> {
+    Binding(
+      get: { ollamaModel },
+      set: { value in
+        ollamaModel = value
+        if selectedProvider == .ollama {
+          model = normalizedModel(value, provider: .ollama)
+        }
+      }
+    )
+  }
+
+  private var useLocalModelBinding: Binding<Bool> {
+    Binding(
+      get: { selectedProvider == .ollama },
+      set: { useLocal in
+        if useLocal {
+          activateLocalModel()
+        } else if selectedProvider == .ollama {
+          activateHostedProvider(.openAI)
+          selectedSection = .localModel
+        }
+      }
+    )
+  }
+
+  private var localModelCanBecomeActive: Bool {
+    if case .reachable = localReachability {
+      return true
+    }
+    return false
+  }
+
+  private var localToggleHelperText: String {
+    if selectedProvider == .ollama {
+      return "Ollama is the active engine for new decompositions."
+    }
+    if localModelCanBecomeActive {
+      return "Makes Ollama the active engine instead of a hosted provider."
+    }
+    return "Available once a reachability check passes."
+  }
+
+  private var localReachabilityColor: Color {
+    switch localReachability {
+    case .reachable:
+      return BrandColors.success
+    case .unreachable:
+      return BrandColors.danger
+    case .unchecked, .checking:
+      return BrandColors.textSecondary
+    }
+  }
+
+  private var localReachabilityIcon: String {
+    switch localReachability {
+    case .unchecked:
+      return "questionmark.circle"
+    case .checking:
+      return "arrow.clockwise"
+    case .reachable:
+      return "checkmark.circle"
+    case .unreachable:
+      return "xmark.circle"
+    }
+  }
+
+  private var localReachabilityTitle: String {
+    switch localReachability {
+    case .unchecked:
+      return "Not checked yet"
+    case .checking:
+      return "Checking \(ollamaHostDisplay)..."
+    case .reachable:
+      return "Ollama reachable"
+    case .unreachable:
+      return "Can't reach \(ollamaHostDisplay)"
+    }
+  }
+
+  private var localReachabilityMessage: String {
+    switch localReachability {
+    case .unchecked:
+      return "A reachability check is different from a hosted Test connection — there's no account or key to authenticate, gunk just confirms the local server answers."
+    case .checking:
+      return "Checking \(ollamaHostDisplay)... Asking Ollama for its loaded models."
+    case .reachable(let model, let milliseconds):
+      return "Ollama reachable. `\(model)` is loaded and answered in \(milliseconds) ms."
+    case .unreachable(let message):
+      return "\(message) Is Ollama running? Start it with `ollama serve`, then check again."
+    }
+  }
+
+  private var localReachabilityButtonTitle: String {
+    localReachability == .unchecked ? "Check reachability" : "Check again"
+  }
+
   private var removeConfirmationBinding: Binding<Bool> {
     Binding(
       get: { removeCandidate != nil },
@@ -1160,6 +1444,57 @@ struct SettingsView: View {
       title: "\(provider.rawValue) is active",
       message: "\(oldProvider.rawValue)'s remembered model was left untouched."
     )
+    refreshStatus()
+  }
+
+  private func activateLocalModel() {
+    guard localModelCanBecomeActive else {
+      return
+    }
+
+    let oldProvider = selectedProvider
+    rememberModel(model, for: oldProvider)
+    rememberModel(ollamaModel, for: .ollama)
+    providerRawValue = LLMProvider.ollama.rawValue
+    syncActiveModelFromMemory()
+    providerBanner = nil
+    refreshStatus()
+    refreshSpend()
+  }
+
+  private func resetLocalReachability() {
+    guard localReachability != .checking else {
+      return
+    }
+    localReachability = .unchecked
+    refreshStatus()
+  }
+
+  private func checkLocalReachability() async {
+    guard let baseURL = normalizedOllamaBaseURL else {
+      localReachability = .unreachable("The host/base URL is not a valid URL.")
+      refreshStatus()
+      return
+    }
+
+    localReachability = .checking
+    refreshStatus()
+    let started = Date()
+    let requestedModel = normalizedModel(ollamaModel, provider: .ollama)
+
+    do {
+      let loadedModels = try await checkOllamaReachability(baseURL)
+      let elapsed = max(1, Int(Date().timeIntervalSince(started) * 1000))
+      if loadedModels.contains(requestedModel) {
+        localReachability = .reachable(model: requestedModel, milliseconds: elapsed)
+      } else {
+        let loaded = loadedModels.isEmpty ? "No models were reported as loaded." : "Loaded models: \(loadedModels.joined(separator: ", "))."
+        localReachability = .unreachable("Ollama answered, but `\(requestedModel)` is not loaded. \(loaded)")
+      }
+    } catch {
+      localReachability = .unreachable(shortReachabilityError(error))
+    }
+
     refreshStatus()
   }
 
@@ -1313,6 +1648,18 @@ struct SettingsView: View {
     return message
   }
 
+  private func shortReachabilityError(_ error: Error) -> String {
+    if let urlError = error as? URLError {
+      switch urlError.code {
+      case .cannotConnectToHost, .networkConnectionLost, .timedOut, .notConnectedToInternet:
+        return "No response."
+      default:
+        return urlError.localizedDescription
+      }
+    }
+    return error.localizedDescription
+  }
+
   private func migrateLegacyActiveModelIfNeeded() {
     let trimmed = model.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmed.isEmpty else {
@@ -1365,6 +1712,8 @@ struct SettingsView: View {
     statusSnapshot = SettingsStatusSnapshot.make(
       provider: selectedProvider,
       model: model,
+      ollamaModel: normalizedModel(ollamaModel, provider: .ollama),
+      ollamaReachability: localReachability,
       storePath: storePath,
       secretStore: secretStore,
       resolveEngine: resolveEngine
@@ -1439,6 +1788,7 @@ struct SettingsView: View {
     }
 
     applyProviderKeysDebugOverride()
+    applyLocalModelDebugOverride()
   }
 
   private func applyProviderKeysDebugOverride() {
@@ -1510,6 +1860,36 @@ struct SettingsView: View {
     return store
   }
 
+  private func applyLocalModelDebugOverride() {
+    guard let fixture = ProcessInfo.processInfo.environment["GUNK_DEBUG_SETTINGS_LOCAL_MODEL"] else {
+      return
+    }
+
+    selectedSection = .localModel
+    ollamaBaseURLText = "http://localhost:11434"
+    ollamaModel = "llama3.1:8b"
+    if fixture == "active" {
+      providerRawValue = LLMProvider.ollama.rawValue
+      syncActiveModelFromMemory()
+    }
+
+    switch fixture {
+    case "checking":
+      localReachability = .checking
+    case "reachable", "active":
+      localReachability = .reachable(model: "llama3.1:8b", milliseconds: 180)
+    case "unreachable":
+      localReachability = .unreachable("No response.")
+    default:
+      localReachability = .unchecked
+    }
+    focusedLocalModelField = nil
+    DispatchQueue.main.async {
+      focusedLocalModelField = nil
+    }
+    refreshStatus()
+  }
+
   private static func liveTestConnection(
     provider: LLMProvider,
     model: String,
@@ -1539,8 +1919,12 @@ struct SettingsView: View {
     case .anthropic:
       _ = try await AnthropicClient(apiKey: apiKey).complete(request: request)
     case .ollama:
-      _ = try await OllamaClient().complete(request: request)
+      _ = try await OllamaClient(baseURL: OllamaClient.configuredBaseURL()).complete(request: request)
     }
+  }
+
+  private static func liveOllamaReachabilityCheck(baseURL: URL) async throws -> [String] {
+    try await OllamaClient(baseURL: baseURL).listModels()
   }
 }
 
