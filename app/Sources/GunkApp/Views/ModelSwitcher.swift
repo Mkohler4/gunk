@@ -68,7 +68,8 @@ enum ModelCatalog {
         ),
       ]
     case .ollama:
-      // Ignored for now: local models return when their UX is designed.
+      // Configured in Settings v2's Local model section; this quick switcher
+      // stays hosted-only so it never implies a local reachability check ran.
       return []
     }
   }

@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 ### Added
+- Settings v2 (Phase 11): the old single-form Settings page is now a
+  sectioned trust panel for Provider & keys, Local model, Spend, Processing,
+  and Pipeline health. The spend readout uses the restored Swift
+  `listLLMRuns()` / `llmRunsForSource(_:)` APIs plus
+  `llmRunAggregatesByModel(...)` to estimate USD from real token counts with a
+  versioned in-repo price table; unknown hosted prices render `—`, Ollama rows
+  render as known local/free, and `cost_usd` remains unused presentation
+  storage. Provider keys stay in Keychain with per-provider remembered models,
+  Ollama gets host/model reachability checks, the confidence threshold now
+  labels the Approval ↔ Auto-accept behavior and drives the Library approval
+  queue, and the optional cost cap is warn-only.
 - `gunk.app` "How this works" on-demand analysis (T-10.14): a single quiet
   disclosure on the module page opens an AI-written walkthrough of the module's
   design — a plain-language summary, the data flow (input → transform →
@@ -678,7 +689,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Removed
 - The in-process Swift AI pipeline (`Analyze/`, AI `Decompose/` stages, ingest scanning/context, `Search/EmbeddingIndex`) and its SwiftPM tree-sitter grammar dependencies, now superseded by `gunk-engine`. The Swift `Extract/`, `SourceDetector`, LLM clients, and store remain for the shell's approval-extract, folder detection, and connection-test features.
-- Dead Swift `Store` accessors and models orphaned by the engine port: `addSourceFile`/`filesForSource` (+ `SourceFile`), `llmRunsForSource`/`listLLMRuns`, and the gunk-cluster membership reader/writer (+ `GunkClusterMembership`); these tables are now written by the engine and read by MCP. Also dropped the unused test-bundle `Fixtures` (the eval fixtures live in `engine/test/fixtures`).
+- Dead Swift `Store` accessors and models orphaned by the engine port:
+  `addSourceFile`/`filesForSource` (+ `SourceFile`) and the gunk-cluster
+  membership reader/writer (+ `GunkClusterMembership`); these tables are now
+  written by the engine and read by MCP. The LLM run read APIs were removed at
+  this point, then restored in Phase 11 for Settings spend readouts. Also
+  dropped the unused test-bundle `Fixtures` (the eval fixtures live in
+  `engine/test/fixtures`).
 - Cross-source module dedup with canonical cluster links, variant counts, and MCP exposure for list/get/search.
 - Local semantic search for extracted gunks with schema v3 `gunk_embeddings`, app-side embedding indexing, and MCP cosine ranking with substring fallback.
 - `gunk.app` eval gate proving the capability-centric pipeline beats the Phase 3 baseline and emits zero trivial-module false positives.

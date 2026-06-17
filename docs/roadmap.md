@@ -130,8 +130,9 @@ gunk.
 - [x] Tag taxonomy v0: `auth`, `payments`, `ui-kit`, `scraper`, `dashboard`,
       `cli`, `api`, `db-layer`, `email`, `search` (now a *seed*; tags are
       AI-derived and open — see ADR/CHANGELOG dynamic tags)
-- [ ] LLM cost meter — partial: per-run `cost_usd` + token usage are tracked in
-      the store, but no in-app meter UI yet
+- [x] LLM cost meter — closed in Phase 11 Settings v2 as a presentation-only
+      spend readout: token usage is real, USD is estimated from the versioned
+      in-repo price table, and `cost_usd` remains inert.
 - [ ] Re-classify affordance per gunk — engine can re-run, but the app
       `reclassify` hook is still a no-op (tracked in T-6.8)
 - [x] MCP `search_gunks(query)` and tag-based filtering
@@ -430,15 +431,18 @@ badge.
 > real), so the spend view derives USD from a versioned price table and
 > never fabricates a figure.
 
-- [ ] Token + cost meter — presentation only: per-run `input_tokens` /
-      `output_tokens` / `cost_usd` already land in the store (this closes the
-      Phase 3 "LLM cost meter" leftover)
-- [ ] Multi-provider API key management UI (per-provider Keychain storage
-      already exists; the management UI doesn't)
-- [ ] Local model (Ollama) configuration UX
-- [ ] Label the confidence threshold slider and fix bug B1 (the approval
-      queue gates on a hard-coded 0.7 instead of the user's setting)
-- [ ] Stretch: cost cap setting (from the old Polish phase)
+- [x] Token + cost meter — presentation only: reads `input_tokens` /
+      `output_tokens`, estimates USD from the Phase 11 price table, and leaves
+      `cost_usd` inert. Price representation is recorded in
+      [T-11.2](tasks/phase-11-settings-v2.md#t-112--versioned-price-table--usd-estimation-core-cp-m)
+      and the `PriceTable.swift` `PRICES` note; no full ADR was required.
+- [x] Multi-provider API key management UI (per-provider Keychain storage,
+      remembered models, add/edit/remove/test)
+- [x] Local model (Ollama) configuration UX (host/model fields, reachability,
+      no-key local treatment)
+- [x] Label the confidence threshold slider and fix bug B1 (the approval
+      queue now uses the user's setting)
+- [x] Stretch: cost cap setting (warn-only, estimate-based)
 
 ---
 

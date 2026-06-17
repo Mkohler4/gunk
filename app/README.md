@@ -96,9 +96,10 @@ enables foreign keys, and applies pending schema migrations. The typed API is:
 | `filesForSource(sourceId:)` | Returns scanned files for one source ordered by path. |
 | `addGunkFile(gunkId:relpath:size:)` | Records one file in a module bundle. |
 | `filesForGunk(gunkId:)` | Returns files for one module ordered by path. |
-| `recordLLMRun(...)` | Records provider/model token and cost accounting for a source. |
-| `llmRunsForSource(sourceId:)` | Returns LLM runs for one source ordered by insertion. |
-| `listLLMRuns()` | Returns all LLM runs ordered by start time for cost aggregation. |
+| `recordLLMRun(...)` | Records provider/model token accounting for a source; `cost_usd` remains presentation-inert. |
+| `llmRunsForSource(sourceId:)` | Returns LLM runs for one source ordered by start time, for Settings spend readouts. |
+| `listLLMRuns()` | Returns all LLM runs ordered by start time, for Settings spend aggregation. |
+| `llmRunAggregatesByModel(...)` | Sums input/output tokens by provider + model and flags partial rows with unknown token counts. |
 
 The Swift schema strings in `Sources/GunkApp/Store/Schema.swift` are kept
 byte-for-byte identical to the MCP source of truth under `../mcp/src/schema/`.
