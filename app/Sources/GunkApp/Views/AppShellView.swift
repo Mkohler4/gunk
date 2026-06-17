@@ -46,6 +46,8 @@ struct AppShellView: View {
   /// surface re-checks all of them and they can never disagree.
   @StateObject private var mcpSetup = MCPSetupModel()
   @State private var showMCPSetup = false
+  @State private var settingsMCPDeepLinkNonce = 0
+  @State private var settingsShouldShowMCPArrival = false
   /// The run-end toast (T-8.7): the completion/failure moment is a floating
   /// overlay over the detail area, not a sidebar chip.
   @State private var toast: ShellRunToast?
@@ -250,8 +252,7 @@ struct AppShellView: View {
           isConnected: mcpSetup.isAnyClientConnected,
           connectedSummary: mcpSetup.connectedSummary
         ) {
-          // T-8.10: Connect opens the one-click setup sheet.
-          showMCPSetup = true
+          navigateToSettingsMCP()
         }
       }
       .animation(BrandMotion.standard, value: services.processingModel.isProcessing)
@@ -267,6 +268,9 @@ struct AppShellView: View {
       accessory: accessory(for: section),
       accessoryAction: accessoryAction(for: section)
     ) {
+      if section == .settings {
+        settingsShouldShowMCPArrival = false
+      }
       selection = section
     }
   }
@@ -688,7 +692,7 @@ struct AppShellView: View {
         // (ux §4.5, D8) so the detail line and the chip can't disagree.
         mcpNeedsSetup: !mcpSetup.isAnyClientConnected,
         onShowSettings: { selection = .settings },
-        onShowMCPSetup: { showMCPSetup = true },
+        onShowMCPSetup: navigateToSettingsMCP,
         onShowRuns: { runInspectorContext = $0 },
         onOpenModule: { modulePath.append(.module($0)) }
       )
@@ -703,8 +707,20 @@ struct AppShellView: View {
       // later. Drag-and-drop and the empty-Library button still intake.
       Color.clear
     case .settings:
-      SettingsView(storePath: services.store.databasePath, mcpSetup: mcpSetup)
+      SettingsView(
+        initialSection: settingsShouldShowMCPArrival ? .pipelineHealth : .providerKeys,
+        mcpDeepLinkNonce: settingsMCPDeepLinkNonce,
+        mcpDeepLinkOnAppear: settingsShouldShowMCPArrival,
+        storePath: services.store.databasePath,
+        mcpSetup: mcpSetup
+      )
     }
+  }
+
+  private func navigateToSettingsMCP() {
+    settingsShouldShowMCPArrival = true
+    selection = .settings
+    settingsMCPDeepLinkNonce += 1
   }
 }
 
