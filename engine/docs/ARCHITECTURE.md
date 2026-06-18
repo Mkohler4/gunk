@@ -369,6 +369,55 @@ cat /tmp/gunk-home/runs/*/trace.json | jq '.verification'
 `--json` (stdout) is the live progress; `--trace` is the post-mortem. stderr
 carries human-readable `[decompose]` log lines.
 
+### Watch a run live: `gunk-engine watch`
+
+`trace.json` is a post-mortem (written once at the end). To **watch the AI think
+in real time** — every stage transition and the full prompt + raw response of
+every LLM call as they happen — use the live log.
+
+Whenever the engine runs with `--trace` (the app always does), it also streams a
+tail-able `~/.gunk/runs/<runId>/live.jsonl`, one JSON event per line, flushed
+immediately. `gunk-engine watch` follows it and pretty-prints each step:
+
+```bash
+cd engine
+bun run watch                 # attach to the active run, or wait for the next one to start
+bun run watch --full          # don't truncate prompts/responses
+bun run watch <runId>         # follow a specific run
+bun run watch --no-follow     # print the current log once and exit
+bun run watch --gunk-home /tmp/gunk-home
+```
+
+Typical workflow: open a terminal, run `bun run watch` (it prints "waiting for a
+run to start…"), then process a folder in the app — every scan/survey/refine/gate
+step and each LLM prompt + response streams into the terminal live. The viewer
+exits when the run finishes. Source: `src/trace/liveLog.ts` (producer),
+`src/trace/watch.ts` (viewer).
+
+### Read a trace fast: `gunk-engine trace`
+
+`trace.json` is verbose. The `trace` subcommand digests one run into a
+one-screen, symptom-oriented report: the **signal funnel** (files → edges →
+hypotheses → modules → accepted), survey/refine/gate decisions,
+self-containment failures, and **heuristic warnings that point at the likely
+failing stage**.
+
+```bash
+cd engine
+bun run trace                       # newest run under ~/.gunk/runs
+bun run trace <runId>               # a specific run
+bun run trace /tmp/gunk-home/runs/<runId>/trace.json  # an explicit path
+bun run trace --gunk-home /tmp/gunk-home              # non-default home
+bun run trace <runId> --show survey # + dump verbatim prompt/response for a stage
+bun run trace <runId> --json        # structured digest (for tools / diffing)
+```
+
+The funnel makes "where did the signal die?" obvious at a glance; the warnings
+encode the playbook rules below (0-edge graph, dropped survey hypotheses,
+low-cohesion rejections, self-containment failures). Reach for `--show <stage>`
+when you need the exact prompt and raw model output. Source:
+`src/trace/digest.ts`.
+
 ---
 
 ## Tuning knobs

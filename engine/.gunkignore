@@ -1,0 +1,6 @@
+# Applied when the engine subfolder is decomposed on its own (source root
+# = engine/). The test fixtures are synthetic fake apps (Stripe checkout,
+# OAuth login, SendGrid email, order APIs, etc.) used only for eval/replay
+# regression testing; they are not real gunk capabilities, so keep the
+# whole test tree out of the pipeline.
+test/

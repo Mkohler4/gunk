@@ -7,6 +7,13 @@
 //
 // Durable state -> SQLite at ~/.gunk/store.db. Telemetry -> NDJSON on stdout
 // (with --json). Full trace -> ~/.gunk/runs/<runId>/trace.json (with --trace).
+//
+// Subcommands:
+//   gunk-engine eval [...]                  run the offline eval gate
+//   gunk-engine trace [runId|path] [--show <stage>] [--json] [--gunk-home p]
+//                                           digest a run's trace.json
+//   gunk-engine watch [runId|path] [--full] [--no-follow] [--gunk-home p]
+//                                           live-tail a run (steps + prompts/outputs)
 
 import { randomUUID } from "node:crypto";
 import { homedir } from "node:os";
@@ -29,10 +36,13 @@ import {
   RunTraceRecorder,
   type DecompositionObserver,
 } from "./trace/trace.js";
+import { LiveLogObserver } from "./trace/liveLog.js";
 import { defaultModel, makeClient, type LLMProvider } from "./llm/client.js";
 import { makeEmbeddingProvider } from "./llm/embeddings.js";
 import { DecompositionPipeline } from "./decompose/pipeline.js";
 import { formatEvalReport, runEval } from "./eval/runEval.js";
+import { runTraceCli } from "./trace/digest.js";
+import { runWatchCli } from "./trace/watch.js";
 
 interface CliArgs {
   folder: string;
@@ -155,6 +165,16 @@ function apiKeyFromEnv(provider: LLMProvider): string {
 }
 
 async function main(): Promise<void> {
+  if (process.argv[2] === "trace") {
+    process.stdout.write(`${runTraceCli(process.argv.slice(3))}\n`);
+    return;
+  }
+
+  if (process.argv[2] === "watch") {
+    await runWatchCli(process.argv.slice(3));
+    return;
+  }
+
   if (process.argv[2] === "eval") {
     const args = parseEvalArgs(process.argv.slice(3));
     const report = await runEval({
@@ -199,6 +219,14 @@ async function main(): Promise<void> {
     : null;
   const observers: DecompositionObserver[] = [new LoggingObserver()];
   if (recorder) observers.push(recorder);
+  // Live log streams every step (incl. full prompts + responses) to a tail-able
+  // JSONL while the run is in flight. Tied to --trace so app-spawned runs get it
+  // for free. Follow it with `gunk-engine watch`.
+  if (args.trace) {
+    observers.push(
+      new LiveLogObserver({ runId, runsDir: join(args.gunkHome, "runs") }),
+    );
+  }
   const observer = new CompositeObserver(observers);
   observer.runStarted({
     runId,

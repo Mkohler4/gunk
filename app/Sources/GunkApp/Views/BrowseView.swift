@@ -326,7 +326,6 @@ struct BrowseView: View {
         needsApprovalScopeChip
       }
 
-      sourcesButton
       modelSelector
     }
   }
@@ -338,7 +337,6 @@ struct BrowseView: View {
         headerTitle
         viewModePicker
         Spacer(minLength: BrandMetrics.Spacing.sm)
-        sourcesButton
         modelSelector
       }
 
@@ -360,6 +358,9 @@ struct BrowseView: View {
   /// Restored here because T-8.6's "View runs" entry point lives on the
   /// panel's rows. A quiet icon in the actions cluster: not filter UI, so it
   /// doesn't violate the one-row appbar rule.
+  ///
+  /// NOTE: temporarily unmounted from the header for MVP — the sources/panel
+  /// code below is intentionally kept so this can be re-homed later.
   private var sourcesButton: some View {
     Button {
       showSourcesPanel = true

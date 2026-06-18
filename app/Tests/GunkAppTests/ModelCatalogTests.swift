@@ -8,8 +8,34 @@ final class ModelCatalogTests: XCTestCase {
     }
   }
 
-  func testLocalProviderIsIgnoredForNow() {
+  func testLocalProviderHasNoCuratedCatalog() {
+    // Ollama's model is user-pulled and typed into Settings, so it has no
+    // curated catalog — its single switcher row is derived from the saved
+    // model by `menuOptions`, not `options`.
     XCTAssertTrue(ModelCatalog.options(for: .ollama).isEmpty)
+  }
+
+  func testSwitcherProvidersAlwaysAppendLocalAfterKeyedHosted() {
+    // Ollama is always offered (no key, runs locally) and sits after the
+    // keyed hosted providers — this is what lets it be picked from the
+    // dropdown without the Settings toggle.
+    XCTAssertEqual(
+      ModelCatalog.switcherProviders { _ in true },
+      ModelCatalog.hostedProviders + [.ollama]
+    )
+    XCTAssertEqual(ModelCatalog.switcherProviders { _ in false }, [.ollama])
+    XCTAssertEqual(ModelCatalog.switcherProviders { $0 == .anthropic }, [.anthropic, .ollama])
+  }
+
+  func testLocalMenuOptionIsTheSavedModelWithLocalSubtitle() {
+    let options = ModelCatalog.menuOptions(
+      for: .ollama,
+      selectedProvider: .ollama,
+      selectedModelId: "llama3.1:8b"
+    )
+    XCTAssertEqual(options.count, 1)
+    XCTAssertEqual(options.first?.modelId, "llama3.1:8b")
+    XCTAssertEqual(options.first?.subtitle, ModelCatalog.localOptionSubtitle)
   }
 
   func testCatalogDefaultsMatchProviderDefaults() {

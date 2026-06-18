@@ -1,0 +1,16 @@
+# gunk self-analysis ignore rules.
+#
+# When gunk decomposes its OWN repository, the engine's synthetic test
+# fixtures (deliberately fake SaaS apps: Stripe checkout, OAuth login,
+# SendGrid email, order APIs, etc.) look exactly like real capabilities,
+# so the pipeline surfaces them as modules that aren't part of gunk's
+# actual product. They are test scaffolding, not first-party source —
+# exclude the whole fixture tree.
+engine/test/fixtures/
+
+# Eval/replay tapes and golden files live alongside the fixtures and are
+# data, not code worth decomposing.
+engine/test/
+
+# Marketing/site and generated docs are not extractable product modules.
+web/

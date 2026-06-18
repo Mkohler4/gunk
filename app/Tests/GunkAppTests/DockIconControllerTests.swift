@@ -24,7 +24,9 @@ final class DockIconControllerTests: XCTestCase {
     XCTAssertEqual(controller.currentDescriptor.assetName, "DockBinProcessing")
   }
 
-  func testBadgeReflectsGunkCount() {
+  /// The Dock badge is disabled: a non-zero gunk count still drives the icon
+  /// state (`.full`) but never surfaces a red badge label.
+  func testGunkCountDrivesStateWithoutBadge() {
     let applicator = RecordingDockIconApplicator()
     let controller = DockIconController(applicator: applicator)
 
@@ -32,8 +34,8 @@ final class DockIconControllerTests: XCTestCase {
 
     XCTAssertEqual(controller.state, .full)
     XCTAssertEqual(controller.currentDescriptor.assetName, "DockBinFull")
-    XCTAssertEqual(controller.currentDescriptor.badgeLabel, "3")
-    XCTAssertEqual(applicator.badgeLabel, "3")
+    XCTAssertNil(controller.currentDescriptor.badgeLabel)
+    XCTAssertNil(applicator.badgeLabel)
 
     controller.reflectGunkCount(0)
 
@@ -43,25 +45,20 @@ final class DockIconControllerTests: XCTestCase {
     XCTAssertNil(applicator.badgeLabel)
   }
 
-  /// B2 regression: a run beginning from a badged idle state must never flash
-  /// the stale idle count on the processing icon. The old call site applied
-  /// `setState(.processing)` (rendering the new icon with the previous badge
-  /// still attached) and only then `badge(count:)`, so the badge label was
-  /// applied twice — "12" then nil. The atomic `transition(to:badgeCount:)`
-  /// applies it once.
-  func testRunBeginDoesNotFlashStaleIdleBadge() {
+  /// The Dock badge is disabled, so no count is ever applied — idle or
+  /// processing. A run beginning from a populated idle state stays badge-free
+  /// the whole way through (and renders the processing icon).
+  func testRunBeginNeverAppliesABadge() {
     let applicator = RecordingDockIconApplicator()
     let controller = DockIconController(applicator: applicator)
     let model = ProcessingModel(dockIconController: controller, gunkCount: { 12 })
 
-    model.refreshIdleDockState() // idle: full + "12"
-    XCTAssertEqual(applicator.badgeLabel, "12")
+    model.refreshIdleDockState() // idle: full, no badge
+    XCTAssertNil(applicator.badgeLabel)
     applicator.resetHistory()
 
     model.begin(sourceId: 1) // a run starts, 0 modules found so far
 
-    // No stale "12" on the way to the cleared processing badge — exactly one
-    // badge apply, straight to nil.
     XCTAssertEqual(applicator.badgeLabelHistory, [nil])
     XCTAssertEqual(controller.currentDescriptor.assetName, "DockBinProcessing")
     XCTAssertNil(applicator.badgeLabel)

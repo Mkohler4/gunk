@@ -1055,14 +1055,6 @@ struct SettingsView: View {
           }
 
           VStack(alignment: .leading, spacing: BrandMetrics.Spacing.sm) {
-            HStack {
-              Text("APPROVAL")
-              Spacer()
-              Text("AUTO-ACCEPT")
-            }
-            .font(BrandTypography.caption.weight(.semibold))
-            .foregroundStyle(BrandColors.textSecondary)
-
             thresholdSlider
 
             HStack(alignment: .top) {
@@ -1149,36 +1141,18 @@ struct SettingsView: View {
   }
 
   private var thresholdSlider: some View {
-    GeometryReader { proxy in
-      ZStack(alignment: .topLeading) {
-        Slider(
-          value: confidenceThresholdBinding,
-          in: 0.5...1,
-          step: 0.05,
-          onEditingChanged: { isEditing in
-            isAdjustingConfidenceThreshold = isEditing
-          }
-        )
-        .padding(.top, showsConfidenceThresholdBubble ? 28 : 0)
-
-        if showsConfidenceThresholdBubble {
-          Text(confidencePercentText)
-            .font(BrandTypography.caption.weight(.semibold))
-            .monospacedDigit()
-            .foregroundStyle(BrandColors.backgroundPrimary)
-            .padding(.horizontal, BrandMetrics.Spacing.sm)
-            .padding(.vertical, BrandMetrics.Spacing.xs)
-            .background(
-              Capsule(style: .continuous)
-                .fill(BrandColors.accent)
-            )
-            .offset(x: confidenceBubbleOffset(width: proxy.size.width), y: 0)
-            .transition(.opacity.combined(with: .scale(scale: 0.95, anchor: .bottom)))
-        }
+    BrandThresholdSlider(
+      value: confidenceThresholdBinding,
+      range: 0.5...1,
+      step: 0.05,
+      leadingLabel: "APPROVAL",
+      trailingLabel: "AUTO-ACCEPT",
+      bubbleText: confidencePercentText,
+      showsBubble: showsConfidenceThresholdBubble,
+      onEditingChanged: { editing in
+        isAdjustingConfidenceThreshold = editing
       }
-    }
-    .frame(height: showsConfidenceThresholdBubble ? 54 : 24)
-    .animation(BrandMotion.standard, value: showsConfidenceThresholdBubble)
+    )
     .accessibilityLabel("Approval to auto-accept threshold")
     .accessibilityValue(confidencePercentText)
   }
@@ -1369,28 +1343,32 @@ struct SettingsView: View {
 
   private func mcpClientRow(_ row: MCPSetupModel.ClientRow) -> some View {
     VStack(alignment: .leading, spacing: 3) {
-      Toggle(isOn: mcpToggleBinding(for: row)) {
+      HStack(alignment: .center, spacing: BrandMetrics.Spacing.md) {
         VStack(alignment: .leading, spacing: 3) {
-          HStack(alignment: .firstTextBaseline) {
-            Text(row.client.displayName)
-              .font(BrandTypography.callout)
-              .foregroundStyle(BrandColors.textPrimary)
-            Spacer(minLength: 8)
-            Text(row.displayStatus.label)
-              .font(BrandTypography.caption.weight(.semibold))
-              .foregroundStyle(mcpStatusColor(row.displayStatus))
-          }
+          Text(row.client.displayName)
+            .font(BrandTypography.callout)
+            .foregroundStyle(BrandColors.textPrimary)
 
-          Text(row.configURL.path)
+          Text(shortenedConfigPath(row.configURL))
             .font(BrandTypography.mono)
             .foregroundStyle(BrandColors.textSecondary)
             .lineLimit(1)
             .truncationMode(.middle)
             .textSelection(.enabled)
         }
+
+        Spacer(minLength: BrandMetrics.Spacing.lg)
+
+        Text(row.displayStatus.label)
+          .font(BrandTypography.caption.weight(.semibold))
+          .foregroundStyle(mcpStatusColor(row.displayStatus))
+
+        Toggle("", isOn: mcpToggleBinding(for: row))
+          .labelsHidden()
+          .toggleStyle(.switch)
+          .controlSize(.small)
+          .tint(BrandColors.accentSecondary)
       }
-      .toggleStyle(.switch)
-      .controlSize(.small)
 
       if let problem = mcpProblemMessage(for: row) {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -1443,7 +1421,9 @@ struct SettingsView: View {
   private func mcpStatusColor(_ status: MCPSetupModel.DisplayStatus) -> Color {
     switch status {
     case .connected:
-      return BrandColors.success
+      // The green toggle already signals the active state; keep the label
+      // muted rather than a loud success green.
+      return BrandColors.textSecondary
     case .notSetUp:
       return BrandColors.warning
     case .notDetected:
@@ -1451,6 +1431,12 @@ struct SettingsView: View {
     case .problem:
       return BrandColors.danger
     }
+  }
+
+  /// Collapses the user's home directory to `~` so long config paths fit on a
+  /// single line without leaning on truncation.
+  private func shortenedConfigPath(_ url: URL) -> String {
+    (url.path as NSString).abbreviatingWithTildeInPath
   }
 
   private func statusRow(_ item: SettingsStatusItem, isHighlighted: Bool = false) -> some View {
@@ -1966,12 +1952,6 @@ struct SettingsView: View {
     String(format: "$%.2f", value)
   }
 
-  private func confidenceBubbleOffset(width: CGFloat) -> CGFloat {
-    let normalized = CGFloat((confidenceThresholdBinding.wrappedValue - 0.5) / 0.5)
-    let bubbleWidth: CGFloat = 48
-    return min(max(normalized * width - bubbleWidth / 2, 0), max(0, width - bubbleWidth))
-  }
-
   private func refreshStatus() {
     statusSnapshot = SettingsStatusSnapshot.make(
       provider: selectedProvider,
@@ -2245,5 +2225,169 @@ private extension SettingsStatusItem.State {
     case .unavailable:
       return "xmark.circle"
     }
+  }
+}
+
+/// Brand-themed range slider used by the Processing section's auto-accept
+/// threshold. Replaces the native `Slider` (which renders in the system blue
+/// accent and grows its own bounds when an overlay appears) with a fixed-height
+/// green band: the value fill, the inline APPROVAL / AUTO-ACCEPT labels, the
+/// handle, and the drag bubble all live inside a constant layout so adjusting
+/// the value never nudges the surrounding settings rows.
+private struct BrandThresholdSlider: View {
+  @Binding var value: Double
+  let range: ClosedRange<Double>
+  let step: Double
+  let leadingLabel: String
+  let trailingLabel: String
+  let bubbleText: String
+  let showsBubble: Bool
+  var onEditingChanged: (Bool) -> Void
+
+  @State private var isDragging = false
+
+  private let bandHeight: CGFloat = 36
+  private let bubbleZoneHeight: CGFloat = 22
+  private let bubbleSpacing: CGFloat = 6
+  private let handleWidth: CGFloat = 12
+  private let bandRadius: CGFloat = BrandMetrics.Radius.medium
+
+  private var totalHeight: CGFloat { bubbleZoneHeight + bubbleSpacing + bandHeight }
+
+  private var fraction: CGFloat {
+    let span = range.upperBound - range.lowerBound
+    guard span > 0 else { return 0 }
+    return CGFloat((value - range.lowerBound) / span)
+  }
+
+  var body: some View {
+    GeometryReader { proxy in
+      let width = proxy.size.width
+      let travel = max(width - handleWidth, 1)
+      let handleCenterX = handleWidth / 2 + fraction * travel
+
+      VStack(spacing: bubbleSpacing) {
+        bubbleZone(handleCenterX: handleCenterX, width: width)
+        band(handleCenterX: handleCenterX)
+      }
+      .contentShape(Rectangle())
+      .gesture(dragGesture(width: width, travel: travel))
+    }
+    .frame(height: totalHeight)
+    .animation(BrandMotion.standard, value: showsBubble)
+    .animation(BrandMotion.standard, value: isDragging)
+  }
+
+  private func bubbleZone(handleCenterX: CGFloat, width: CGFloat) -> some View {
+    let bubbleWidth: CGFloat = 46
+    let clampedX = min(max(handleCenterX - bubbleWidth / 2, 0), max(0, width - bubbleWidth))
+
+    return ZStack(alignment: .topLeading) {
+      Color.clear
+      Text(bubbleText)
+        .font(BrandTypography.caption.weight(.semibold))
+        .monospacedDigit()
+        .foregroundStyle(BrandColors.backgroundPrimary)
+        .frame(width: bubbleWidth)
+        .padding(.vertical, BrandMetrics.Spacing.xs)
+        .background(
+          Capsule(style: .continuous)
+            .fill(BrandColors.accent)
+        )
+        .offset(x: clampedX)
+        .opacity(showsBubble ? 1 : 0)
+        .scaleEffect(showsBubble ? 1 : 0.9, anchor: .bottom)
+    }
+    .frame(height: bubbleZoneHeight)
+  }
+
+  private func band(handleCenterX: CGFloat) -> some View {
+    ZStack(alignment: .leading) {
+      RoundedRectangle(cornerRadius: bandRadius, style: .continuous)
+        .fill(BrandColors.backgroundPrimary)
+
+      Rectangle()
+        .fill(
+          LinearGradient(
+            colors: [BrandColors.accentSecondary, BrandColors.accent],
+            startPoint: .leading,
+            endPoint: .trailing
+          )
+        )
+        .frame(width: handleCenterX)
+
+      // Muted text for the un-filled groove, then dark text masked to the
+      // filled region so each label stays legible against its background.
+      labelRow
+        .foregroundStyle(BrandColors.textSecondary)
+
+      labelRow
+        .foregroundStyle(BrandColors.backgroundPrimary)
+        .mask(alignment: .leading) {
+          Rectangle().frame(width: handleCenterX)
+        }
+
+      handle
+        .position(x: handleCenterX, y: bandHeight / 2)
+    }
+    .frame(height: bandHeight)
+    .clipShape(RoundedRectangle(cornerRadius: bandRadius, style: .continuous))
+    .overlay(
+      RoundedRectangle(cornerRadius: bandRadius, style: .continuous)
+        .strokeBorder(BrandColors.accent.opacity(0.22))
+    )
+  }
+
+  private var labelRow: some View {
+    HStack {
+      Text(leadingLabel)
+      Spacer(minLength: BrandMetrics.Spacing.sm)
+      Text(trailingLabel)
+    }
+    .font(BrandTypography.caption.weight(.semibold))
+    .padding(.horizontal, BrandMetrics.Spacing.md)
+    .frame(maxWidth: .infinity)
+  }
+
+  private var handle: some View {
+    RoundedRectangle(cornerRadius: handleWidth / 2, style: .continuous)
+      .fill(
+        LinearGradient(
+          colors: [BrandColors.Mark.gradientTop, BrandColors.accent],
+          startPoint: .top,
+          endPoint: .bottom
+        )
+      )
+      .overlay(
+        RoundedRectangle(cornerRadius: handleWidth / 2, style: .continuous)
+          .strokeBorder(BrandColors.backgroundPrimary.opacity(0.35))
+      )
+      .frame(width: handleWidth, height: bandHeight - 8)
+      .scaleEffect(isDragging ? 1.08 : 1, anchor: .center)
+      .shadow(color: BrandColors.scrim.opacity(0.35), radius: 3, y: 1)
+  }
+
+  private func dragGesture(width: CGFloat, travel: CGFloat) -> some Gesture {
+    DragGesture(minimumDistance: 0)
+      .onChanged { drag in
+        if !isDragging {
+          isDragging = true
+          onEditingChanged(true)
+        }
+        updateValue(locationX: drag.location.x, travel: travel)
+      }
+      .onEnded { drag in
+        updateValue(locationX: drag.location.x, travel: travel)
+        isDragging = false
+        onEditingChanged(false)
+      }
+  }
+
+  private func updateValue(locationX: CGFloat, travel: CGFloat) {
+    let rawFraction = (locationX - handleWidth / 2) / travel
+    let clamped = min(max(Double(rawFraction), 0), 1)
+    let span = range.upperBound - range.lowerBound
+    let stepped = (clamped * span / step).rounded() * step + range.lowerBound
+    value = min(max(stepped, range.lowerBound), range.upperBound)
   }
 }

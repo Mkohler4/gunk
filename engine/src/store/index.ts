@@ -253,6 +253,36 @@ export function insertGunk(
   return gunkById(db, id)!;
 }
 
+export interface ClearedGunks {
+  removed: number;
+  bundlePaths: string[];
+}
+
+/**
+ * Replace semantics for a re-run: hard-delete every gunk belonging to a source
+ * so a fresh decomposition does not accumulate stale modules from earlier runs
+ * (e.g. capabilities that were later excluded by an ignore rule). Dependent
+ * rows — gunk_files, gunk_tags, gunk_embeddings, gunk_cluster memberships —
+ * cascade via the schema's `ON DELETE CASCADE` (requires `PRAGMA foreign_keys
+ * = ON`, which `openStore` sets). `llm_runs` reference `sources`, not `gunks`,
+ * so spend history is preserved. Returns the count removed and the on-disk
+ * bundle paths so the caller can delete their extracted bundle directories.
+ */
+export function clearGunksForSource(db: Database, sourceId: number): ClearedGunks {
+  const rows = db
+    .query<{ bundlePath: string | null }, [number]>(
+      `SELECT bundle_path AS bundlePath FROM gunks WHERE source_id = ?`,
+    )
+    .all(sourceId);
+  db.query(`DELETE FROM gunks WHERE source_id = ?`).run(sourceId);
+  return {
+    removed: rows.length,
+    bundlePaths: rows
+      .map((row) => row.bundlePath)
+      .filter((path): path is string => path !== null && path.length > 0),
+  };
+}
+
 export function upsertTag(db: Database, name: string): Tag {
   db.query(`INSERT INTO tags (name) VALUES (?) ON CONFLICT(name) DO NOTHING`).run(name);
   return db.query<Tag, [string]>(`SELECT id, name FROM tags WHERE name = ?`).get(name)!;

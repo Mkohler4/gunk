@@ -132,9 +132,13 @@ final class DockIconController {
   }
 
   static func descriptor(state: State, badgeCount: Int) -> Descriptor {
+    // The Dock badge (the red count indicator) is intentionally disabled: the
+    // icon state alone (empty/full/processing) communicates status without a
+    // notification badge. `badgeCount` is still tracked for state logic but
+    // never surfaces as a badge label.
     Descriptor(
       assetName: state.assetName,
-      badgeLabel: badgeCount > 0 ? String(badgeCount) : nil
+      badgeLabel: nil
     )
   }
 

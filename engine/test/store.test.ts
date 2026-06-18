@@ -5,15 +5,19 @@ import {
   addGunkFile,
   addGunkTag,
   addSourceFile,
+  clearGunksForSource,
   cosineSimilarity,
   decodeVector,
   encodeVector,
+  filesForGunk,
   filesForSource,
   gunkEmbedding,
+  gunksForSource,
   insertGunk,
   insertSource,
   listGunkTags,
   listTags,
+  markGunkExtracted,
   recordLLMRun,
   runMigrations,
   upsertGunkEmbedding,
@@ -90,6 +94,43 @@ describe("engine store", () => {
     const tag = upsertTag(db, "reports");
     addGunkTag(db, gunk.id, tag.id, 0.8);
     expect(listGunkTags(db, gunk.id).map((t) => t.tag)).toEqual(["reports"]);
+  });
+
+  it("clearGunksForSource replaces a source's modules and reports bundle paths", () => {
+    const source = insertSource(db, "demo", "/tmp/demo-replace", 1000);
+    const first = insertGunk(db, {
+      sourceId: source.id,
+      name: "stale-module",
+      purpose: "from an earlier run",
+      language: "typeScript",
+      confidence: 0.9,
+    });
+    const authTag = listTags(db).find((t) => t.name === "auth")!;
+    addGunkTag(db, first.id, authTag.id, 0.9);
+    addGunkFile(db, first.id, "src/a.ts", 10);
+    upsertGunkEmbedding(db, first.id, [0.1, 0.2], "text-embedding-3-small");
+    markGunkExtracted(db, first.id, "/home/.gunk/modules/1", "/home/.gunk/modules/1/gunk.yml");
+
+    const cleared = clearGunksForSource(db, source.id);
+    expect(cleared.removed).toBe(1);
+    expect(cleared.bundlePaths).toEqual(["/home/.gunk/modules/1"]);
+
+    // Gunk + all dependent rows are gone (cascade), source itself survives.
+    expect(gunksForSource(db, source.id)).toEqual([]);
+    expect(listGunkTags(db, first.id)).toEqual([]);
+    expect(gunkEmbedding(db, first.id)).toBeNull();
+    expect(filesForGunk(db, first.id)).toEqual([]);
+
+    // A fresh run can now persist without accumulating the stale module.
+    const second = insertGunk(db, {
+      sourceId: source.id,
+      name: "fresh-module",
+      purpose: "from the re-run",
+      language: "typeScript",
+      confidence: 0.9,
+    });
+    expect(gunksForSource(db, source.id).map((g) => g.name)).toEqual(["fresh-module"]);
+    expect(second.id).not.toBe(first.id);
   });
 
   it("round-trips embedding vectors as little-endian float32", () => {

@@ -220,6 +220,12 @@ struct ModuleRow: View {
   private static let attentionRailWidth: CGFloat = 3
   /// Selection / arrival ring (library-v2 §1: inset 1.5pt green).
   private static let ringWidth: CGFloat = 1.5
+  /// The ring is inset from the row edges so its corners never collide with
+  /// the group card's rounded `clipShape` — a flush, square-cornered ring gets
+  /// its corners sliced off on the first/last row. The inset keeps the whole
+  /// ring inside the card (and reads as the spec's "inset" treatment).
+  private static let ringInset: CGFloat = 3
+  private static let ringCornerRadius = BrandMetrics.Radius.small
   /// *Not in toolbox* dims the whole row; hover restores it (library-v2 §1).
   private static let dimmedOpacity: Double = 0.46
   /// Persistent faint amber wash on a needs-approval row, warmer on hover.
@@ -267,7 +273,8 @@ struct ModuleRow: View {
     }
     .overlay {
       if showsRing {
-        Rectangle()
+        RoundedRectangle(cornerRadius: Self.ringCornerRadius, style: .continuous)
+          .inset(by: Self.ringInset)
           .strokeBorder(BrandColors.accent, lineWidth: Self.ringWidth)
           .allowsHitTesting(false)
       }

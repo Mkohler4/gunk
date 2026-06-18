@@ -10,6 +10,8 @@
   "scripts": {
     "start": "bun run src/index.ts",
     "eval": "bun run src/index.ts eval",
+    "trace": "bun run src/index.ts trace",
+    "watch": "bun run src/index.ts watch",
     "test": "bun test",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit",

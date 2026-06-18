@@ -20,14 +20,21 @@ struct ModelOption: Equatable, Identifiable {
   }
 }
 
-/// The curated hosted-model catalog behind the shell's model switcher
-/// (toolbox-v2 `.model-menu`). Local/Ollama models are intentionally absent
-/// for now (Mark's direction) — the switcher only offers hosted providers
-/// whose API key is saved in Settings.
+/// The model catalog behind the shell's model switcher (toolbox-v2
+/// `.model-menu`). Hosted providers offer a curated catalog once their API
+/// key is saved; the local provider (Ollama) is always available and offers
+/// whatever model Settings has configured. Selecting any of them from the
+/// switcher activates that engine directly — no separate Settings toggle.
 enum ModelCatalog {
-  /// Providers the switcher can offer, in mockup order. A provider's
+  /// Hosted providers the switcher can offer, in mockup order. A provider's
   /// models only appear once its key exists in the Keychain.
   static let hostedProviders: [LLMProvider] = [.anthropic, .openAI]
+
+  /// Local providers the switcher always offers — they need no key and run
+  /// on the user's machine, so they're listed unconditionally (after the
+  /// keyed hosted providers). Ollama appears with whatever model Settings
+  /// has saved, which is what lets it be picked straight from the dropdown.
+  static let localProviders: [LLMProvider] = [.ollama]
 
   static func options(for provider: LLMProvider) -> [ModelOption] {
     switch provider {
@@ -68,8 +75,9 @@ enum ModelCatalog {
         ),
       ]
     case .ollama:
-      // Configured in Settings v2's Local model section; this quick switcher
-      // stays hosted-only so it never implies a local reachability check ran.
+      // Ollama has no curated catalog — the model is whatever the user
+      // pulled and typed into Settings' Local model section. Its single
+      // switcher row is derived from the saved model in `menuOptions`.
       return []
     }
   }
@@ -99,17 +107,31 @@ enum ModelCatalog {
   /// Settings actually has configured.
   static let customOptionSubtitle = "Custom · from Settings"
 
-  /// The providers the open menu sections by: hosted providers whose key
-  /// probe succeeds, in mockup order. Unkeyed providers are intentionally
-  /// absent (ratified T-8.8 deviation) — an empty result renders the
-  /// "Add an API key in Settings" state.
+  /// Subtitle on the local-provider row: no key, runs on your machine.
+  static let localOptionSubtitle = "Local · runs on your machine"
+
+  /// The hosted providers whose key probe succeeds, in mockup order.
+  /// Unkeyed hosted providers are absent — they only appear once a key is
+  /// saved in Settings.
   static func keyedProviders(hasKey: (LLMProvider) -> Bool) -> [LLMProvider] {
     hostedProviders.filter(hasKey)
   }
 
+  /// Every provider the open switcher sections by: keyed hosted providers
+  /// (mockup order) followed by the always-available local providers. This
+  /// is what lets Ollama be picked straight from the dropdown — selecting it
+  /// activates the local engine, no Settings toggle required, so the user
+  /// can switch seamlessly between every configured model.
+  static func switcherProviders(hasKey: (LLMProvider) -> Bool) -> [LLMProvider] {
+    keyedProviders(hasKey: hasKey) + localProviders
+  }
+
   /// One provider section's rows: the curated catalog, plus the saved
-  /// model as a "Custom · from Settings" row exactly when that model is
-  /// off-catalog, non-empty, and saved under this provider.
+  /// model as an extra row exactly when that model is off-catalog, non-empty,
+  /// and saved under this provider. For local providers (Ollama) the catalog
+  /// is empty, so this saved-model row is the section's only entry and it
+  /// carries the "Local · runs on your machine" subtitle instead of the
+  /// hosted "Custom · from Settings" one.
   static func menuOptions(
     for provider: LLMProvider,
     selectedProvider: LLMProvider,
@@ -126,7 +148,7 @@ enum ModelCatalog {
           provider: provider,
           modelId: providerModelId,
           displayName: displayName(for: providerModelId),
-          subtitle: customOptionSubtitle
+          subtitle: localProviders.contains(provider) ? localOptionSubtitle : customOptionSubtitle
         )
       )
     }
@@ -154,16 +176,17 @@ struct ModelSwitcher: View {
   var onShowSettings: () -> Void = {}
 
   @State private var isMenuPresented = false
-  /// Hosted providers with a saved key, refreshed every time the menu
-  /// opens so a key saved in Settings shows up without relaunching.
-  @State private var keyedProviders: [LLMProvider] = []
+  /// Providers the menu sections by — keyed hosted providers plus the
+  /// always-available local provider (Ollama). Refreshed every time the
+  /// menu opens so a key saved in Settings shows up without relaunching.
+  @State private var menuProviders: [LLMProvider] = []
 
   /// Mockup `.model-menu { width: 248px }`.
   private static let menuWidth: CGFloat = 248
 
   var body: some View {
     Button {
-      refreshKeyedProviders()
+      refreshMenuProviders()
       isMenuPresented.toggle()
     } label: {
       switcherLabel
@@ -172,7 +195,7 @@ struct ModelSwitcher: View {
     .help(switcherHelp)
     .accessibilityLabel("Extraction model: \(providerRawValue), \(modelDisplayName)")
     .onAppear {
-      refreshKeyedProviders()
+      refreshMenuProviders()
       // Dev-only screenshot hook, like GUNK_DESIGN_GALLERY: opens the menu
       // at launch so the open state can be captured scripted.
       if ProcessInfo.processInfo.environment["GUNK_DEBUG_MODEL_MENU"] == "1" {
@@ -248,17 +271,8 @@ struct ModelSwitcher: View {
 
   private var menu: some View {
     VStack(alignment: .leading, spacing: BrandMetrics.Spacing.xs / 2) {
-      if keyedProviders.isEmpty {
-        Text("Add an API key in Settings to choose a model.")
-          .font(BrandTypography.callout)
-          .foregroundStyle(BrandColors.textSecondary)
-          .fixedSize(horizontal: false, vertical: true)
-          .padding(.horizontal, BrandMetrics.Spacing.sm + 2)
-          .padding(.vertical, BrandMetrics.Spacing.sm)
-      } else {
-        ForEach(keyedProviders) { provider in
-          providerSection(provider)
-        }
+      ForEach(menuProviders) { provider in
+        providerSection(provider)
       }
 
       Divider()
@@ -343,8 +357,8 @@ struct ModelSwitcher: View {
     return !hasKey(selectedProvider)
   }
 
-  private func refreshKeyedProviders() {
-    keyedProviders = ModelCatalog.keyedProviders(hasKey: hasKey)
+  private func refreshMenuProviders() {
+    menuProviders = ModelCatalog.switcherProviders(hasKey: hasKey)
   }
 
   private func rememberedModel(for provider: LLMProvider) -> String {
@@ -380,7 +394,7 @@ struct ModelSwitcher: View {
     // both short-circuit the Keychain probe entirely. An unsigned debug
     // binary changes identity on every rebuild, so this synchronous
     // `SecItemCopyMatching` (reached from `body` via
-    // `selectedProviderNeedsKey` and from `refreshKeyedProviders`) raises
+    // `selectedProviderNeedsKey` and from `refreshMenuProviders`) raises
     // a blocking Keychain consent dialog *before the first window exists*
     // — scripted runs hang with zero windows until a human clicks.
     //

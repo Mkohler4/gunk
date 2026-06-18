@@ -25,12 +25,12 @@ final class ProcessingModelTests: XCTestCase {
     XCTAssertEqual(model.progressBySource[42], 0.45)
     XCTAssertEqual(model.modulesFound, 2)
     XCTAssertEqual(dockIconController.state, .processing)
-    XCTAssertEqual(applicator.badgeLabel, "2")
+    XCTAssertNil(applicator.badgeLabel)
 
     model.moduleFound(sourceId: 42)
 
     XCTAssertEqual(model.modulesFound, 3)
-    XCTAssertEqual(applicator.badgeLabel, "3")
+    XCTAssertNil(applicator.badgeLabel)
 
     model.complete(sourceId: 42)
 
@@ -38,7 +38,7 @@ final class ProcessingModelTests: XCTestCase {
     XCTAssertTrue(model.progressBySource.isEmpty)
     XCTAssertEqual(model.modulesFound, 0)
     XCTAssertEqual(dockIconController.state, .full)
-    XCTAssertEqual(applicator.badgeLabel, "3")
+    XCTAssertNil(applicator.badgeLabel)
 
     finalGunkCount = 0
     model.refreshIdleDockState()

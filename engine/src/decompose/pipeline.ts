@@ -10,6 +10,7 @@ import {
   addGunkFile,
   addGunkTag,
   addSourceFile,
+  clearGunksForSource,
   filesForSource,
   gunkById,
   insertGunk,
@@ -51,7 +52,7 @@ import { CapabilityRefiner } from "./refiner.js";
 import { ModuleQualityGate } from "./qualityGate.js";
 import { verifySelfContainment } from "./selfContainment.js";
 import { dedupe } from "./dedupe.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, rmSync } from "node:fs";
 import { basename } from "node:path";
 
 export interface PipelineOptions {
@@ -261,14 +262,25 @@ export class DecompositionPipeline {
       };
     });
 
-    // 10. persist
+    // 10. persist. Re-running a source replaces its modules rather than
+    // accumulating: clear the prior gunks (and their extracted bundle dirs)
+    // before writing the fresh set. This runs only after survey/refine
+    // succeeded, so a run that fails earlier never wipes existing results.
     const persisted = await this.stage("persist", 0.92, () => {
+      const cleared = clearGunksForSource(this.db, source.id);
+      for (const bundlePath of cleared.bundlePaths) {
+        try {
+          rmSync(bundlePath, { recursive: true, force: true });
+        } catch {
+          // best-effort: a missing/locked stale bundle dir must not fail the run
+        }
+      }
       const rows = this.persist(persistable.keep, source, {
         fingerprints,
         fingerprintBuilder,
         manifestContents,
       });
-      return { value: rows, counts: { persisted: rows.length } };
+      return { value: rows, counts: { persisted: rows.length, replaced: cleared.removed } };
     });
 
     // 11. extract
