@@ -107,7 +107,21 @@ app's false positives.
 
 #### Definition of done
 - [ ] `phase-14-baseline.md` exists with three funnels + a one-paragraph reading each.
-- [ ] CHANGELOG line under an "Unreleased / engine" heading.
+  Goal: Summarize the three funnels and their readings from phase-14-baseline.md for quick reference and understanding.
+  Files:
+    - docs/tasks/phase-14-baseline.md
+  Steps:
+    - [ ] Identify the three funnels described in docs/tasks/phase-14-baseline.md. → docs/tasks/phase-14-baseline.md
+    - [ ] Read the one-paragraph reading associated with each funnel in the file. → docs/tasks/phase-14-baseline.md
+    - [ ] Write a concise 1-2 sentence summary for each funnel and its reading. → docs/tasks/phase-14-baseline.md
+    - [ ] Add the three summaries together at the top or bottom of docs/tasks/phase-14-baseline.md, ensuring they are clearly labeled as summaries. → docs/tasks/phase-14-baseline.md
+    - [ ] Save the updated docs/tasks/phase-14-baseline.md file. → docs/tasks/phase-14-baseline.md
+  Done when:
+    - [ ] docs/tasks/phase-14-baseline.md contains a clear summary of all three funnels and their readings at the top or bottom of the file.
+    - [ ] Each funnel and its reading are represented by a concise 1-2 sentence summary.
+    - [ ] No original content is lost or overwritten; summaries are additive.
+    - [ ] The file is saved with the new summaries present.
+- [x] CHANGELOG line under an "Unreleased / engine" heading.
 
 ---
 
@@ -178,53 +192,101 @@ green.
 **Owner:** Mark
 
 #### Goal
-Stop treating high inbound-degree files as capability anchors/seeds; classify
-them as shared infrastructure unless they are a real entrypoint.
+A high-fan-in file (imported by many unrelated files) is presented to the survey
+LLM as **shared infrastructure that should not be a capability seed**, instead of
+as neutral/positive `bridge_files` evidence, so a cross-cutting `ThemeProvider`
+stops being proposed as a standalone module.
 
 #### Why
-Smallest change that fixes a real failure (design doc §8, Appendix A.5). Inverts
-the current signal in `GraphClustering.highFanInBridgeFiles`.
+Smallest change that fixes a real failure (design doc §8, Appendix A.5).
+
+#### Ground truth — how seeding actually works today (read before coding)
+There is **no code gate that picks seed files** — the survey LLM picks
+`seedFiles` from the repo-map *text*. So this task changes how high-fan-in files
+are **presented** and the **prompt**, not a seeding `if`. The current call path:
+
+1. `engine/src/ingest/contextBuilder.ts:131-156` — builds the repo map. Line ~133
+   computes `bridgeFiles = new Set(clustering.highFanInBridgeFiles(2).map(...))`
+   and line ~156 attaches the high-fan-in files to each cluster's `bridgeFiles`.
+2. `engine/src/ingest/repoMap.ts:72-73` — renders them verbatim as a neutral
+   `  bridge_files: <a, b, c>` line in the map the LLM reads. **Nothing tells the
+   model these are *bad* seeds.**
+3. `engine/src/decompose/survey.ts:84` — the rubric explicitly lists
+   `"strongly connected graph cluster"` as a **valid anchor**, which a
+   high-fan-in hub trivially satisfies — actively inviting the false positive.
+4. `engine/src/decompose/expander.ts:28` — `sharedFanInThreshold: 3` already
+   demotes a file reached by ≥3 capabilities to a `sharedDependencyFile`. This is
+   the *post-seed* safety net and likely needs **no change**; the fix is upstream
+   at presentation + prompt.
+
+So the lever is steps 2–3, not the expander.
 
 #### Prerequisites
 T-14.1.
 
 #### Files
-- `engine/src/analyze/graphClustering.ts` (modify) — add a `classifyHighFanInFile`
-  / `highFanInRole` helper (`possible_entrypoint` | `possible_platform_service` |
-  `shared_infrastructure` | `suspicious_cross_cutting_file`).
-- `engine/src/decompose/survey.ts` and/or `engine/src/ingest/contextBuilder.ts`
-  (modify) — high-fan-in files stop being offered as "strongly-connected cluster"
-  anchors / seeds; they remain available as shared dependencies.
-- `engine/src/decompose/expander.ts` (modify, if needed) — ensure a suppressed
-  seed can still be pulled in as a `sharedDependencyFile`.
-- `engine/test/graphClustering.test.ts`, `engine/test/decompose.test.ts` (modify).
+- `engine/src/analyze/graphClustering.ts` (modify) — add
+  `classifyHighFanInFile(node, graph): HighFanInRole` (`possible_entrypoint` |
+  `possible_platform_service` | `shared_infrastructure` |
+  `suspicious_cross_cutting_file`) per design doc §8. Keep `highFanInBridgeFiles`
+  but expose the role alongside each node.
+- `engine/src/ingest/repoMap.ts` (modify) — relabel the rendered line from
+  `bridge_files:` to something the model reads as a warning, e.g.
+  `shared_infra_do_not_seed:`, and (optional) drop entrypoint-role files from it.
+- `engine/src/ingest/contextBuilder.ts` (modify) — pass the role through so only
+  non-`possible_entrypoint` high-fan-in files are tagged as do-not-seed.
+- `engine/src/decompose/survey.ts` (modify, lines ~79-85) — (a) remove or qualify
+  `"strongly connected graph cluster"` as an anchor so a bare hub is not a valid
+  anchor; (b) add a rubric line: *"Files listed under shared_infra_do_not_seed are
+  cross-cutting dependencies; never propose one as a capability seed — only as a
+  shared dependency."* **This edits the prompt → triggers tape re-record (below).**
+- `engine/test/graphClustering.test.ts` (modify), `engine/test/repoMap.test.ts`
+  (modify).
+- All `engine/test/fixtures/*/recorded-trace.json` whose survey prompt/map text
+  changed (re-record — **required**).
 
 #### Execution steps
-1. Implement `classifyHighFanInFile(file)` per design doc §8.
-2. At candidate-seeding, drop files whose `inboundDegree > threshold` and role ≠
-   `possible_entrypoint`; route them to shared dependencies instead.
-3. Keep the threshold configurable (CLI flag or pipeline option), default chosen
-   from the baseline.
-4. Re-record any fixture tapes whose **survey input** changed (the repo map text
-   may shift); run `bun run eval`.
+1. Add `classifyHighFanInFile` to `GraphClustering` using `inboundEdges` + the
+   §8 heuristic (route/CLI entrypoint → `possible_entrypoint`; domain-API +
+   tests → `possible_platform_service`; `Provider`/`Context`/`Theme`/`Config` or
+   `shared`/`common` path → `shared_infrastructure`; else
+   `suspicious_cross_cutting_file`).
+2. Thread the role into `contextBuilder.ts` so the repo map separates
+   do-not-seed files from entrypoints.
+3. Rename/relabel the `bridge_files:` rendering in `repoMap.ts` accordingly.
+4. Edit the survey prompt in `survey.ts` (anchor list + new rubric line).
+5. Re-record every affected fixture tape:
+   `GUNK_API_KEY=… bun run src/index.ts test/fixtures/<name> --provider openai --model gpt-4.1-mini --gunk-home /tmp/rec --trace`
+   then copy `/tmp/rec/runs/<id>/trace.json` → `test/fixtures/<name>/recorded-trace.json`.
+6. `bun test && bun run eval`.
 
 #### MCP touchpoints
 None.
 
 #### Tests required
-- [ ] Unit: a `Provider`/`Context`/`Theme` file with high fan-in classifies as
-      `shared_infrastructure` and is **not** seeded.
-- [ ] Unit: a route/CLI entrypoint with high fan-in is still seedable.
-- [ ] Eval: the `app-themeprovider` fixture no longer emits a standalone
-      ThemeProvider module (flip its floor from quarantined to enforced).
+- [ ] Unit (`graphClustering.test.ts`): a `ThemeProvider.tsx` node with inbound
+      degree ≥ 5 and no route → `classifyHighFanInFile` returns
+      `shared_infrastructure`.
+- [ ] Unit (`graphClustering.test.ts`): a node that is a route/CLI entrypoint with
+      high inbound degree → `possible_entrypoint`.
+- [ ] Unit (`repoMap.test.ts`): a high-fan-in non-entrypoint file renders under
+      the `shared_infra_do_not_seed:` line, not as a neutral `bridge_files:` anchor.
+- [ ] Eval (`evalGate.test.ts`): the `app-themeprovider` fixture (from T-14.1)
+      produces **0** accepted/needsApproval modules whose `ownedFiles` contain the
+      ThemeProvider file; flip its floor from quarantined to enforced.
+- [ ] Eval: existing SaaS/multi-language fixtures hold their current module
+      floors (no regression) after tape re-record.
 
 #### Execution objective
-Re-running the app fixture shows ThemeProvider as a shared dependency, never as
-an accepted module.
+`bun run trace` on the app fixture shows the ThemeProvider file under
+shared-infrastructure, and it appears (if at all) only as a `sharedDependency` of
+another module — never as an accepted module's owned file.
 
 #### Definition of done
-- [ ] Tests above pass; `app-themeprovider` floor enforced.
-- [ ] CHANGELOG; design doc §8/§20 marked "implemented in T-14.2".
+- [ ] All tests above pass; `app-themeprovider` floor enforced; no SaaS-fixture
+      regression.
+- [ ] Affected `recorded-trace.json` tapes re-recorded and committed.
+- [ ] CHANGELOG entry; design doc §8/§20 annotated "implemented in T-14.2".
 
 ---
 

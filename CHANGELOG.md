@@ -6,6 +6,13 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## [Unreleased]
+### Engine
+- Phase 14 (T-14.0): captured a written baseline of the current decomposition
+  funnel on three repo kinds (SaaS/app, library/SDK, and gunk's own
+  `engine`) in `docs/tasks/phase-14-baseline.md`, documenting the gunk
+  false-negative and the app false-positive that the Module Architect phase
+  fixes. Documentation only — no engine behavior change.
+
 ### Added
 - Settings v2 (Phase 11): the old single-form Settings page is now a
   sectioned trust panel for Provider & keys, Local model, Spend, Processing,
