@@ -4,7 +4,7 @@
 
 > **Reframe, don't recode. Less tokens, more shipping.**
 
-Gunk is your shit code, modularized — and silently fed back into your AI.
+Gunk turns your throwaway code into reusable modules — and quietly feeds them back to your AI.
 
 You ship throwaway projects every week. Half of them die. The other half quietly contain the same auth flow, the same Stripe wrapper, the same dashboard scaffold — re-implemented for the 51st time. That waste is **gunk**. Repurposed correctly, it's the most useful thing in your dev folder.
 
