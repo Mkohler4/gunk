@@ -12,6 +12,8 @@ You drag the folders you want to remember onto **gunk.app**. It modularizes them
 
 You don't type any commands. You don't grant Full Disk Access. You curate; gunk does the rest.
 
+![The gunk.app Library: modules decomposed from dropped folders, each tagged and marked agent-ready or pending review, with the provider/model switcher in the top-right.](docs/images/gunk-app-library.png)
+
 ---
 
 ## The problem
@@ -76,23 +78,31 @@ You can drop more folders in any time. You can remove folders any time. There is
 
 ## Status
 
-Very early. Building in public. Code lands daily-ish; product decisions land in [`docs/adr/`](docs/adr/); the plan lives in [`docs/roadmap.md`](docs/roadmap.md).
+Early, but real. Building in public. Code lands daily-ish; product decisions land in [`docs/adr/`](docs/adr/) (18 ADRs and counting); the plan lives in [`docs/roadmap.md`](docs/roadmap.md).
 
-What exists today: this README, four ADRs, a roadmap, and a clear thesis. That's the honest state.
+What exists today: a working **`gunk.app`** macOS app (drop a folder → watch it process → browse, run, and approve extracted modules), a cross-platform **`gunk-engine`** decomposition pipeline with a multi-language eval gate, a **`gunk-mcp`** server that exposes your modules to Cursor / Claude Code / Codex / OpenCode, one-click MCP wiring, and a spend readout. What's not done yet: the marketplace, first-run onboarding, and a signed public build. That's the honest state.
 
 ## Roadmap (high-level)
 
-| Phase | Outcome |
-|---|---|
-| 1. Foundation | Repo, license, ADRs, CI, public roadmap. |
-| 2. Walking skeleton | Drop a folder → it appears in the store → MCP server exposes it → Cursor can reference it. End-to-end, no classification. |
-| 3. Classifier | Drops get tagged: auth, payments, ui-kit, scraper, dashboard… |
-| 4. Extractor | Tagged modules become portable bundles with manifests. |
-| 5. Multi-language evals | Engine proves module quality across web, mobile, JVM, mixed, and large fixtures. |
-| 6. Full macOS app | Real windowed app: sources, modules, runs, approval, settings, bundle details. |
-| 7. AI-tool wiring | One-click MCP setup for Cursor, Claude Code, Codex, OpenCode. |
-| 8. Friend alpha | Five real users from the Twitter circle. |
-| 9. Public alpha | `gunk.app` download, demo video, Show HN. |
+| Phase | Outcome | Status |
+|---|---|---|
+| 1. Foundation | Repo, license, ADRs, CI, public roadmap. | ✅ |
+| 2. Walking skeleton | Drop a folder → store → MCP server exposes it → Cursor references it. | ✅ |
+| 3. Classifier | Drops get decomposed into tagged capability modules with confidence. | ✅ |
+| 4. Extractor | Modules become portable bundles with `gunk.yml` manifests + mini-READMEs. | ✅ |
+| 5. Multi-language evals | Engine proves module quality across web, mobile, JVM, mixed, and large fixtures. | ✅ |
+| 6. Full macOS app | Windowed app: sources, modules, runs, approval, settings, bundle details. | ✅ |
+| 7. Design & branding | Brand tokens, glass components, wordmark, Dock tile; shell re-skin. | ✅ |
+| 8. Shell & IA restructure | Library-centric IA, model switcher + MCP status up front, one-click MCP wiring. | ✅ |
+| 9. Library v2 + processing states | List/grid library, live processing, per-module model attribution. | ✅ |
+| 10. Run & test modules | Sandboxed smoke runs, coverage ledger, MCP `run_gunk` tool. | ✅ |
+| 11. Settings v2 | Multi-provider keys, estimated spend readout, warn-only cost cap. | ✅ |
+| 12. Marketplace (UI-first) | Browse / install modules against mock data (backend out of scope). | ◻️ |
+| 13. Walkthrough / onboarding | Branded first-run intro → two-action landing. | ◻️ |
+| 14. Friend alpha | Five real users; each sees their AI use a gunk module. | ◻️ |
+| 15. Public alpha | `gunk.app` download, demo video, Show HN. | ◻️ |
+
+In parallel, an **engine v2** track ([Module Architect](docs/tasks/phase-14-module-architect.md), [ADR-0018](docs/adr/0018-module-architect.md)) is reworking decomposition so tooling/library repos surface modules and cross-cutting files don't.
 
 See [`docs/roadmap.md`](docs/roadmap.md) for the week-by-week version.
 
